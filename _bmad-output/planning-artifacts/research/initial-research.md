@@ -1,5 +1,14 @@
 # Voyager Simulation — Initial Research
 
+> ⚠️ **Notice for downstream agents (added 2026-05-16):** This is the foundation document for the project. Most of it remains accurate and useful — mission timelines, data sources, asset locations, overall architectural shape. **However, four specific technical recommendations in this document have been superseded** by deeper research in [technical-voyager-simulation-feasibility-research-2026-05-16.md](technical-voyager-simulation-feasibility-research-2026-05-16.md). Those passages are struck through below with inline pointers to the corrected guidance. Treat strike-through text as deprecated; treat the rest of the document as authoritative for context and milestones.
+>
+> **Superseded recommendations at a glance:**
+>
+> 1. Catmull-Rom spline interpolation → use **cubic Hermite** (SPICE provides velocities; Catmull-Rom discards them)
+> 2. `logarithmicDepthBuffer: true` as "non-negotiable" → prefer **reverse-Z depth** on Three.js WebGLRenderer
+> 3. "JSON binary or CSV" runtime trajectory format → use **custom little-endian Float64Array + 40-byte header + brotli**
+> 4. (Implicit) attitude scope deferred → CK kernel integration is now **in v1 scope** (see "Scope Addendum" in the corrected report)
+
 ## Q: How much do you know about details of the Voyager space flights... can you give me a day by day description that I can use to create a simulation?
 
 I know quite a bit about the Voyager space flights! They represent a masterclass in orbital mechanics, utilizing a rare planetary alignment that occurs only once every 176 years to pull off the "Grand Tour" using gravity assists.
@@ -301,7 +310,7 @@ animate();
 Because 3D files and high-resolution planetary texture maps can be quite large (10 MB to 100 MB total), optimizing delivery for a web app is vital:
 
 - **Asset Hosting:** Put your planet textures (2K resolution is plenty for sharp browser visuals without crashing mobile browsers) and `.glb` files in a public `assets/` folder. Use a free service like Vercel, Netlify, or GitHub Pages to host the application.
-- **Pre-parsing Data:** Do not try to make live API calls to JPL Horizons while the user is running the simulation. Instead, run a local Python script beforehand using `astroquery` to download the entire 50-year day-by-day dataset, compress it into a single clean JSON binary or CSV file, and load that lightweight file entirely into client memory when the web page first loads.
+- **Pre-parsing Data:** Do not try to make live API calls to JPL Horizons while the user is running the simulation. Instead, run a local Python script beforehand ~~using `astroquery`~~ (use **SpiceyPy + NAIF SPK kernels** — far more accurate than Horizons-derived state vectors and provides velocities for Hermite interpolation) to download the entire 50-year day-by-day dataset, ~~compress it into a single clean JSON binary or CSV file~~ (**use a custom 40-byte header + little-endian Float64Array binary, brotli-compressed** — JSON parse cost is ~10–40 ms wasted at this scale, CSV is worse; see "Runtime Binary Trajectory Format" in the corrected report), and load that lightweight file entirely into client memory when the web page first loads.
 
 Would you like some assistance writing a quick Python data extraction script to generate that clean daily JSON file of positions so you have a solid dataset ready for your project?
 
@@ -387,11 +396,13 @@ P_Local = (P_World_Double − P_Camera_Double)  →  cast to Float32
 
 By ensuring that the input to the `BufferGeometry` is always a small, camera-relative value, the simulation bypasses the GPU's precision limitations, allowing the user to zoom in from a solar system view to a sub-meter inspection of the Voyager's Golden Record without any visual instability.
 
-#### Z-Buffer Resolution and Logarithmic Depth
+#### Z-Buffer Resolution and ~~Logarithmic~~ Reverse-Z Depth
+
+> 🔁 **Superseded:** The recommendation below to use `logarithmicDepthBuffer` was correct in 2024 but is no longer the best 2026 choice. Three.js WebGLRenderer now supports **reverse-Z depth** ([demo](https://threejs.org/examples/webgl_reversed_depth_buffer.html)) which gives **sub-millimeter precision at 10 m** with the far plane at 165 AU, AND preserves early-Z optimization (no perf hit). Use reverse-Z. Logarithmic depth remains the fallback **only** for WebGPURenderer, which doesn't yet support reverse-Z as of late 2025. See "Pattern 2: Depth-Precision Strategy" in the corrected report.
 
 A secondary precision issue occurs in the Z-buffer (depth buffer), which determines the render order of overlapping objects. In a traditional linear Z-buffer, nearly 90% of the precision is concentrated in the first 10% of the view distance. For a simulation that must simultaneously render a nearby spacecraft and a planet millions of kilometers away, this leads to "Z-fighting," where the spacecraft appears to flicker behind the planet's surface.
 
-The simulation should enable a `logarithmicDepthBuffer` in the Three.js renderer. This redistributes depth precision logarithmically across the view frustum, maintaining constant relative precision. Although this can impact performance by disabling "Early-Z" culling on older hardware, it is a non-negotiable requirement for astronomical scales.
+~~The simulation should enable a `logarithmicDepthBuffer` in the Three.js renderer. This redistributes depth precision logarithmically across the view frustum, maintaining constant relative precision. Although this can impact performance by disabling "Early-Z" culling on older hardware, it is a non-negotiable requirement for astronomical scales.~~
 
 ### High-Fidelity Asset Sourcing and Graphical Synthesis
 
@@ -437,17 +448,19 @@ To support user-controlled time-lapse rates, the simulation must decouple the "S
 3. **The Scaling Factor:** Multiply `realDeltaTime` by a `userTimeScale` (e.g., 86,400 to move one day per second).
 4. **The Simulation Step:** Update the `currentSimulationTime` by this scaled delta and then calculate new positions for all objects.
 
-#### Trajectory Interpolation with Catmull-Rom Splines
+#### ~~Trajectory Interpolation with Catmull-Rom Splines~~ Trajectory Interpolation with Cubic Hermite Splines
 
-Linear interpolation between daily position points results in "jerky" motion that ignores the gravitational curves of the flight path. The simulation should utilize Catmull-Rom splines for the trajectory.
+> 🔁 **Superseded:** Catmull-Rom is the wrong spline for this project because SPICE provides **both position AND velocity** at every sample. Catmull-Rom estimates tangents from neighboring positions and **discards the known velocities**, throwing away physical accuracy. **Cubic Hermite** uses both position and velocity at each knot — exact at the knots, same computational cost, dramatically lower mid-segment error during high-curvature flybys. See "Pattern 4: Cubic Hermite Trajectory Interpolation" in the corrected report for the math, basis functions, and a TypeScript implementation. Three.js's `THREE.CatmullRomCurve3` is **not** the right primitive here; implement Hermite directly (~20 LOC).
 
-A Catmull-Rom spline is an interpolating cubic spline that passes through all its control points. It is defined by four points: P(i−1), P(i), P(i+1), P(i+2). The curve between P(i) and P(i+1) is determined by the positions and the tangents calculated from the surrounding points.
+~~Linear interpolation between daily position points results in "jerky" motion that ignores the gravitational curves of the flight path. The simulation should utilize Catmull-Rom splines for the trajectory.~~
 
-```text
-P(t) = [1  t  t²  t³] · M_CR · [P(i−1)  P(i)  P(i+1)  P(i+2)]ᵀ
-```
+~~A Catmull-Rom spline is an interpolating cubic spline that passes through all its control points. It is defined by four points: P(i−1), P(i), P(i+1), P(i+2). The curve between P(i) and P(i+1) is determined by the positions and the tangents calculated from the surrounding points.~~
 
-In Three.js, the `THREE.CatmullRomCurve3` class provides this functionality out of the box. The developer must set the `curveType` to `'catmullrom'` and the `tension` to `0.5` to achieve a natural, balanced curve for orbital motion.
+~~```text~~
+~~P(t) = [1  t  t²  t³] · M_CR · [P(i−1)  P(i)  P(i+1)  P(i+2)]ᵀ~~
+~~```~~
+
+~~In Three.js, the `THREE.CatmullRomCurve3` class provides this functionality out of the box. The developer must set the `curveType` to `'catmullrom'` and the `tension` to `0.5` to achieve a natural, balanced curve for orbital motion.~~
 
 #### Attitude Interpolation with SLERP
 
@@ -498,11 +511,11 @@ The following plan provides succinct, technically dense steps designed for a cod
 1. **Kernel Pre-processing:** Use a Python-based SPICE toolkit (e.g., SpiceyPy) to extract trajectory data for Voyager 1 and 2, the Sun, and all eight planets from 1977 to 2030.
 2. **Dataset Transformation:** Export the extracted data as a series of binary `Float64Array` files or compressed JSON segments (e.g., 1 MB per mission year) to optimize browser loading times.
 3. **Simulation Clock Implementation:** Create a `ClockManager` class that calculates the current simulation date based on a `startTime` (1977-08-20) and a `timeScale` variable. Implement `pause()`, `play()`, and `scrub(timestamp)` methods.
-4. **Interpolation Service:** Develop an interpolation module that takes a timestamp and returns a `THREE.Vector3` position. For long gaps, implement the Catmull-Rom logic to ensure smooth transit.
+4. **Interpolation Service:** Develop an interpolation module that takes a timestamp and returns a `THREE.Vector3` position. ~~For long gaps, implement the Catmull-Rom logic to ensure smooth transit.~~ **Use cubic Hermite interpolation** (see superseding note above and the corrected report's "Pattern 4"), consuming both position and velocity samples from SPICE.
 
 #### Phase 2: The Graphics and Precision Engine
 
-1. **Three.js Scene Setup:** Initialize the renderer with `antialias: true` and `logarithmicDepthBuffer: true`. Set the background to a black skybox with a Milky Way texture.
+1. **Three.js Scene Setup:** Initialize the renderer with `antialias: true` and ~~`logarithmicDepthBuffer: true`~~ **reverse-Z depth** (Three.js WebGLRenderer with float depth buffer; see "Pattern 2" in the corrected report). Set the background to a black skybox with a Milky Way texture.
 2. **Floating Origin Controller:** Create a `WorldGroup` object to hold all visual entities. In the render loop, update `WorldGroup.position` to be the negative of the `Camera.worldPosition` (calculated in `Float64`), effectively keeping the camera at `(0,0,0)`.
 3. **Celestial Body Instantiation:** Loop through the planetary data and create `THREE.Mesh` objects for each planet. Use the radii from PCK kernels (e.g., Jupiter R ≈ 71,492 km).
 4. **Saturn Ring Shader:** Implement a custom `THREE.ShaderMaterial` for Saturn's rings that handles alpha-tested textures and double-sided rendering to ensure visibility from all angles.
