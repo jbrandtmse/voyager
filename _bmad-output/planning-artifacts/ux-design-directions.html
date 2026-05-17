@@ -1,0 +1,1043 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voyager — UX Design Direction Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,300..700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Voyager design tokens (locked in Step 8) */
+      --v-color-bg: #0a0e14;
+      --v-color-fg: #e8eaed;
+      --v-color-fg-muted: #9aa0a6;
+      --v-color-fg-quiet: #5f6368;
+      --v-color-accent: #d4a017;
+      --v-color-accent-quiet: #8a6a0e;
+      --v-color-trajectory-past: #e8eaed;
+      --v-color-trajectory-future: #5f6368;
+      --v-color-ck: #4a7c4e;
+      --v-color-synth: #d4a017;
+      --v-color-focus: #6b8cae;
+      --v-color-divider: #1f2530;
+
+      --v-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+      --v-font-serif: 'Source Serif 4', Georgia, serif;
+      --v-font-sans: 'Inter', system-ui, sans-serif;
+
+      /* Page-level (showcase-doc) tokens */
+      --doc-bg: #14181f;
+      --doc-fg: #e8eaed;
+      --doc-fg-muted: #9aa0a6;
+      --doc-max-width: 1200px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { font-size: 16px; }
+    body {
+      margin: 0;
+      background: var(--doc-bg);
+      color: var(--doc-fg);
+      font-family: var(--v-font-sans);
+      font-weight: 400;
+      line-height: 1.5;
+      font-feature-settings: "kern" 1;
+    }
+
+    .page-wrap {
+      max-width: var(--doc-max-width);
+      margin: 0 auto;
+      padding: 64px 32px 96px;
+    }
+
+    /* Doc-level typography */
+    h1 { font-family: var(--v-font-serif); font-weight: 400; font-size: 2rem; line-height: 1.2; margin: 0 0 16px; }
+    h2 { font-family: var(--v-font-sans); font-weight: 600; font-size: 1.5rem; line-height: 1.2; margin: 64px 0 12px; letter-spacing: -0.005em; }
+    h3 { font-family: var(--v-font-sans); font-weight: 500; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--doc-fg-muted); margin: 32px 0 8px; }
+    p { font-family: var(--v-font-serif); font-size: 1rem; line-height: 1.6; max-width: 65ch; color: var(--doc-fg); margin: 0 0 16px; }
+    .lede { font-size: 1.125rem; color: var(--doc-fg-muted); max-width: 70ch; }
+    em { font-style: italic; }
+    code { font-family: var(--v-font-mono); font-size: 0.875em; color: var(--v-color-accent); }
+
+    .doc-header { margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid #2a313c; }
+    .doc-header__meta { font-family: var(--v-font-mono); font-size: 0.75rem; color: var(--doc-fg-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 24px; }
+
+    /* Mockup viewport — represents the full Voyager UI at 16:9 */
+    .mockup-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    figure.mockup { margin: 0; }
+    figcaption { font-family: var(--v-font-mono); font-size: 0.75rem; color: var(--doc-fg-muted); margin-top: 8px; text-transform: lowercase; letter-spacing: 0.02em; }
+    .viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: var(--v-color-bg);
+      overflow: hidden;
+      border: 1px solid #2a313c;
+      font-family: var(--v-font-sans);
+      color: var(--v-color-fg);
+      font-size: 0.7em;       /* Scale UI down for the mockup pane */
+    }
+    /* The canvas backdrop: a starfield + sun */
+    .viewport__canvas {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(circle at 30% 50%, rgba(255,240,200,0.04) 0%, transparent 25%),
+        radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.3) 0%, transparent 100%),
+        radial-gradient(1px 1px at 35% 72%, rgba(255,255,255,0.25) 0%, transparent 100%),
+        radial-gradient(1px 1px at 62% 28%, rgba(255,255,255,0.18) 0%, transparent 100%),
+        radial-gradient(1px 1px at 84% 88%, rgba(255,255,255,0.22) 0%, transparent 100%),
+        radial-gradient(1px 1px at 92% 52%, rgba(255,255,255,0.3) 0%, transparent 100%),
+        radial-gradient(1px 1px at 18% 88%, rgba(255,255,255,0.2) 0%, transparent 100%),
+        radial-gradient(1px 1px at 78% 18%, rgba(255,255,255,0.15) 0%, transparent 100%),
+        radial-gradient(1px 1px at 45% 12%, rgba(255,255,255,0.28) 0%, transparent 100%),
+        radial-gradient(1.5px 1.5px at 8% 65%, rgba(255,255,255,0.35) 0%, transparent 100%),
+        var(--v-color-bg);
+    }
+    /* Sun for cruise view */
+    .viewport__sun {
+      position: absolute;
+      left: 28%; top: 48%;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: radial-gradient(circle at center, #fff5d1 0%, #f7d77a 40%, #d4a017 70%, transparent 100%);
+      box-shadow: 0 0 24px 4px rgba(212,160,23,0.25);
+    }
+    /* Spacecraft dot */
+    .viewport__sc {
+      position: absolute;
+      width: 4px; height: 4px;
+      background: var(--v-color-fg);
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px rgba(232,234,237,0.2);
+    }
+    .viewport__sc--v1 { left: 56%; top: 38%; }
+    .viewport__sc--v2 { left: 51%; top: 56%; }
+    /* Trajectory line */
+    .viewport__traj { position: absolute; inset: 0; pointer-events: none; }
+    .viewport__traj-line { fill: none; stroke-width: 0.6; }
+    .viewport__traj-line--past { stroke: var(--v-color-trajectory-past); stroke-dasharray: none; }
+    .viewport__traj-line--future { stroke: var(--v-color-trajectory-future); stroke-dasharray: 2 2; }
+
+    /* Jupiter encounter context */
+    .viewport__planet {
+      position: absolute;
+      left: 50%; top: 45%;
+      width: 80px; height: 80px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(200,170,120,0.35) 0px,
+          rgba(150,120,80,0.5) 4px,
+          rgba(190,160,110,0.4) 8px,
+          rgba(220,180,130,0.3) 14px
+        ),
+        radial-gradient(circle at 35% 35%, #c9a674 0%, #8b6f3c 60%, #4d3a1c 100%);
+      box-shadow: inset -8px -4px 16px rgba(0,0,0,0.4);
+    }
+    .viewport__moon {
+      position: absolute;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #b8a98b;
+    }
+    .viewport__moon--io { left: 36%; top: 47%; }
+    .viewport__moon--europa { left: 64%; top: 39%; background: #d9d4c4; }
+
+    /* The narrow-angle cone during encounter */
+    .viewport__cone {
+      position: absolute;
+      left: 56%; top: 38%;
+      width: 0; height: 0;
+      border-left: 0px solid transparent;
+      border-right: 0px solid transparent;
+      transform-origin: 0 0;
+      transform: rotate(220deg);
+    }
+    .viewport__cone-svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+    /* === Shared chrome variants (each direction overrides) === */
+    .hud {
+      position: absolute;
+      font-family: var(--v-font-mono);
+      color: var(--v-color-fg);
+      font-feature-settings: "tnum" 1, "kern" 1;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+    }
+    .hud__row { display: flex; gap: 12px; align-items: baseline; }
+    .hud__label { color: var(--v-color-fg-quiet); font-size: 0.65em; text-transform: uppercase; letter-spacing: 0.06em; }
+    .hud__value { color: var(--v-color-fg); font-size: 0.85em; }
+    .hud__value--muted { color: var(--v-color-fg-muted); }
+
+    .chapter-title {
+      position: absolute;
+      font-family: var(--v-font-sans);
+      font-weight: 500;
+      font-size: 0.75em;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--v-color-fg);
+    }
+
+    /* The scrubber */
+    .scrubber-region { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 var(--edge); }
+    .scrubber {
+      position: relative;
+      width: 100%;
+    }
+    .scrubber__track {
+      position: relative;
+      width: 100%;
+      background: rgba(255,255,255,0.08);
+    }
+    .scrubber__progress {
+      position: absolute;
+      left: 0; top: 0;
+      height: 100%;
+      background: var(--v-color-accent-quiet);
+    }
+    .scrubber__thumb {
+      position: absolute;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--v-color-fg);
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .scrubber__marker {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Speed multiplier dot/track */
+    .speed {
+      position: absolute;
+      font-family: var(--v-font-mono);
+      font-feature-settings: "tnum" 1;
+      font-variant-numeric: tabular-nums;
+      color: var(--v-color-fg);
+      font-size: 0.75em;
+    }
+
+    /* Chapter copy panel */
+    .chapter-copy {
+      position: absolute;
+      font-family: var(--v-font-serif);
+      color: var(--v-color-fg);
+      line-height: 1.55;
+      max-width: 28ch;
+    }
+    .chapter-copy__lede {
+      font-size: 1em;
+      margin-bottom: 8px;
+      font-weight: 400;
+    }
+    .chapter-copy__body {
+      font-size: 0.85em;
+      color: var(--v-color-fg-muted);
+    }
+
+    /* === Direction A: Mission Control === */
+    /* Tight HUD cluster top-right; thick scrubber bar; labeled pin markers; always-visible chapter copy */
+    .dir-a .viewport { --edge: 14px; }
+    .dir-a .hud { top: 14px; right: 14px; text-align: right; padding: 8px 10px; background: rgba(15,20,28,0.6); border: 1px solid rgba(255,255,255,0.08); }
+    .dir-a .hud__row + .hud__row { margin-top: 4px; }
+    .dir-a .chapter-title { top: 14px; left: 14px; }
+    .dir-a .scrubber-region { padding: 0 14px 14px; }
+    .dir-a .scrubber__track { height: 12px; }
+    .dir-a .scrubber__progress { background: var(--v-color-accent); height: 100%; }
+    .dir-a .scrubber__thumb { width: 14px; height: 14px; background: var(--v-color-fg); border: 2px solid var(--v-color-bg); }
+    .dir-a .scrubber__marker {
+      width: 2px; height: 18px; background: var(--v-color-fg-muted);
+    }
+    .dir-a .scrubber__marker--active { background: var(--v-color-accent); }
+    .dir-a .scrubber__marker-label {
+      position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+      font-family: var(--v-font-mono); font-size: 0.55em; color: var(--v-color-fg-muted);
+      white-space: nowrap; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .dir-a .scrubber__marker--active .scrubber__marker-label { color: var(--v-color-accent); }
+    .dir-a .chapter-copy {
+      right: 14px; bottom: 60px; padding: 12px 14px;
+      background: rgba(15,20,28,0.65);
+      border-left: 2px solid var(--v-color-accent);
+    }
+
+    /* === Direction B: AiRT canonical === */
+    /* Distributed HUD; thin scrubber line; restrained dot markers (labels on hover only); chapter copy auto-fades */
+    .dir-b .viewport { --edge: 18px; }
+    .dir-b .hud--date-distance { top: 18px; right: 18px; text-align: right; }
+    .dir-b .hud--instruments { bottom: 56px; left: 18px; }
+    .dir-b .hud__row + .hud__row { margin-top: 3px; }
+    .dir-b .chapter-title { top: 18px; left: 18px; }
+    .dir-b .scrubber-region { padding: 0 18px 18px; }
+    .dir-b .scrubber__track { height: 1px; background: rgba(232,234,237,0.18); }
+    .dir-b .scrubber__progress { background: var(--v-color-fg); height: 100%; }
+    .dir-b .scrubber__thumb { width: 10px; height: 10px; background: var(--v-color-accent); }
+    .dir-b .scrubber__marker { width: 3px; height: 3px; border-radius: 50%; background: var(--v-color-fg-muted); }
+    .dir-b .scrubber__marker--active { background: var(--v-color-accent); width: 5px; height: 5px; }
+    .dir-b .chapter-copy { right: 18px; bottom: 50px; }
+
+    /* === Direction C: Cinema === */
+    /* Minimal HUD at rest (date + chapter only); thin scrubber; tick markers without labels; chapter copy timed fade */
+    .dir-c .viewport { --edge: 22px; }
+    .dir-c .hud { top: 22px; right: 22px; text-align: right; }
+    .dir-c .hud__row + .hud__row { margin-top: 4px; }
+    .dir-c .chapter-title { top: 22px; left: 22px; }
+    .dir-c .scrubber-region { padding: 0 22px 22px; }
+    .dir-c .scrubber__track { height: 1px; background: rgba(232,234,237,0.12); }
+    .dir-c .scrubber__progress { background: rgba(232,234,237,0.7); height: 100%; }
+    .dir-c .scrubber__thumb { width: 7px; height: 7px; background: var(--v-color-fg); border: 1px solid var(--v-color-bg); }
+    .dir-c .scrubber__marker { width: 1px; height: 8px; background: var(--v-color-fg-muted); }
+    .dir-c .scrubber__marker--active { background: var(--v-color-accent); height: 14px; }
+    .dir-c .chapter-copy { bottom: 60px; left: 50%; transform: translateX(-50%); max-width: 36ch; text-align: center; font-style: italic; color: var(--v-color-fg-muted); }
+    .dir-c .chapter-copy__lede { font-style: normal; color: var(--v-color-fg); }
+
+    /* === Direction D: Editorial === */
+    /* Larger chapter copy panel; quiet HUD bottom-strip; dot markers with subtle labels at rest */
+    .dir-d .viewport { --edge: 16px; }
+    .dir-d .hud { bottom: 16px; left: 50%; transform: translateX(-50%); text-align: center; padding-bottom: 36px; }
+    .dir-d .hud__row { display: inline-flex; gap: 24px; }
+    .dir-d .chapter-title { top: 16px; left: 16px; }
+    .dir-d .scrubber-region { padding: 0 16px 14px; }
+    .dir-d .scrubber__track { height: 2px; background: rgba(232,234,237,0.16); }
+    .dir-d .scrubber__progress { background: var(--v-color-fg); height: 100%; }
+    .dir-d .scrubber__thumb { width: 10px; height: 10px; background: var(--v-color-fg); border: 2px solid var(--v-color-accent); }
+    .dir-d .scrubber__marker { width: 4px; height: 4px; border-radius: 50%; background: var(--v-color-fg-muted); }
+    .dir-d .scrubber__marker--active { background: var(--v-color-accent); width: 7px; height: 7px; }
+    .dir-d .scrubber__marker-label {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      font-family: var(--v-font-mono); font-size: 0.5em; color: var(--v-color-fg-quiet);
+      white-space: nowrap; letter-spacing: 0.08em;
+    }
+    .dir-d .chapter-copy {
+      right: 16px; top: 50%; transform: translateY(-50%); max-width: 32ch;
+      padding: 14px 16px; background: rgba(15,20,28,0.7);
+      border-left: 1px solid var(--v-color-fg-quiet);
+    }
+    .dir-d .chapter-copy__lede { font-size: 1.05em; line-height: 1.45; }
+    .dir-d .chapter-copy__body { font-size: 0.85em; }
+
+    /* Detail scrubber styles (only shown in encounter view) */
+    .scrubber--detail-region {
+      position: absolute;
+      bottom: 38px;
+      left: var(--edge); right: var(--edge);
+    }
+    .dir-a .scrubber--detail-region { bottom: 50px; }
+    .dir-b .scrubber--detail-region { bottom: 42px; }
+    .dir-c .scrubber--detail-region { bottom: 44px; }
+    .dir-d .scrubber--detail-region { bottom: 40px; }
+    .scrubber--detail .scrubber__track { background: rgba(212,160,23,0.18); height: 1px; }
+    .scrubber--detail .scrubber__progress { background: var(--v-color-accent); }
+    .scrubber--detail .scrubber__thumb { width: 8px; height: 8px; background: var(--v-color-accent); }
+    .dir-a .scrubber--detail .scrubber__track { height: 4px; }
+    .scrubber--detail-label {
+      position: absolute; top: -14px; left: 0;
+      font-family: var(--v-font-mono); font-size: 0.55em;
+      color: var(--v-color-accent); text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .scrubber--detail-label--right { left: auto; right: 0; }
+
+    /* Speed multiplier minimap */
+    .dir-a .speed { bottom: 14px; right: 14px; padding: 4px 8px; background: rgba(15,20,28,0.6); }
+    .dir-b .speed { bottom: 30px; right: 18px; }
+    .dir-c .speed { bottom: 32px; right: 22px; color: var(--v-color-fg-muted); font-size: 0.65em; }
+    .dir-d .speed { bottom: 14px; right: 16px; }
+
+    /* Direction selector / TOC */
+    .direction-toc {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(20, 24, 31, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 16px 0;
+      margin: 0 -32px 32px;
+      padding-left: 32px;
+      padding-right: 32px;
+      border-bottom: 1px solid #2a313c;
+    }
+    .direction-toc__inner { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .direction-toc a {
+      color: var(--doc-fg-muted);
+      font-family: var(--v-font-mono);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-decoration: none;
+      padding: 6px 10px;
+      border: 1px solid #2a313c;
+    }
+    .direction-toc a:hover { color: var(--v-color-fg); border-color: var(--v-color-fg-quiet); }
+
+    /* Direction header with name + tagline */
+    .direction-head {
+      display: flex; gap: 24px;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .direction-head__index { font-family: var(--v-font-mono); color: var(--v-color-accent); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em; }
+    .direction-head__name { font-family: var(--v-font-serif); font-weight: 400; font-size: 1.5rem; color: var(--doc-fg); }
+    .direction-traits {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 4px 16px;
+      font-family: var(--v-font-mono);
+      font-size: 0.75rem;
+      margin-bottom: 16px;
+      color: var(--doc-fg-muted);
+    }
+    .direction-traits dt { color: var(--v-color-fg-quiet); text-transform: uppercase; letter-spacing: 0.06em; }
+    .direction-traits dd { margin: 0; color: var(--doc-fg); }
+
+    .closing {
+      margin-top: 64px;
+      padding: 24px;
+      background: rgba(212,160,23,0.06);
+      border-left: 2px solid var(--v-color-accent);
+    }
+    .closing h2 { margin-top: 0; }
+    .closing p:last-child { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+  <div class="page-wrap">
+
+    <header class="doc-header">
+      <div class="doc-header__meta">Voyager · UX Design Spec · Step 9 · Design Directions</div>
+      <h1>Four design directions, one register.</h1>
+      <p class="lede">
+        All four directions inherit the AiRT-class typographic and color foundation locked
+        in Steps 5–8 (JetBrains Mono / Source Serif 4 / Inter; deep-space palette; warm-gold
+        functional accent). What varies between them is <em>execution at the level finer than
+        tokens</em>: chapter marker shape, scrubber stroke, HUD grouping and density, and
+        how the chapter copy panel rests.
+      </p>
+      <p>
+        Each direction is shown across two states: <strong>cruise</strong> (idle mid-mission,
+        no encounter active) and <strong>encounter</strong> (V1 Jupiter, with the detail
+        scrubber expanded and the narrow-angle cone aimed at Io). The encounter view is
+        where the differentiator lives, so it's the more diagnostic comparison.
+      </p>
+    </header>
+
+    <nav class="direction-toc">
+      <div class="direction-toc__inner">
+        <a href="#dir-a">A · Mission Control</a>
+        <a href="#dir-b">B · AiRT Canonical</a>
+        <a href="#dir-c">C · Cinema</a>
+        <a href="#dir-d">D · Editorial</a>
+      </div>
+    </nav>
+
+    <!-- =========================================================
+         DIRECTION A — Mission Control
+         ========================================================= -->
+    <section id="dir-a" class="dir-a">
+      <div class="direction-head">
+        <span class="direction-head__index">Direction A</span>
+        <span class="direction-head__name">Mission Control</span>
+      </div>
+      <p class="lede">
+        Tightest UI cluster. HUD grouped in a quiet panel top-right; thick scrubber with
+        labeled pin markers; chapter copy always-visible with accent-gold left border. Reads
+        as a designed instrument panel — least restrained of the four, but highest information
+        legibility at first glance.
+      </p>
+      <dl class="direction-traits">
+        <dt>HUD grouping</dt><dd>Tight cluster top-right with subtle background fill</dd>
+        <dt>Scrubber stroke</dt><dd>Thick bar (12px) with gold progress fill</dd>
+        <dt>Chapter markers</dt><dd>Labeled pins, always-visible labels</dd>
+        <dt>Chapter copy</dt><dd>Always visible, gold left border</dd>
+        <dt>Risk</dt><dd>Reads slightly OpenSpace-cleaned-up; loses AiRT silence</dd>
+      </dl>
+
+      <div class="mockup-row">
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__sun"></div>
+            <svg class="viewport__traj" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 320 180 380 188 T 448 170 T 530 162" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 530 162 Q 600 158 660 168 T 720 200" />
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 290 240 360 260 T 408 252" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 408 252 Q 480 248 540 260 T 660 290" />
+            </svg>
+            <div class="viewport__sc viewport__sc--v1" style="left: 66%; top: 36%;"></div>
+            <div class="viewport__sc viewport__sc--v2" style="left: 51%; top: 56%;"></div>
+
+            <div class="chapter-title">1982 · CRUISE</div>
+
+            <div class="hud">
+              <div class="hud__row"><span class="hud__label">Date</span><span class="hud__value">1982-04-17 03:00 UT</span></div>
+              <div class="hud__row"><span class="hud__label">V1 dist</span><span class="hud__value">10.4 AU</span></div>
+              <div class="hud__row"><span class="hud__label">V2 dist</span><span class="hud__value">6.8 AU</span></div>
+              <div class="hud__row"><span class="hud__label">Speed</span><span class="hud__value">10,000×</span></div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">Cruise.</div>
+              <div class="chapter-copy__body">Voyager 2 closes the gap toward Saturn. V1 continues outbound past Saturn's orbit. The high-gain antennas hold Earth-pointing.</div>
+            </div>
+
+            <div class="speed">10,000× · mission in ~16 min</div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 9.6%;"></div>
+                  <div class="scrubber__thumb" style="left: 9.6%;"></div>
+                  <div class="scrubber__marker" style="left: 0.5%;"><span class="scrubber__marker-label">V2 L</span></div>
+                  <div class="scrubber__marker" style="left: 2%;"><span class="scrubber__marker-label">V1 L</span></div>
+                  <div class="scrubber__marker" style="left: 3.8%;"><span class="scrubber__marker-label">V1 J</span></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"><span class="scrubber__marker-label">V2 J</span></div>
+                  <div class="scrubber__marker" style="left: 7%;"><span class="scrubber__marker-label">V1 S</span></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"><span class="scrubber__marker-label">V2 S</span></div>
+                  <div class="scrubber__marker" style="left: 16%;"><span class="scrubber__marker-label">V2 U</span></div>
+                  <div class="scrubber__marker" style="left: 22%;"><span class="scrubber__marker-label">V2 N</span></div>
+                  <div class="scrubber__marker" style="left: 24%;"><span class="scrubber__marker-label">PBD</span></div>
+                  <div class="scrubber__marker" style="left: 66%;"><span class="scrubber__marker-label">V1 H</span></div>
+                  <div class="scrubber__marker" style="left: 76%;"><span class="scrubber__marker-label">V2 H</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>A · cruise · 1982-04-17 · v2 mid-saturn approach</figcaption>
+        </figure>
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__planet"></div>
+            <div class="viewport__moon viewport__moon--io"></div>
+            <div class="viewport__moon viewport__moon--europa"></div>
+            <div class="viewport__sc viewport__sc--v1" style="left: 60%; top: 30%; width: 5px; height: 5px;"></div>
+            <svg class="viewport__cone-svg" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path d="M 480 135 L 290 213 L 296 220 Z" fill="rgba(212,160,23,0.18)" stroke="#d4a017" stroke-width="0.8" />
+            </svg>
+
+            <div class="chapter-title">V1 JUPITER · 1979-03-05</div>
+
+            <div class="hud">
+              <div class="hud__row"><span class="hud__label">Date</span><span class="hud__value">1979-03-05 11:42 UT</span></div>
+              <div class="hud__row"><span class="hud__label">V1 dist</span><span class="hud__value">5.20 AU</span></div>
+              <div class="hud__row"><span class="hud__label">Target</span><span class="hud__value">Io</span></div>
+              <div class="hud__row"><span class="hud__label">Att.</span><span class="hud__value" style="color: var(--v-color-ck);">CK</span></div>
+              <div class="hud__row"><span class="hud__label">Speed</span><span class="hud__value">100×</span></div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">V1 Jupiter.</div>
+              <div class="chapter-copy__body">23 minutes before closest approach. The scan platform turns to track Io. The first active volcano discovered beyond Earth will appear in the next pass.</div>
+            </div>
+
+            <div class="speed">100× · 1 min / sec</div>
+
+            <div class="scrubber--detail-region">
+              <div class="scrubber scrubber--detail">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 42%;"></div>
+                  <div class="scrubber__thumb" style="left: 42%;"></div>
+                </div>
+                <div class="scrubber--detail-label">Feb 28</div>
+                <div class="scrubber--detail-label scrubber--detail-label--right">Mar 12, 1979</div>
+              </div>
+            </div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 3.8%;"></div>
+                  <div class="scrubber__thumb" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker scrubber__marker--active" style="left: 3.8%;"><span class="scrubber__marker-label">V1 J</span></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"><span class="scrubber__marker-label">V2 J</span></div>
+                  <div class="scrubber__marker" style="left: 7%;"><span class="scrubber__marker-label">V1 S</span></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"><span class="scrubber__marker-label">V2 S</span></div>
+                  <div class="scrubber__marker" style="left: 16%;"><span class="scrubber__marker-label">V2 U</span></div>
+                  <div class="scrubber__marker" style="left: 22%;"><span class="scrubber__marker-label">V2 N</span></div>
+                  <div class="scrubber__marker" style="left: 24%;"><span class="scrubber__marker-label">PBD</span></div>
+                  <div class="scrubber__marker" style="left: 66%;"><span class="scrubber__marker-label">V1 H</span></div>
+                  <div class="scrubber__marker" style="left: 76%;"><span class="scrubber__marker-label">V2 H</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>A · encounter · v1 jupiter · 23 min before closest approach</figcaption>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         DIRECTION B — AiRT Canonical
+         ========================================================= -->
+    <section id="dir-b" class="dir-b">
+      <div class="direction-head">
+        <span class="direction-head__index">Direction B</span>
+        <span class="direction-head__name">AiRT Canonical</span>
+      </div>
+      <p class="lede">
+        The most disciplined application of the AiRT reference. Distributed HUD with date+distance
+        top-right, instrument-shutoff legend bottom-left as quiet typography. Thin hairline
+        scrubber. Restrained dot markers; chapter labels appear only on hover. Chapter copy is
+        present but quiet — no background, no border, just typography over the canvas.
+      </p>
+      <dl class="direction-traits">
+        <dt>HUD grouping</dt><dd>Distributed; no background fills; pure typography</dd>
+        <dt>Scrubber stroke</dt><dd>Thin hairline (1px) with gold thumb</dd>
+        <dt>Chapter markers</dt><dd>Tiny dots, labels on hover only</dd>
+        <dt>Chapter copy</dt><dd>Bottom-right, no chrome — typography over canvas</dd>
+        <dt>Risk</dt><dd>Maya may not notice the chapter markers; affordance discovery harder</dd>
+      </dl>
+
+      <div class="mockup-row">
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__sun"></div>
+            <svg class="viewport__traj" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 320 180 380 188 T 448 170 T 530 162" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 530 162 Q 600 158 660 168 T 720 200" />
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 290 240 360 260 T 408 252" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 408 252 Q 480 248 540 260 T 660 290" />
+            </svg>
+            <div class="viewport__sc viewport__sc--v1" style="left: 66%; top: 36%;"></div>
+            <div class="viewport__sc viewport__sc--v2" style="left: 51%; top: 56%;"></div>
+
+            <div class="chapter-title">1982 · CRUISE</div>
+
+            <div class="hud hud--date-distance">
+              <div class="hud__row"><span class="hud__label">UT</span><span class="hud__value">1982-04-17 03:00</span></div>
+              <div class="hud__row"><span class="hud__label">V1</span><span class="hud__value">10.4 AU</span></div>
+              <div class="hud__row"><span class="hud__label">V2</span><span class="hud__value">6.8 AU</span></div>
+            </div>
+
+            <div class="hud hud--instruments">
+              <div class="hud__row"><span class="hud__label">V1</span><span class="hud__value hud__value--muted">ISS · UVS · PLS · LECP</span></div>
+              <div class="hud__row"><span class="hud__label">V2</span><span class="hud__value hud__value--muted">ISS · UVS · PLS · LECP</span></div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">Cruise.</div>
+              <div class="chapter-copy__body">Voyager 2 closes the gap toward Saturn. V1 continues outbound past Saturn's orbit.</div>
+            </div>
+
+            <div class="speed">10,000× — full mission in ~16 min</div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 9.6%;"></div>
+                  <div class="scrubber__thumb" style="left: 9.6%;"></div>
+                  <div class="scrubber__marker" style="left: 0.5%;"></div>
+                  <div class="scrubber__marker" style="left: 2%;"></div>
+                  <div class="scrubber__marker" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"></div>
+                  <div class="scrubber__marker" style="left: 7%;"></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"></div>
+                  <div class="scrubber__marker" style="left: 16%;"></div>
+                  <div class="scrubber__marker" style="left: 22%;"></div>
+                  <div class="scrubber__marker" style="left: 24%;"></div>
+                  <div class="scrubber__marker" style="left: 66%;"></div>
+                  <div class="scrubber__marker" style="left: 76%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>B · cruise · 1982-04-17</figcaption>
+        </figure>
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__planet"></div>
+            <div class="viewport__moon viewport__moon--io"></div>
+            <div class="viewport__moon viewport__moon--europa"></div>
+            <div class="viewport__sc viewport__sc--v1" style="left: 60%; top: 30%; width: 5px; height: 5px;"></div>
+            <svg class="viewport__cone-svg" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path d="M 480 135 L 290 213 L 296 220 Z" fill="rgba(212,160,23,0.16)" stroke="#d4a017" stroke-width="0.6" />
+            </svg>
+
+            <div class="chapter-title">V1 JUPITER</div>
+
+            <div class="hud hud--date-distance">
+              <div class="hud__row"><span class="hud__label">UT</span><span class="hud__value">1979-03-05 11:42</span></div>
+              <div class="hud__row"><span class="hud__label">V1</span><span class="hud__value">5.20 AU</span></div>
+              <div class="hud__row"><span class="hud__label">Target</span><span class="hud__value">Io</span></div>
+              <div class="hud__row"><span class="hud__label">Att</span><span class="hud__value" style="color: var(--v-color-ck);">CK reconstructed</span></div>
+            </div>
+
+            <div class="hud hud--instruments">
+              <div class="hud__row"><span class="hud__label">V1</span><span class="hud__value hud__value--muted">ISS · UVS · PLS · LECP</span></div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">V1 Jupiter.</div>
+              <div class="chapter-copy__body">23 minutes before closest approach. The scan platform turns to track Io. The first active volcano discovered beyond Earth will appear in the next pass.</div>
+            </div>
+
+            <div class="speed">100× — 1 min / sec</div>
+
+            <div class="scrubber--detail-region">
+              <div class="scrubber scrubber--detail">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 42%;"></div>
+                  <div class="scrubber__thumb" style="left: 42%;"></div>
+                </div>
+                <div class="scrubber--detail-label">Feb 28</div>
+                <div class="scrubber--detail-label scrubber--detail-label--right">Mar 12, 1979</div>
+              </div>
+            </div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 3.8%;"></div>
+                  <div class="scrubber__thumb" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker scrubber__marker--active" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"></div>
+                  <div class="scrubber__marker" style="left: 7%;"></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"></div>
+                  <div class="scrubber__marker" style="left: 16%;"></div>
+                  <div class="scrubber__marker" style="left: 22%;"></div>
+                  <div class="scrubber__marker" style="left: 24%;"></div>
+                  <div class="scrubber__marker" style="left: 66%;"></div>
+                  <div class="scrubber__marker" style="left: 76%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>B · encounter · v1 jupiter</figcaption>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         DIRECTION C — Cinema
+         ========================================================= -->
+    <section id="dir-c" class="dir-c">
+      <div class="direction-head">
+        <span class="direction-head__index">Direction C</span>
+        <span class="direction-head__name">Cinema</span>
+      </div>
+      <p class="lede">
+        Canvas-is-everything. Minimal HUD at rest (date + chapter title only). Chapter copy
+        materializes as italic text below the canvas after a chapter is entered, fades after
+        idle. Tick-style markers, no labels. The most restrained of the four — closest to
+        watching a silent film of the mission.
+      </p>
+      <dl class="direction-traits">
+        <dt>HUD grouping</dt><dd>Minimal: date + chapter only at rest</dd>
+        <dt>Scrubber stroke</dt><dd>Thinnest (1px hairline)</dd>
+        <dt>Chapter markers</dt><dd>Vertical ticks, no labels</dd>
+        <dt>Chapter copy</dt><dd>Centered italic, materializes/fades</dd>
+        <dt>Risk</dt><dd>Instrument shutoff status and provenance harder to surface</dd>
+      </dl>
+
+      <div class="mockup-row">
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__sun"></div>
+            <svg class="viewport__traj" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 320 180 380 188 T 448 170 T 530 162" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 530 162 Q 600 158 660 168 T 720 200" />
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 290 240 360 260 T 408 252" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 408 252 Q 480 248 540 260 T 660 290" />
+            </svg>
+            <div class="viewport__sc viewport__sc--v1" style="left: 66%; top: 36%;"></div>
+            <div class="viewport__sc viewport__sc--v2" style="left: 51%; top: 56%;"></div>
+
+            <div class="chapter-title">1982</div>
+
+            <div class="hud">
+              <div class="hud__row"><span class="hud__value">1982-04-17 03:00 UT</span></div>
+            </div>
+
+            <div class="speed">10,000×</div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 9.6%;"></div>
+                  <div class="scrubber__thumb" style="left: 9.6%;"></div>
+                  <div class="scrubber__marker" style="left: 0.5%;"></div>
+                  <div class="scrubber__marker" style="left: 2%;"></div>
+                  <div class="scrubber__marker" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"></div>
+                  <div class="scrubber__marker" style="left: 7%;"></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"></div>
+                  <div class="scrubber__marker" style="left: 16%;"></div>
+                  <div class="scrubber__marker" style="left: 22%;"></div>
+                  <div class="scrubber__marker" style="left: 24%;"></div>
+                  <div class="scrubber__marker" style="left: 66%;"></div>
+                  <div class="scrubber__marker" style="left: 76%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>C · cruise · 1982 · most restrained chrome</figcaption>
+        </figure>
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__planet"></div>
+            <div class="viewport__moon viewport__moon--io"></div>
+            <div class="viewport__moon viewport__moon--europa"></div>
+            <div class="viewport__sc viewport__sc--v1" style="left: 60%; top: 30%; width: 5px; height: 5px;"></div>
+            <svg class="viewport__cone-svg" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path d="M 480 135 L 290 213 L 296 220 Z" fill="rgba(212,160,23,0.14)" stroke="#d4a017" stroke-width="0.5" />
+            </svg>
+
+            <div class="chapter-title">V1 JUPITER</div>
+
+            <div class="hud">
+              <div class="hud__row"><span class="hud__value">1979-03-05 11:42 UT</span></div>
+              <div class="hud__row"><span class="hud__label">target</span><span class="hud__value">Io</span></div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">V1 Jupiter.</div>
+              <div class="chapter-copy__body">23 minutes before closest approach. The scan platform turns to track Io.</div>
+            </div>
+
+            <div class="speed">100×</div>
+
+            <div class="scrubber--detail-region">
+              <div class="scrubber scrubber--detail">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 42%;"></div>
+                  <div class="scrubber__thumb" style="left: 42%;"></div>
+                </div>
+                <div class="scrubber--detail-label">Feb 28</div>
+                <div class="scrubber--detail-label scrubber--detail-label--right">Mar 12, 1979</div>
+              </div>
+            </div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 3.8%;"></div>
+                  <div class="scrubber__thumb" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker scrubber__marker--active" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"></div>
+                  <div class="scrubber__marker" style="left: 7%;"></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"></div>
+                  <div class="scrubber__marker" style="left: 16%;"></div>
+                  <div class="scrubber__marker" style="left: 22%;"></div>
+                  <div class="scrubber__marker" style="left: 24%;"></div>
+                  <div class="scrubber__marker" style="left: 66%;"></div>
+                  <div class="scrubber__marker" style="left: 76%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>C · encounter · italic prose surfaces</figcaption>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         DIRECTION D — Editorial
+         ========================================================= -->
+    <section id="dir-d" class="dir-d">
+      <div class="direction-head">
+        <span class="direction-head__index">Direction D</span>
+        <span class="direction-head__name">Editorial</span>
+      </div>
+      <p class="lede">
+        NYT long-scroll register pulled forward. Chapter copy panel is large, always-visible
+        on the right side as a vertical editorial strip. HUD is a quiet centered bottom-strip
+        rather than top-right. Dot markers with small persistent labels. Reads as
+        "interactive essay" more than "instrument panel."
+      </p>
+      <dl class="direction-traits">
+        <dt>HUD grouping</dt><dd>Centered bottom-strip; quiet horizontal arrangement</dd>
+        <dt>Scrubber stroke</dt><dd>Medium (2px) with gold-ring thumb</dd>
+        <dt>Chapter markers</dt><dd>Dots with persistent labels above</dd>
+        <dt>Chapter copy</dt><dd>Always-visible vertical strip, prose-leading</dd>
+        <dt>Risk</dt><dd>Canvas is the protagonist commitment weakened; reads more "essay"</dd>
+      </dl>
+
+      <div class="mockup-row">
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__sun"></div>
+            <svg class="viewport__traj" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 320 180 380 188 T 448 170 T 530 162" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 530 162 Q 600 158 660 168 T 720 200" />
+              <path class="viewport__traj-line viewport__traj-line--past" d="M 224 216 Q 290 240 360 260 T 408 252" />
+              <path class="viewport__traj-line viewport__traj-line--future" d="M 408 252 Q 480 248 540 260 T 660 290" />
+            </svg>
+            <div class="viewport__sc viewport__sc--v1" style="left: 56%; top: 36%;"></div>
+            <div class="viewport__sc viewport__sc--v2" style="left: 44%; top: 56%;"></div>
+
+            <div class="chapter-title">1982 · CRUISE</div>
+
+            <div class="hud">
+              <div class="hud__row">
+                <span><span class="hud__label">UT</span> <span class="hud__value">1982-04-17 03:00</span></span>
+                <span><span class="hud__label">V1</span> <span class="hud__value">10.4 AU</span></span>
+                <span><span class="hud__label">V2</span> <span class="hud__value">6.8 AU</span></span>
+                <span><span class="hud__label">Speed</span> <span class="hud__value">10,000×</span></span>
+              </div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">The long cruise.</div>
+              <div class="chapter-copy__body">Voyager 2 closes the gap toward Saturn — eighteen months still ahead. Voyager 1 continues outbound past Saturn's orbit, the high-gain antenna locked Earthward.</div>
+            </div>
+
+            <div class="speed">10,000×</div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 9.6%;"></div>
+                  <div class="scrubber__thumb" style="left: 9.6%;"></div>
+                  <div class="scrubber__marker" style="left: 0.5%;"><span class="scrubber__marker-label">V2L</span></div>
+                  <div class="scrubber__marker" style="left: 2%;"><span class="scrubber__marker-label">V1L</span></div>
+                  <div class="scrubber__marker" style="left: 3.8%;"><span class="scrubber__marker-label">V1J</span></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"><span class="scrubber__marker-label">V2J</span></div>
+                  <div class="scrubber__marker" style="left: 7%;"><span class="scrubber__marker-label">V1S</span></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"><span class="scrubber__marker-label">V2S</span></div>
+                  <div class="scrubber__marker" style="left: 16%;"><span class="scrubber__marker-label">V2U</span></div>
+                  <div class="scrubber__marker" style="left: 22%;"><span class="scrubber__marker-label">V2N</span></div>
+                  <div class="scrubber__marker" style="left: 24%;"><span class="scrubber__marker-label">PBD</span></div>
+                  <div class="scrubber__marker" style="left: 66%;"><span class="scrubber__marker-label">V1H</span></div>
+                  <div class="scrubber__marker" style="left: 76%;"><span class="scrubber__marker-label">V2H</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>D · cruise · 1982 · editorial strip leads</figcaption>
+        </figure>
+
+        <figure class="mockup">
+          <div class="viewport">
+            <div class="viewport__canvas"></div>
+            <div class="viewport__planet" style="left: 42%;"></div>
+            <div class="viewport__moon viewport__moon--io" style="left: 30%;"></div>
+            <div class="viewport__moon viewport__moon--europa" style="left: 55%;"></div>
+            <div class="viewport__sc viewport__sc--v1" style="left: 50%; top: 30%; width: 5px; height: 5px;"></div>
+            <svg class="viewport__cone-svg" viewBox="0 0 800 450" preserveAspectRatio="none">
+              <path d="M 400 135 L 232 213 L 238 220 Z" fill="rgba(212,160,23,0.18)" stroke="#d4a017" stroke-width="0.8" />
+            </svg>
+
+            <div class="chapter-title">V1 JUPITER</div>
+
+            <div class="hud">
+              <div class="hud__row">
+                <span><span class="hud__label">UT</span> <span class="hud__value">1979-03-05 11:42</span></span>
+                <span><span class="hud__label">V1</span> <span class="hud__value">5.20 AU</span></span>
+                <span><span class="hud__label">Target</span> <span class="hud__value">Io</span></span>
+                <span><span class="hud__label">Att</span> <span class="hud__value" style="color: var(--v-color-ck);">CK</span></span>
+              </div>
+            </div>
+
+            <div class="chapter-copy">
+              <div class="chapter-copy__lede">V1 Jupiter.</div>
+              <div class="chapter-copy__body">23 minutes before closest approach. The scan platform — a mechanically articulated boom on the spacecraft's body — turns deliberately to track Io. In the next pass, the narrow-angle camera will photograph the first active volcano discovered beyond Earth.</div>
+            </div>
+
+            <div class="speed">100×</div>
+
+            <div class="scrubber--detail-region">
+              <div class="scrubber scrubber--detail">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 42%;"></div>
+                  <div class="scrubber__thumb" style="left: 42%;"></div>
+                </div>
+                <div class="scrubber--detail-label">Feb 28</div>
+                <div class="scrubber--detail-label scrubber--detail-label--right">Mar 12, 1979</div>
+              </div>
+            </div>
+
+            <div class="scrubber-region">
+              <div class="scrubber">
+                <div class="scrubber__track">
+                  <div class="scrubber__progress" style="width: 3.8%;"></div>
+                  <div class="scrubber__thumb" style="left: 3.8%;"></div>
+                  <div class="scrubber__marker scrubber__marker--active" style="left: 3.8%;"><span class="scrubber__marker-label">V1J</span></div>
+                  <div class="scrubber__marker" style="left: 4.4%;"><span class="scrubber__marker-label">V2J</span></div>
+                  <div class="scrubber__marker" style="left: 7%;"><span class="scrubber__marker-label">V1S</span></div>
+                  <div class="scrubber__marker" style="left: 8.7%;"><span class="scrubber__marker-label">V2S</span></div>
+                  <div class="scrubber__marker" style="left: 16%;"><span class="scrubber__marker-label">V2U</span></div>
+                  <div class="scrubber__marker" style="left: 22%;"><span class="scrubber__marker-label">V2N</span></div>
+                  <div class="scrubber__marker" style="left: 24%;"><span class="scrubber__marker-label">PBD</span></div>
+                  <div class="scrubber__marker" style="left: 66%;"><span class="scrubber__marker-label">V1H</span></div>
+                  <div class="scrubber__marker" style="left: 76%;"><span class="scrubber__marker-label">V2H</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>D · encounter · editorial prose persists</figcaption>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         Comparison summary + closing
+         ========================================================= -->
+    <section class="closing">
+      <h2>Comparison at a glance</h2>
+      <p>
+        <strong>A — Mission Control</strong> is the most legible at first glance but pays
+        for that legibility with chrome that competes with the canvas. The accent-gold borders
+        and labeled pins read as designed surfaces, not as restraint.
+      </p>
+      <p>
+        <strong>B — AiRT Canonical</strong> is the most disciplined application of the
+        Step 5 reference set. Distributed HUD as pure typography over the canvas; hairline
+        scrubber; markers as quiet dots. The risk is discoverability: Maya may not notice
+        the chapter markers without prompting. Mitigated by hover-affordance and chapter-marker
+        focus-ring on keyboard navigation.
+      </p>
+      <p>
+        <strong>C — Cinema</strong> is the most restrained. Minimal chrome; the simulation
+        does all the talking. Loses some affordance density (instrument-shutoff status
+        becomes hard to surface; provenance labels need a different home). Closest to
+        watching a silent film of the mission.
+      </p>
+      <p>
+        <strong>D — Editorial</strong> pulls the NYT long-scroll register forward. The
+        always-visible chapter copy strip means the prose competes more with the canvas; the
+        bottom-centered HUD is unusual but reads as editorial caption. Strongest for Marcus
+        (the classroom case) and weakest for the "canvas is the protagonist" commitment.
+      </p>
+      <p>
+        <strong>The recommendation is Direction B.</strong> It maximally inherits the AiRT
+        register established in Step 5, leans into typography as the primary UI surface, and
+        keeps the canvas as the protagonist. The discoverability risk (markers too quiet) is
+        addressable through hover/focus affordance design without altering the resting state.
+        It is the direction whose mistakes are the most fixable.
+      </p>
+      <p>
+        Pick a direction and we lock it in the spec; cherry-pick details from others and we
+        document the synthesis.
+      </p>
+    </section>
+
+  </div>
+</body>
+</html>
