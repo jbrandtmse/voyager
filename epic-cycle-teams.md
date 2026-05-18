@@ -64,7 +64,27 @@ Develop a slash command that executes the BMAD Method development implementation
 **End of Epic (executed once per epic after all stories):**
 1. **Lead** pauses and asks user: "Would you like to run a retrospective?" If yes, execute `/bmad-retrospective` **in interactive mode, not YOLO** — the skill must actually ask its questions and wait for real user answers; auto-answering them produces a worthless artifact. (`bypassPermissions` for tool calls is fine; what matters is the skill's elicitation flow reaches the user.)
 
-Make sure to include a file for the slash command in the project-root `.claude/commands/` folder so the workflow can be executed as a slash command.
+Make sure to include a file for the slash command in the project-root `.claude/commands/` folder so the workflow can be executed as a slash command. See "Slash Command File" below for the exact file format.
+
+## Slash Command File
+
+Create `.claude/commands/epic-cycle.md` at the project root with this exact structure:
+
+```markdown
+---
+description: Run the BMAD Method epic development cycle for one or more epics using Agent Teams
+---
+
+Execute the workflow specified in `epic-cycle-teams.md` at the project root.
+
+Begin by performing the Pre-flight check (verify Agent Teams is enabled — if not, follow the instructions in epic-cycle-teams.md § Pre-flight and stop). Then call `TeamCreate` per Team Lifecycle § Required. Then proceed sequentially through the Per Epic / Per Story / End of Epic phases per that document. After the last epic's retrospective (or skip), shut down any lingering teammates and call `TeamDelete` to clean up.
+
+Arguments: the user may pass an epic range as $ARGUMENTS — for example `1-3` for Epics 1 through 3, `2` for a single epic, or empty to prompt the user for the range.
+
+Honor every "(Critical)" / "(Critical Gate)" rule in epic-cycle-teams.md without exception. The retrospective is the one step that must run interactively (lead executes the skill itself; do not spawn it as an agent).
+```
+
+The `description` frontmatter shows in `/` autocomplete; the body is the prompt Claude receives when the command is invoked. `$ARGUMENTS` (if used in the body) is replaced by whatever the user typed after the slash-command name. Invoke as `/epic-cycle 1-3` (or whatever range you want), or `/epic-cycle` to be prompted.
 
 ## Execution Guidelines
 
@@ -80,7 +100,7 @@ Stories are to be documented/updated consistently with the instructions in each 
 
 **All agents must be spawned with `mode: "bypassPermissions"`** — this is YOLO mode. Agents should not prompt for file edits, bash commands, or tool permissions. Without this, the pipeline stalls on every file write waiting for human approval.
 
-**`/bmad-retrospective` is the one step that must run interactively.** The retrospective is executed by the **lead directly** (not a spawned agent) via the `Skill` tool, and it must run interactively so the user can answer its prompts. See "Retrospective Per Epic" below.
+**`/bmad-retrospective` is the one step whose elicitation prompts must reach the user.** The mechanism: when the **lead** invokes the skill itself via the `Skill` tool (not via a spawned agent), the skill's `AskUserQuestion` calls route directly to the user. `bypassPermissions` does NOT auto-answer `AskUserQuestion` — that tool always elicits the human. Spawned agents are subagents and cannot reliably surface their elicitation to the user, so this skill must be executed by the lead directly. See "Retrospective Per Epic" below.
 
 ## Skill Tool Invocation (Critical)
 
@@ -88,9 +108,34 @@ All BMAD skills (`/bmad-create-story`, `/bmad-dev-story`, `/bmad-qa-generate-e2e
 
 ## Spawn-on-Demand Coordination (Critical)
 
-**Do NOT use the task list system** (`TaskCreate`, `TaskList`, `TaskUpdate`). Agents poll TaskList on every wake-up and will self-schedule regardless of prompt instructions, `blockedBy` constraints, or task ownership. This behavior cannot be overridden by prompt text alone.
+**Do NOT create, update, or read tasks via the task list system** (`TaskCreate`, `TaskUpdate`, `TaskList`). Note that `TeamCreate` automatically provisions an empty TaskList directory alongside the team — that's unavoidable but harmless **as long as no tasks are ever written to it**. Agents poll TaskList on every wake-up and will self-schedule from any non-empty list regardless of prompt instructions, `blockedBy` constraints, or task ownership; keeping the list empty is what prevents self-scheduling. This behavior cannot be overridden by prompt text alone.
 
-Instead, the lead tracks pipeline state directly from the epic story list and coordinates agents via **spawn-on-demand**:
+Instead, the lead tracks pipeline state directly from the epic story list and coordinates agents via **spawn-on-demand**.
+
+### Team Lifecycle (Required)
+
+Agent Teams is a stateful subsystem. Before the lead can spawn any named teammate, a team must exist; at the end of the workflow run, the team should be deleted to avoid accumulating state under `~/.claude/teams/`.
+
+**Once per workflow run (not per epic), before the first agent spawn:**
+
+```text
+TeamCreate({
+  team_name: "epic-cycle-<epoch-or-date>",   // e.g. "epic-cycle-2026-05-18"
+  agent_type: "team-lead",
+  description: "Epic Development Cycle: Epics <range> for project <name>"
+})
+```
+
+Use a unique `team_name` per workflow run (date-stamped or epoch-stamped) so multiple runs don't collide. The lead is implicitly the team-lead; teammates are joined via the `Agent` tool's `team_name` and `name` parameters during spawn.
+
+**Once per workflow run, after the last epic's retrospective (or skip) completes:**
+
+```text
+// Confirm no teammates are still alive (all stories' shutdown handshakes are complete).
+TeamDelete()  // operates on the current session's team context; takes no team_name arg
+```
+
+`TeamDelete` will fail if any teammate is still active — make sure every spawned agent has been shut down via the documented shutdown-before-respawn sequence before calling it.
 
 ### Task-in-Prompt Pattern (Required)
 
@@ -98,17 +143,23 @@ Embed the task directly in the agent's spawn prompt rather than using SendMessag
 
 For each pipeline step, the lead:
 
-1. **Spawns** a fresh agent with `mode: "bypassPermissions"` and the full task embedded in the prompt
+1. **Spawns** a fresh agent via the `Agent` tool with:
+   - `team_name: <the team created in Team Lifecycle>` (required — joins the agent to the team so SendMessage can reach it by name)
+   - `name: <unique-per-story>` (see step 2)
+   - `mode: "bypassPermissions"`
+   - `prompt: <full task embedded in the spawn prompt>` (Task-in-Prompt; no SendMessage at spawn time)
 2. **Uses unique names** per story: `dev-{epic}-{story}`, `qa-{epic}-{story}`, and `cr-{epic}-{story}` (e.g., `dev-2-3`, `qa-2-3`, `cr-2-3`) — never reuse generic names like `developer`, `qa`, or `code-reviewer`
 3. **Waits** for the completion message
-4. **Shuts down** the agent via `SendMessage(type: "shutdown_request")`
-5. **Waits for shutdown approval** — do NOT spawn the next agent until the shutdown confirmation is received (prevents name collisions)
+4. **Shuts down** the agent via `SendMessage({to: "<agent-name>", message: {type: "shutdown_request"}})` (structured message; no `summary` needed for structured messages — `summary` is required only when the message is a plain string)
+5. **Waits for shutdown approval** — the agent responds with `shutdown_response: approve=true`; do NOT spawn the next agent with the same name until that response arrives (prevents name collisions)
 
 This completely eliminates self-scheduling — terminated agents can't poll TaskList.
 
 ### Pipeline Flow
 
 ```
+Lead calls TeamCreate({team_name: "epic-cycle-<date>", agent_type: "team-lead", description: "..."})  // once per workflow run
+
 For each epic in range:
   Lead executes /bmad-sprint-planning via Skill tool (ensures sprint-status.yaml is current)
   Lead logs sprint planning completion
@@ -129,8 +180,10 @@ For each epic in range:
     Lead does feat commit + push (submodules first if applicable, then parent — see Submodule Commit Order)
     Lead logs completion → next story (or next batch)
 
-  Lead pauses: "Would you like to run a retrospective?" → if yes, execute /bmad-retrospective via Skill tool IN INTERACTIVE MODE — lead runs the skill itself, surfaces every elicitation prompt to the user, and waits for real answers (do not auto-answer; permission mode is unrelated)
+  Lead pauses: "Would you like to run a retrospective?" → if yes, execute /bmad-retrospective via Skill tool — lead runs the skill itself so its AskUserQuestion calls reach the user (do not spawn an agent for this)
   Lead logs epic completion → next epic
+
+Lead calls TeamDelete()  // once per workflow run, after all spawned agents have been shut down
 ```
 
 ### Smart Parallelism (Opt-In Per Batch)
@@ -188,7 +241,7 @@ Sequential resume is always safe; parallel resume is an optimization. When in do
 **Write-ahead rule (prevents resume-time duplicate work):** The lead must write the cycle log entry for a completed stage **before** taking the next action that depends on that completion. Concretely:
 
 1. Agent sends `STATUS: completed` → lead receives.
-2. Lead writes the cycle log entry for that stage and `fsync`s it to disk.
+2. Lead appends the cycle log entry for that stage via the `Write` (or `Edit`) tool. The Write tool returns only after the file has been committed to the OS; no additional flush primitive is available to or required from the lead.
 3. *Only then* does the lead initiate the shutdown handshake, spawn the next stage's agent, or perform a git commit.
 
 If a crash occurs after step 1 but before step 2, the agent is dead (process gone), the work is on disk, but the cycle log doesn't reflect the completion — on resume the lead re-spawns the agent for that stage. This is acceptable for dev/qa stages (idempotent re-implementation against the same story spec) but **NOT acceptable for the commit stage** (would produce a duplicate commit). For the `committed` stage specifically: write the log entry immediately after `git push` returns success, before any other action. If the crash happens between `git push` success and log write, on resume the lead inspects `git log --oneline` against the expected story files; if a matching commit exists, the lead writes the missing log entry and proceeds. Do NOT re-run the commit.
@@ -198,7 +251,7 @@ If a crash occurs after step 1 but before step 2, the agent is dead (process gon
 After sprint planning and before building the story list, the lead must review the previous epic's retrospective and create a cleanup story. **This step is mandatory** — it closes the feedback loop between retrospectives and sprint planning, ensuring deferred items are systematically triaged rather than silently dropped.
 
 1. **Calculate previous epic number** — if processing Epic N, look for Epic N-1's retrospective.
-2. **Search for the retrospective file**: `_bmad-output/implementation-artifacts/epic-{N-1}-retro-*.md`. If multiple matches exist (re-runs), select the latest by file modification time; tie-break by lexicographic filename so explicit version suffixes (`-v2`, `-final`) win over earlier matches. Log which file was selected.
+2. **Search for the retrospective file**: the convention used here is `_bmad-output/implementation-artifacts/epic-{N-1}-retro-*.md`. Before relying on this pattern, verify it matches what your project's `/bmad-retrospective` skill actually writes — check the skill's SKILL.md, output template, or inspect a known-good retro file from a prior epic. If multiple matches exist (re-runs), select the latest by file modification time; tie-break by lexicographic filename so explicit version suffixes (`-v2`, `-final`) win over earlier matches. Log which file was selected.
 3. **If a retrospective exists**, read it and extract:
    - All **action items** (with status: completed, in-progress, not addressed)
    - All **deferred review findings** from that epic's stories
@@ -208,7 +261,11 @@ After sprint planning and before building the story list, the lead must review t
    - **Include in Story X.0** — items relevant to the current epic's codebase or blocking quality
    - **Explicitly defer with rationale** — items not relevant yet (e.g., belongs to a future epic)
    - **Drop** — items already resolved or no longer applicable
-6. **Create Story X.0** by invoking `/bmad-create-story` via the `Skill` tool. Supply the skill with whatever args its current contract expects to express: a story ID of `{N}.0`, a title along the lines of `"Epic {N-1} Deferred Cleanup"`, and a body containing the full triage table (each item, its source — retro or deferred-work.md — and its triage decision). If the skill's args contract differs from this shape, follow the skill's contract and pass the triage table inline as the story body or as an attached input file. If ALL items are triaged as defer/drop, still create the X.0 story to document the decision.
+6. **Create Story X.0 in two steps** (the `Skill` tool's `args` parameter is a single string and cannot carry a multi-line triage body):
+   - **Step 6a (skill invocation):** Invoke `/bmad-create-story` via the `Skill` tool with `args` set to a brief title string, e.g., `"Story {N}.0: Epic {N-1} Deferred Cleanup"`. Capture the resulting story file path from the skill's output.
+   - **Step 6b (body editing):** Append the full triage table to the created story file via the `Edit` or `Write` tool. Table format: one row per item with columns `Item` | `Source` (retro or `deferred-work.md`) | `Triage Decision` (include / defer with rationale / drop). Include a header section noting which Epic N-1 the triage covers and the date.
+
+   If ALL items are triaged as defer/drop, still create the X.0 story to document the decision.
 7. **Skip Story X.0 ONLY if both sources are empty.** If no previous retrospective exists (e.g., Epic 1, or retro was skipped) AND `deferred-work.md` is missing or contains no unresolved items: log that no triage source was found and skip Story X.0 creation. If a retrospective is missing but `deferred-work.md` has unresolved items, do NOT skip — still execute the triage (step 5) and create Story X.0 (step 6) using only the `deferred-work.md` source. Orphaning unresolved items because the retro is absent is itself the failure mode that made this gate mandatory.
 8. Log the retrospective review and Story X.0 creation in the cycle log.
 
@@ -219,7 +276,7 @@ This gate was elevated from optional to mandatory after a prior project's mid-ru
 Before processing any stories for an epic, the lead must run sprint planning:
 
 1. Execute `/bmad-sprint-planning` directly via the `Skill` tool (NOT via an agent).
-2. This ensures `sprint-status.yaml` is current, all stories are tracked, and any status mismatches are caught.
+2. This ensures `sprint-status.yaml` (conventionally located at `_bmad-output/implementation-artifacts/sprint-status.yaml` — verify your project's actual path from the sprint-planning skill's SKILL.md or output) is current, all stories are tracked, and any status mismatches are caught.
 3. If sprint planning surfaces a blocking issue, pause and inform the user before proceeding. A **blocking issue** is any one of: a story listed in `epics.md` but missing from `sprint-status.yaml` (or vice versa); a status mismatch where the same story shows different statuses in the two sources; a schema-validation error in `sprint-status.yaml`; or any case where the skill's own output explicitly flags an inconsistency for human review. Routine updates (newly-discovered stories appended, previously-completed stories marked done) are not blocking — they reflect normal progress and the lead proceeds.
 4. Log sprint planning completion in the cycle log.
 
@@ -234,11 +291,11 @@ After all stories in an epic are complete, the lead must pause for the user:
 3. If **yes**: Execute `/bmad-retrospective` directly via the `Skill` tool, **in interactive mode**. Wait for completion before continuing.
 4. If **no**: Log that the retrospective was skipped. Continue to the next epic.
 
-**Interactive mode is mandatory for the retrospective.** The retrospective is a human-in-the-loop step — it asks the user to reflect on what went well, what went poorly, and which deferred items to carry forward. The skill's questions must reach the user; auto-answering them defeats the purpose of the retrospective and produces a low-quality artifact.
+**Elicitation must reach the user.** The retrospective is a human-in-the-loop step — it asks the user to reflect on what went well, what went poorly, and which deferred items to carry forward. The mechanism that delivers questions to the user is `AskUserQuestion`, which always elicits the human regardless of `bypassPermissions`. The constraint: the **lead** must execute the skill, not a spawned agent.
 
 Concretely:
-- The lead executes `/bmad-retrospective` itself via the `Skill` tool — do NOT spawn an agent for it.
-- When the skill asks a question, surface it to the user and wait for the actual answer.
+- The lead invokes `/bmad-retrospective` itself via the `Skill` tool — do NOT spawn an agent for it. Spawned agents cannot reliably surface `AskUserQuestion` to the user.
+- When the skill issues an `AskUserQuestion` call, it will appear to the user directly; wait for the user's actual answer and let the skill continue.
 
 Retrospectives surface deferred work, process improvements, and preparation tasks for the next epic. They also update `deferred-work.md` and may create cleanup stories (Story X.0 pattern).
 
@@ -337,7 +394,7 @@ When an agent needs clarification, it sends a message to the lead instead of a c
 1. **Do NOT shut down the agent** — it is waiting for a response, not finished.
 2. Surface the agent's question to the user in the main conversation, including the Story ID and relevant context.
 3. Wait for the user's answer.
-4. Relay the user's answer back to the agent via `SendMessage`, incorporating it as a hard constraint.
+4. Relay the user's answer back to the agent via `SendMessage({to: "<agent-name>", summary: "<5–10 word UI preview>", message: "<the user's answer as plain text, framed as a hard constraint>"})`. The `summary` parameter is required for plain-text messages (it's the preview shown in the UI); only structured messages like `shutdown_request` omit it.
 5. The agent resumes its workflow and eventually sends a completion message.
 6. Proceed with normal shutdown only after receiving the completion message.
 
@@ -424,6 +481,10 @@ These patterns were tested and failed due to agent self-scheduling behavior:
 - **Parallelizing a story whose prerequisites are still in-flight** — Independence-test condition 3 (Smart Parallelism § Independence test) requires every prerequisite to be at `committed` stage before a story enters a parallel batch. Including a story in a batch alongside any of its uncommitted prerequisites creates a hidden ordering bug — the dependent may run before its prerequisite lands. Foundation stories (those many later stories cite as prerequisites) are caught by this rule naturally; they end up sequential at the start of an epic without needing a special "foundation" label
 - **Unstructured completion messages** — Free-form completion text is unparseable, especially under parallel execution where the lead must route three concurrent file lists to three downstream agents. Every completion message must use the literal `STATUS: completed | STORY_ID | FILES_MODIFIED | TESTS_ADDED | DECISIONS | ISSUES_ENCOUNTERED` envelope from Agent Prompt Requirements
 - **Telling agents to "wait for SendMessage"** — The Task-in-Prompt pattern delivers the task in the spawn prompt; no SendMessage will arrive. Agent prompts that include "wait for the lead to message you" cause the agent to hang. The agent prompt template must instruct the agent to begin work immediately on spawn
+- **Spawning before `TeamCreate`** — Named teammates cannot exist outside a team. If the lead spawns an `Agent` with a `name` before `TeamCreate` has run, the spawn either fails or produces an agent that isn't reachable via `SendMessage` by name. Always call `TeamCreate` first (see Team Lifecycle § Required)
+- **Spawning teammates without `team_name`** — The `Agent` tool needs both `team_name` (which team to join) and `name` (the unique teammate name) to attach the spawned agent to the existing team. Omitting `team_name` produces a standalone subagent that the lead cannot address via `SendMessage`
+- **Leaving teams undeleted across runs** — `TeamCreate` writes persistent state under `~/.claude/teams/{team-name}/` (and `~/.claude/tasks/{team-name}/`). Without `TeamDelete` at the end of each workflow run, those directories accumulate forever. Always call `TeamDelete` after the last epic completes (and after every teammate has been shut down)
+- **Omitting `summary` on plain-text `SendMessage` calls** — The `SendMessage` API requires `summary` (5–10 word UI preview) whenever `message` is a plain string. Structured messages like `{type: "shutdown_request"}` don't need `summary`. Forgetting `summary` on a clarification response causes the message to fail validation
 
 ## Lessons Learned (Accumulated From Prior Project Runs)
 
