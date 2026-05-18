@@ -424,16 +424,25 @@ AttitudeService + MissionPhaseFSM, and read-flat from EmbedModeState + Accessibi
 - **For 60-FPS HUD updates (date/distance counters):** Bypass Lit reactivity entirely. Register a per-frame callback with `RenderEngine.onFrame((et) => { this.dateEl.textContent = formatDate(et) })` and mutate DOM directly. Lit's reactive-property re-render path is for state that changes at human cadence (chapter title, instrument-shutoff legend toggles per-decade, CK/synth indicator transitions, embed-mode visibility).
 - **No global store. No signals library. No event bus.** Service `subscribe` + Lit `@property` is the whole reactivity story.
 
-**Components inventory (Web Components, kebab-cased custom-element names):**
+**Components inventory (Web Components, kebab-cased custom-element names). Source-of-truth names match the UX Design Specification (UX-DR8–UX-DR19); the epics document references these names verbatim:**
 
-- `<v-scrubber>` — timeline + chapter markers, primary control surface
-- `<v-hud>` — date/distance/chapter-title/speed/instrument-shutoff legend/CK-synth indicator
-- `<v-chapter-copy>` — chapter copy panel
-- `<v-chapter-index>` — chapter index modal/affordance
-- `<v-help-overlay>` — keyboard shortcut help (`?` opens)
-- `<v-about-panel>` — About / methodology page
-- `<v-unsupported-fallback>` — browser-unsupported fallback page (static)
-- `<v-audio-toggle>` — Golden Record on/off control
+- `<v-timeline-scrubber>` — timeline + chapter markers, primary control surface; configured by `variant="mission"` or `variant="detail"` attribute (UX-DR8, UX-DR31)
+- `<v-hud>` — container that anchors its sub-components to viewport edges per the canvas-and-edges model (UX-DR9, UX-DR29)
+  - `<v-hud-date>` — simulation date in UT (mono, tabular-nums)
+  - `<v-hud-distance>` — per-spacecraft AU readout
+  - `<v-hud-chapter-title>` — current chapter title (sans caps; fades on chapter change)
+  - `<v-hud-speed>` — speed multiplier + human-friendly elapsed-time description
+  - `<v-hud-instruments>` — per-spacecraft ISS · UVS · PLS · LECP legend with strikethrough on shutoff
+- `<v-attitude-indicator>` — quiet provenance indicator (CK reconstructed vs Synthesized HGA Earth-pointing); rendered inline within `<v-hud>` (UX-DR10)
+- `<v-chapter-copy>` — side-anchored editorial panel for chapter prose (UX-DR11)
+- `<v-play-button>` — play/pause toggle button (UX-DR12)
+- `<v-chapter-index>` — chapter index modal/listbox (UX-DR13)
+- `<v-speed-multiplier>` — log-scale speed slider 1× to 1,000,000× (UX-DR14)
+- `<v-audio-toggle>` — Golden Record on/off control (UX-DR15)
+- `<v-help-overlay>` — keyboard shortcut help modal (`?` opens) (UX-DR16)
+- `<v-fallback-page>` — browser-unsupported fallback (static; pre-rendered to inline HTML in `index.html` and `/unsupported.html`) (UX-DR17)
+- `<v-about-page>` — About / methodology page at `/about` (UX-DR18)
+- `<v-attribution-panel>` — `<dl>` of third-party source → license/usage statement; embedded within `<v-about-page>` and linked from a small footer "Attributions" link on the homepage (UX-DR19)
 
 ### Category 6 — URL + State Contract
 
@@ -466,7 +475,7 @@ AttitudeService + MissionPhaseFSM, and read-flat from EmbedModeState + Accessibi
 - All boot-time scrubs leave the simulation **paused** (per UX design spec — user explicitly clicks play when ready).
 - ISO-8601 parse failures → fall back to chapter anchor (if chapterId valid) or simStart; never throw; never blank-screen.
 
-**Decision 6g — Browser-unsupported fallback page.** A 1-KB inline pre-bootstrap script in `index.html` (runs before main bundle loads) probes for WebGL2, WebAssembly, and Brotli decoding. If any missing: `window.location.replace('/unsupported.html')` — a static page (FR57, NFR-C7) rendered server-side from a `<v-unsupported-fallback>` template at build time, no JS execution required for the fallback to render. If all present: dynamic-imports the main bundle. ADR records probe details.
+**Decision 6g — Browser-unsupported fallback page.** A 1-KB inline pre-bootstrap script in `index.html` (runs before main bundle loads) probes for WebGL2, WebAssembly, and Brotli decoding. If any missing: `window.location.replace('/unsupported.html')` — a static page (FR57, NFR-C7) rendered at build time from the `<v-fallback-page>` Lit template into static HTML + inline CSS, no runtime JS execution required for the fallback to render. If all present: dynamic-imports the main bundle. ADR records probe details.
 
 ## Core Architectural Decisions — Batch 3: Operational Substrate
 
@@ -611,7 +620,7 @@ Detailed expansion of the Batch-1 cross-cutting commitment to automated asset ac
 
 - `THIRD_PARTY.md` documents every asset class: source URL, license terms, attribution text, in-app appearance location
 - Build-time script compiles `THIRD_PARTY.md` to `web/public/third-party.json` for runtime consumption
-- `<v-about-panel>` Web Component renders the JSON in the About page
+- `<v-about-page>` Web Component (with embedded `<v-attribution-panel>`) renders the JSON in the About page
 - CI verifies `THIRD_PARTY.md` exists and is non-empty (Domain Requirements §Data Provenance & Attribution)
 - Sources catalogued: NAIF, PDS Rings Node + Mitch Gordan (QMW SEDR), USGS Astrogeology, Björn Jónsson (attribution-required), NASA 3D Resources, NASA Planetary Photojournal, Voyager Golden Record
 
@@ -679,9 +688,9 @@ The standard CRUD/API conflict points (database naming, REST endpoints, response
 
 **Web Component element names: `<v-*>` prefix, kebab-case.**
 
-- Locked: `<v-scrubber>`, `<v-hud>`, `<v-chapter-copy>`, `<v-chapter-index>`, `<v-help-overlay>`, `<v-about-panel>`, `<v-unsupported-fallback>`, `<v-audio-toggle>`
-- Class names: `VScrubber`, `VHud`, etc. (PascalCase mirror of the element name, dropping the dash)
-- File names: `web/src/ui/v-scrubber.ts` (kebab-case; matches element name)
+- Locked: `<v-timeline-scrubber>`, `<v-hud>` (with sub-components `<v-hud-date>`, `<v-hud-distance>`, `<v-hud-chapter-title>`, `<v-hud-speed>`, `<v-hud-instruments>`), `<v-attitude-indicator>`, `<v-chapter-copy>`, `<v-play-button>`, `<v-chapter-index>`, `<v-speed-multiplier>`, `<v-audio-toggle>`, `<v-help-overlay>`, `<v-fallback-page>`, `<v-about-page>`, `<v-attribution-panel>`
+- Class names: `VTimelineScrubber`, `VHud`, `VHudDate`, `VAttitudeIndicator`, etc. (PascalCase mirror of the element name, dropping the dashes)
+- File names: `web/src/ui/v-timeline-scrubber.ts` (kebab-case; matches element name)
 
 **Service class names: `<Noun>Manager` for owners of mutable state; `<Noun>Service` for pure stateless queries; `<Noun>Renderer` for rendering subsystems.**
 
@@ -755,13 +764,23 @@ web/src/
 │   ├── trajectory-lines.ts
 │   └── floating-origin.ts
 ├── ui/
-│   ├── v-scrubber.ts
+│   ├── v-timeline-scrubber.ts
 │   ├── v-hud.ts
+│   ├── v-hud-date.ts
+│   ├── v-hud-distance.ts
+│   ├── v-hud-chapter-title.ts
+│   ├── v-hud-speed.ts
+│   ├── v-hud-instruments.ts
+│   ├── v-attitude-indicator.ts
 │   ├── v-chapter-copy.ts
+│   ├── v-play-button.ts
 │   ├── v-chapter-index.ts
-│   ├── v-help-overlay.ts
-│   ├── v-about-panel.ts
+│   ├── v-speed-multiplier.ts
 │   ├── v-audio-toggle.ts
+│   ├── v-help-overlay.ts
+│   ├── v-fallback-page.ts
+│   ├── v-about-page.ts
+│   ├── v-attribution-panel.ts
 │   ├── service-controller.ts     # Lit Reactive Controller bridge
 │   ├── markdown-mini.ts          # tiny markdown subset → TemplateResult
 │   └── primitives/
@@ -863,8 +882,8 @@ import {LitElement, html, css} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import {ServiceController} from './service-controller.js';
 
-@customElement('v-scrubber')
-export class VScrubber extends LitElement {
+@customElement('v-timeline-scrubber')
+export class VTimelineScrubber extends LitElement {
   static styles = css`
     :host { display: block; /* design tokens via CSS vars */ }
   `;
@@ -1122,14 +1141,23 @@ voyager/
     │   │   ├── trajectory-lines.ts
     │   │   └── floating-origin.ts
     │   ├── ui/
-    │   │   ├── v-scrubber.ts
+    │   │   ├── v-timeline-scrubber.ts
     │   │   ├── v-hud.ts
+    │   │   ├── v-hud-date.ts
+    │   │   ├── v-hud-distance.ts
+    │   │   ├── v-hud-chapter-title.ts
+    │   │   ├── v-hud-speed.ts
+    │   │   ├── v-hud-instruments.ts
+    │   │   ├── v-attitude-indicator.ts
     │   │   ├── v-chapter-copy.ts
+    │   │   ├── v-play-button.ts
     │   │   ├── v-chapter-index.ts
-    │   │   ├── v-help-overlay.ts
-    │   │   ├── v-about-panel.ts
+    │   │   ├── v-speed-multiplier.ts
     │   │   ├── v-audio-toggle.ts
-    │   │   ├── v-unsupported-fallback.ts
+    │   │   ├── v-help-overlay.ts
+    │   │   ├── v-fallback-page.ts
+    │   │   ├── v-about-page.ts
+    │   │   ├── v-attribution-panel.ts
     │   │   ├── service-controller.ts
     │   │   ├── markdown-mini.ts
     │   │   ├── design-tokens.css        # CSS custom properties only
@@ -1219,13 +1247,13 @@ voyager/
 
 | FR Cluster | Primary location(s) |
 | --- | --- |
-| Timeline & Playback (FR1–FR7) | `web/src/services/clock-manager.ts`, `web/src/ui/v-scrubber.ts` |
+| Timeline & Playback (FR1–FR7) | `web/src/services/clock-manager.ts`, `web/src/ui/v-timeline-scrubber.ts`, `web/src/ui/v-play-button.ts`, `web/src/ui/v-speed-multiplier.ts` |
 | Spacecraft & Trajectory Rendering (FR8–FR14) | `web/src/services/ephemeris-service.ts`, `web/src/render/{render-engine, trajectory-lines, floating-origin}.ts`, `bake/src/bake_trajectories.py` |
-| Attitude & Instrument Visualization (FR15–FR20) | `web/src/services/attitude-service.ts`, `web/src/render/boresight-renderer.ts`, `web/src/ui/v-hud.ts` (CK/synth indicator), `bake/src/bake_attitude.py` |
+| Attitude & Instrument Visualization (FR15–FR20) | `web/src/services/attitude-service.ts`, `web/src/render/boresight-renderer.ts`, `web/src/ui/v-attitude-indicator.ts`, `bake/src/bake_attitude.py` |
 | Encounter & Chapter Scenes (FR21–FR30) | `web/src/chapters/*.ts`, `web/src/scenes/pale-blue-dot/`, `web/src/services/{chapter-director, view-frame}.ts`, `web/src/ui/v-chapter-copy.ts` |
 | Camera, View System & HUD (FR31–FR36) | `web/src/render/voyager-camera-controller.ts`, `web/src/services/view-frame.ts`, `web/src/ui/v-hud.ts` |
 | Sharing, Embedding & URL System (FR37–FR42) | `web/src/boot/url-sync.ts`, `web/src/url/url-codec.ts`, `web/src/boot/embed-mode-state.ts`, `web/e2e/og-cards.spec.ts`, `web/vite.config.ts` (multi-page input for per-chapter HTML shells) |
-| Audio, Accessibility & Methodology (FR43–FR50) | `web/src/services/audio-layer.ts`, `web/src/ui/v-audio-toggle.ts`, `web/src/boot/accessibility-state.ts`, `web/src/ui/v-about-panel.ts`, `THIRD_PARTY.md`, `web/public/data/third-party.json` |
+| Audio, Accessibility & Methodology (FR43–FR50) | `web/src/services/audio-layer.ts`, `web/src/ui/v-audio-toggle.ts`, `web/src/boot/accessibility-state.ts`, `web/src/ui/v-about-page.ts`, `web/src/ui/v-attribution-panel.ts`, `THIRD_PARTY.md`, `web/public/data/third-party.json` |
 | Build, Validation & Deployment (FR51–FR58) | `bake/src/*`, `bake/tests/*` (L1), `web/src/services/*.test.ts` (L2 + L3), `web/e2e/*.spec.ts` (L4 + L5), `kernels/kernels-manifest.json`, `bake/src/drift_report.py`, `.github/workflows/ci.yml`, `justfile` |
 
 ### Cross-Cutting Concern → Structure Mapping
@@ -1234,7 +1262,7 @@ voyager/
 | --- | --- |
 | Time as singular truth | `web/src/services/clock-manager.ts` (owner); every per-frame consumer reads from it |
 | Float64↔Float32 boundary | `web/src/types/branded.ts` (definitions); `web/src/math/floating-origin.ts` (cast point); `web/src/math/world-vec3.ts` (constructors) |
-| CK-vs-synthesized provenance | `web/src/services/attitude-service.ts` (emitter); `web/src/ui/v-hud.ts` (display) |
+| CK-vs-synthesized provenance | `web/src/services/attitude-service.ts` (emitter); `web/src/ui/v-attitude-indicator.ts` (display, embedded in `v-hud`) |
 | URL ↔ simulation state | `web/src/boot/url-sync.ts`, `web/src/url/url-codec.ts` |
 | Asset chunking + prefetch | `web/src/services/chunk-loader.ts`; couples to `clock-manager.ts` (speed cap) and `view-frame.ts` (chunk windows) |
 | 6-layer validation harness | L1: `bake/src/validate_l1.py`; L2: `web/src/**/*.test.ts` (JS-vs-SPICE samples); L3: `web/src/**/*.test.ts` (TS unit); L4: `web/e2e/visual-regression.spec.ts`; L5: `web/e2e/timeline-e2e.spec.ts` |
@@ -1323,7 +1351,7 @@ just rollback <deployment-id> # NFR-R3 ≤5 min
 
 The following gaps were found during validation and resolved inline. These resolutions supersede the corresponding parts of earlier sections:
 
-**Gap 1 — `<v-unsupported-fallback>` Web Component inconsistency.** Resolution: removed from the Web Components inventory. `unsupported.html` is plain static HTML with inlined `<style>` block; no JS dependency. If a user fails feature detection because their browser is too old, a Web Component would fail to render too — the fallback page must be purely declarative HTML. The `web/src/ui/v-unsupported-fallback.ts` entry in the Step 6 structure tree is hereby removed.
+**Gap 1 — Browser-unsupported fallback runtime-JS concern.** Resolution: the fallback page is authored as a `<v-fallback-page>` Lit template (UX-DR17, Story 1.8) but **rendered at build time** into static HTML with inline CSS — the deployed `unsupported.html` has no runtime JS dependency. If a user fails feature detection because their browser is too old, the static HTML still renders. The `web/src/ui/v-fallback-page.ts` source file remains in the structure tree as a build-time artifact; the deployed page is plain static HTML.
 
 **Gap 2 — Design tokens CSS loading mechanism unspecified.** Resolution: `web/src/ui/design-tokens.css` is loaded via `<link rel="stylesheet" href="/design-tokens.css">` in `index.html`, `unsupported.html`, and `perf.html`. CSS custom properties (CSS variables) inherit through Shadow DOM boundaries, so every `<v-*>` Web Component reads `var(--v-color-*)`, `var(--v-font-*)`, `var(--v-space-*)` from its Shadow DOM scope without needing to re-import the tokens. Vite copies the file to `web/dist/design-tokens.{hash}.css` with cache headers on build.
 
