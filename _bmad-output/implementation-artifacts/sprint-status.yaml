@@ -46,7 +46,7 @@ development_status:
   # Epic 1: Foundation & First Vertical Slice (Cruise Viewer)
   epic-1: in-progress
   1-1-initialize-monorepo-with-web-and-bake-halves: done
-  1-2-author-phase-0-adr-catalogue-25-entries: backlog
+  1-2-author-phase-0-adr-catalogue-25-entries: done
   1-3-acquire-and-hash-pin-naif-and-pds-kernels: backlog
   1-4-bake-pipeline-scaffold-and-l1-python-validation-harness: backlog
   1-5-three-js-renderer-foundation-with-reverse-z-and-floating-origin: backlog

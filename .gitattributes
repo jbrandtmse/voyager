@@ -1,3 +1,8 @@
+# Line-ending normalization (ADR 0027): all text files are LF in-repo and on checkout.
+# CI runs on linux/amd64; LF is the canonical encoding for NFR-R4 byte-identical bake.
+* text=auto eol=lf
+
+# Git LFS patterns for NAIF SPICE kernel binary formats.
 *.bsp filter=lfs diff=lfs merge=lfs -text
 *.bc filter=lfs diff=lfs merge=lfs -text
 *.tf filter=lfs diff=lfs merge=lfs -text
