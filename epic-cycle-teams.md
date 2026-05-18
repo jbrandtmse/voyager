@@ -64,27 +64,93 @@ Develop a slash command that executes the BMAD Method development implementation
 **End of Epic (executed once per epic after all stories):**
 1. **Lead** pauses and asks user: "Would you like to run a retrospective?" If yes, execute `/bmad-retrospective` **in interactive mode, not YOLO** — the skill must actually ask its questions and wait for real user answers; auto-answering them produces a worthless artifact. (`bypassPermissions` for tool calls is fine; what matters is the skill's elicitation flow reaches the user.)
 
-Make sure to include a file for the slash command in the project-root `.claude/commands/` folder so the workflow can be executed as a slash command. See "Slash Command File" below for the exact file format.
+Create a slash command file at `.claude/commands/epic-cycle.md` that is **self-contained** — it must embed the workflow inline and must not reference this document. After the file is created, this design document (`epic-cycle-teams.md`) can be deleted. See "Slash Command File" below for the construction recipe.
 
 ## Slash Command File
 
-Create `.claude/commands/epic-cycle.md` at the project root with this exact structure:
+The slash command file **must be self-contained**. The lead reading this document is responsible for constructing the slash command body by embedding the workflow inline, NOT by linking to this document. After validation (see below), this document can be deleted without affecting `/epic-cycle`.
+
+Create `.claude/commands/epic-cycle.md` at the project root with frontmatter plus a body constructed per the recipe below.
+
+### Frontmatter (verbatim)
 
 ```markdown
 ---
 description: Run the BMAD Method epic development cycle for one or more epics using Agent Teams
 ---
-
-Execute the workflow specified in `epic-cycle-teams.md` at the project root.
-
-Begin by performing the Pre-flight check (verify Agent Teams is enabled — if not, follow the instructions in epic-cycle-teams.md § Pre-flight and stop). Then call `TeamCreate` per Team Lifecycle § Required. Then proceed sequentially through the Per Epic / Per Story / End of Epic phases per that document. After the last epic's retrospective (or skip), shut down any lingering teammates and call `TeamDelete` to clean up.
-
-Arguments: the user may pass an epic range as $ARGUMENTS — for example `1-3` for Epics 1 through 3, `2` for a single epic, or empty to prompt the user for the range.
-
-Honor every "(Critical)" / "(Critical Gate)" rule in epic-cycle-teams.md without exception. The retrospective is the one step that must run interactively (lead executes the skill itself; do not spawn it as an agent).
 ```
 
-The `description` frontmatter shows in `/` autocomplete; the body is the prompt Claude receives when the command is invoked. `$ARGUMENTS` (if used in the body) is replaced by whatever the user typed after the slash-command name. Invoke as `/epic-cycle 1-3` (or whatever range you want), or `/epic-cycle` to be prompted.
+### Body construction recipe
+
+The body is built by copying sections of THIS document into the slash command file, with three adjustments to convert design-doc content into a runnable workflow.
+
+**Adjustment 1 — Replace the opening.** Drop the "Develop a slash command that executes..." line from this document (it's an instruction TO Claude-as-doc-reader, not part of the workflow). Replace with this executor-directed opening as the first content in the body:
+
+```markdown
+You are executing the BMAD Method development implementation cycle for one or more epics, using Claude Code Agent Teams. Stories run sequentially by default; independent stories within the same epic may be processed as a parallel batch — see "Smart Parallelism" below.
+
+**Epic range:** $ARGUMENTS (e.g., `1-3` for Epics 1 through 3, `2` for a single epic). If empty, prompt the user for the range before proceeding.
+```
+
+**Adjustment 2 — Replace the four-step Pre-flight section with a condensed runtime check.** The four-step Pre-flight in this document is user-facing setup ("how to enable Agent Teams"). The slash command body only needs a runtime tool-availability check. Use this:
+
+```markdown
+## Pre-flight Runtime Check
+
+Verify that `SendMessage`, `TeamCreate`, and `TeamDelete` tools are available in this session. These are deferred tools; if they are not in your active tool set, load them by calling `ToolSearch` with query `"select:SendMessage,TeamCreate,TeamDelete"` before first use.
+
+If any of these tools cannot be loaded (Agent Teams flag is disabled in this Claude Code installation), halt immediately with:
+
+> "Agent Teams is not enabled. Set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `~/.claude/settings.json` (or `.claude/settings.json` for project-local scope), fully exit and relaunch Claude Code (v2.1.32 or later), then re-run /epic-cycle."
+
+Requires Claude Code v2.1.32 or later.
+```
+
+**Adjustment 3 — Include all remaining workflow content verbatim**, in this exact order:
+
+- The three task-sequence numbered lists (Per Epic / Per Story / End of Epic — the same three lists that appear in this document right after the "Develop a slash command..." line)
+- `## Execution Guidelines`
+- `## Permission Mode (Critical)`
+- `## Skill Tool Invocation (Critical)`
+- `## Spawn-on-Demand Coordination (Critical)` with every subsection in order:
+  - `### Team Lifecycle (Required)`
+  - `### Task-in-Prompt Pattern (Required)`
+  - `### Pipeline Flow`
+  - `### Smart Parallelism (Opt-In Per Batch)`
+  - `### Retrospective Review & Story X.0 Creation (Critical Gate)`
+  - `### Sprint Planning Per Epic (Critical Gate)`
+  - `### Retrospective Per Epic (User Decision Point)`
+  - `### Lead Creates Story Files (Critical Gate)`
+  - `### Context Handoff Between Stages (Critical)`
+  - `### Shutdown-Before-Respawn Sequencing (Critical)`
+  - `### Agent Prompt Requirements`
+- `## When to Pause`
+- `## Handling Clarifications`
+- `## Submodule Commit Order (Critical, if Applicable)`
+- `## Completion Logging` (including the `### Cycle Log Format (enables resume)` subsection)
+- `## Anti-Patterns (Do NOT Use)`
+- `## Lessons Learned (Accumulated From Prior Project Runs)`
+
+**Sections from this document that are EXCLUDED from the slash command body** (they are scaffolding for creating the slash command, not workflow content):
+
+- The original `## Pre-flight: Agent Teams must be enabled` section and its four sub-steps (Adjustment 2 replaces them with the condensed runtime check)
+- The "Develop a slash command that executes..." opening paragraph (Adjustment 1 replaces it)
+- The "Create a slash command file at..." line that precedes this Slash Command File section
+- This entire `## Slash Command File` section (these are the build instructions, not part of the workflow)
+
+### Validation (mandatory before considering the slash command file complete)
+
+1. Run `grep "epic-cycle-teams.md" .claude/commands/epic-cycle.md`. The result must be **zero matches**. Any match means the body still references this design document and is NOT self-contained — fix and re-validate.
+2. Confirm the file contains: frontmatter; the executor-directed opening from Adjustment 1; the Pre-flight Runtime Check from Adjustment 2; and every section listed in Adjustment 3.
+3. Optionally: with the slash command file in place, delete `epic-cycle-teams.md` and verify `/epic-cycle` would still function (it relies only on its own body).
+
+### After Creating the Slash Command
+
+Once the slash command file is constructed and validated, **stop**. Do not proceed to execute the epic-development workflow in the same session that created the slash command. The user will invoke `/epic-cycle <range>` in a fresh session to run the workflow.
+
+### Invocation
+
+`/epic-cycle 1-3` (or whatever range you want), or `/epic-cycle` to be prompted. `$ARGUMENTS` in the body is replaced by whatever the user typed after the slash-command name.
 
 ## Execution Guidelines
 
