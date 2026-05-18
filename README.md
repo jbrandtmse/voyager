@@ -1,6 +1,6 @@
 # Voyager
 
-> 🚧 **Planning phase.** This repository contains planning artifacts only — product brief, PRD, technical research, UX design specification. No source code yet. The implementation phase begins after the solution architecture document is complete.
+> 🚧 **Implementation phase — Epic 1 in progress.** Planning artifacts (product brief, PRD, technical research, UX design specification, architecture) are complete. The monorepo scaffold is in place: `web/` (TypeScript + Vite vanilla-ts) and `bake/` (Python 3.13 + uv + SpiceyPy 8.1.0). See [Repository Layout](#repository-layout) for the smoke-test sequence.
 
 A browser-based, narrative-driven cinematic replay of the **Voyager 1 and Voyager 2** missions — from launch in 1977 through projected interstellar cruise in 2030 — built around a single coherent time axis you can scrub, pause, and zoom from 1× real-time to 1,000,000× (the full 53-year mission in roughly fifty seconds).
 
@@ -117,3 +117,48 @@ License terms to be finalized before public launch. Currently: no license file m
 ## Contributing
 
 The project is currently a solo build. Contributions are not being accepted during the v1 implementation phase. After launch, the architecture (`EphemerisService` / `AttitudeService` over a chapter-driven FSM) is generalizable enough to host other historical missions — but extension beyond Voyager is explicitly **not** part of the v1 product story.
+
+## Repository Layout
+
+The repository is a single Git repo with two top-level halves. Each half is independently buildable from inside its own directory — there is no root-level workspace `package.json`, no `apps/`, no `packages/`, no Nx, no Turborepo, no pnpm workspaces. This was a deliberate architecture choice (see `_bmad-output/planning-artifacts/architecture.md` §143–§180).
+
+| Half | Tech | Purpose |
+| --- | --- | --- |
+| `web/` | TypeScript 5.x strict + Vite (vanilla-ts) + Three.js ≥ r170 | Browser-only SPA — the cinematic replay surface, served as a static CDN bundle. No backend, no API, no database. |
+| `bake/` | Python 3.13 + uv + SpiceyPy 8.1.0 (exact) + scipy + numpy | Build-time precompute — extracts NAIF SPICE kernel data into a custom binary trajectory + attitude format consumed by `web/`. Runs in CI, never at runtime in the browser. |
+
+Root-level files: `.python-version` pins Python to `3.13` (uv resolves the patch version); `.gitattributes` declares Git LFS patterns for NAIF kernel formats (`*.bsp`, `*.bc`, `*.tf`, `*.tsc`, `*.tls`, `*.pck`) so that when kernels arrive in a later story they are LFS-tracked from their first commit; `.gitignore` excludes `web/node_modules/`, `web/dist/`, `bake/.venv/`, `bake/__pycache__/`, and `bake/out/`.
+
+### Cold-clone smoke test
+
+After cloning, verify both halves boot from a clean checkout:
+
+```bash
+# Web half — Vite dev server serves the blank vanilla-ts page on http://localhost:5173
+cd web
+npm install
+npm run dev
+
+# Bake half — SpiceyPy 8.1.0 wraps CSPICE N0067; the tkvrsn call confirms the toolkit loads
+cd bake
+uv sync
+uv run python -c "import spiceypy; print(spiceypy.tkvrsn('TOOLKIT'))"
+```
+
+The bake-half smoke command should print `CSPICE_N0067`. The web-half dev server should serve a blank Vite vanilla-ts page on `http://localhost:5173`. This sequence is documented but not yet enforced via CI — Story 1.14 owns the baseline CI pipeline.
+
+## Privacy Commitment — No PII, No Analytics, No Tracking Cookies
+
+This artifact does not collect, store, transmit, or process any personally identifiable information. There is no backend, no API, no database, no user account, no login. The entire experience is a static-CDN-delivered single-page application that runs locally in the visitor's browser.
+
+Concretely, and as a hard architectural commitment:
+
+- **No third-party analytics.** No Google Analytics, no Mixpanel, no Segment, no Amplitude, no Hotjar, no Plausible, no Fathom, no Matomo, no GA4 / `gtag.js`, no Sentry, no DataDog RUM, no New Relic browser agent. None.
+- **No tracking pixels, beacons, or fingerprinting.** No invisible 1×1 images, no `<noscript>` tracking fallbacks, no canvas/font/WebGL fingerprinting (the WebGL context is used exclusively for rendering the simulation, not for fingerprint extraction), no Sec-CH-UA client hint scraping, no `navigator.userAgent` profiling sent anywhere.
+- **No cookies — therefore no consent banner.** The artifact sets zero cookies of any kind: no functional cookies, no preference cookies, no session cookies, no third-party cookies. Because nothing is being collected, GDPR / CCPA / ePrivacy / UK GDPR consent banners are not required and will not be added. URL state (chapter, timestamp, speed multiplier, `?embed=true`) is stored in the URL itself and is shareable — it is not a tracking identifier.
+- **No localStorage / sessionStorage / IndexedDB for tracking.** Browser storage may be used purely for technical caching of trajectory binaries (where the cache key is the kernel content hash, not a user identifier) and never for behavior tracking.
+- **No external script loads from analytics or ad networks.** Content Security Policy will be configured to block analytics/tracker origins by default. Third-party origins are limited to: the static CDN serving the bundle, public-domain NASA asset mirrors (where used), and optionally a public-domain font CDN if locally-bundled fonts are deemed insufficient.
+
+This commitment is enforced *by absence*: the `bake/pyproject.toml`, `bake/uv.lock`, `web/package.json`, and `web/package-lock.json` are grepped (case-insensitive) for `analytics`, `telemetry`, `fingerprint`, `cookie-consent`, `ga-`, `gtag`, `mixpanel`, `segment`, `amplitude`, `hotjar`, `sentry`, and `datadog` — zero matches is the passing condition. This is codified as FR50 in the PRD and as NFR-S8 (the "absence-proof" posture) in the architecture document.
+
+Voyager is a historical retrospective of an unmanned space mission. The visitor is here to watch the mission, not to be measured.

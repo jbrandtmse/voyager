@@ -1,0 +1,19 @@
+# Deferred Work — Voyager Implementation
+
+This file aggregates LOW-severity / nice-to-have findings from code reviews that were deliberately deferred rather than fixed in the originating story. Each entry includes the originating story, severity, issue summary, deferral rationale, and suggested resolution.
+
+## Deferred from: code review of 1-1-initialize-monorepo-with-web-and-bake-halves (2026-05-18)
+
+- **[1.1 / LOW]** `.gitattributes` lacks `text=auto` / EOL normalization. Git is emitting "LF will be replaced by CRLF" warnings on `.gitignore` and `README.md` during the Story 1.1 commit on Windows. **Why deferred:** Story 1.1's ACs only require LFS patterns for NAIF kernel extensions; an EOL-normalization policy is a separate, repo-wide convention that warrants its own discussion (and likely an ADR) about whether the project locks to LF-only or `text=auto`. **Suggested resolution:** add `* text=auto eol=lf` (or equivalent) to `.gitattributes` as part of Story 1.2's ADR work or as a small targeted PR before contributor onboarding.
+
+- **[1.1 / LOW]** `.pytest_cache/` is not in `.gitignore`. **Why deferred:** Cosmetic — pytest itself ships a `.gitignore` inside `.pytest_cache/` on first run, so accidental commits are already mostly defended. Still worth adding to the root `.gitignore` for belt-and-suspenders defence. **Suggested resolution:** one-line addition to root `.gitignore`: `**/.pytest_cache/`. Can be bundled with Story 1.4 (which adds the first real pytest harness).
+
+- **[1.1 / LOW]** README's narrative `.gitignore` summary (lines 130) lists 5 patterns but the actual file has 7 (`bake/tests/**/__pycache__/` and `**/.DS_Store` are missing from the README prose). **Why deferred:** Pure cosmetic; the `.gitignore` file is the authoritative source and the README sentence is illustrative, not exhaustive. **Suggested resolution:** fold into the next README update.
+
+- **[1.1 / LOW]** `test_spiceypy_is_pinned_exactly_at_8_1_0` uses a regex (`spiceypy\s*==\s*8\.1\.0`) that does not handle PEP 508 extras (`spiceypy[extra]==8.1.0`) or environment markers (`spiceypy==8.1.0; python_version >= "3.13"`). **Why deferred:** Story 1.1 has no extras or markers; this is future-proofing only. **Suggested resolution:** if Story 1.4+ introduces extras or markers, rewrite the test to parse the dep with `packaging.requirements.Requirement` instead of regex.
+
+- **[1.1 / LOW]** `web/package.json` pins `typescript: ~6.0.2`, which deviates from the architecture document's "TypeScript 5.x strict" wording (architecture.md line 38, README tech-stack table). **Why deferred:** create-vite@9.0.7's vanilla-ts template ships TS 6.x; the load-bearing property ("strict mode") is preserved. Story 1.2 will author the first ADR and is the natural home for either (a) ratifying the TS-6 jump or (b) downgrading and documenting why. **Suggested resolution:** ADR in Story 1.2, plus a one-line README tech-stack-table update.
+
+- **[1.1 / LOW]** `web/index.html` retains the Vite default `<title>web</title>`. **Why deferred:** UI is owned by Story 1.5 onward; Story 1.1 explicitly does not customize page chrome. **Suggested resolution:** set the title to "Voyager" (or the chapter-derived title from the URL-sync work) when Story 1.5+ lands the renderer foundation.
+
+- **[1.1 / LOW]** `web/.gitignore` (Vite-generated) duplicates several patterns already in the root `.gitignore` (`node_modules`, `dist`). **Why deferred:** Idiomatic — Vite ships this file by default and removing it would surprise future contributors expecting standard Vite layout. Git handles nested `.gitignore` files correctly. **Suggested resolution:** leave as-is unless it becomes a source of confusion.

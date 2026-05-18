@@ -1,0 +1,27 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
+    "@vitest/coverage-v8": "^4.1.6",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "@types/three": "^0.184.1",
+    "three": "^0.184.0"
+  }
+}

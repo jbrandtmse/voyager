@@ -1,3 +1,16 @@
 # BMad personal config (installer-managed, scoped to user)
 _bmad/config.user.toml
 _bmad/custom/config.user.toml
+
+# Web (TypeScript / Vite) build artifacts
+web/node_modules/
+web/dist/
+
+# Bake (Python / uv) build artifacts
+bake/.venv/
+bake/__pycache__/
+bake/out/
+bake/tests/**/__pycache__/
+
+# OS noise
+**/.DS_Store

@@ -1,0 +1,130 @@
+# generated: 2026-05-18
+# last_updated: 2026-05-18
+# project: Voyager
+# 1.1 set to done on 2026-05-18 after code review (cr-1-1 / epic-cycle-2026-05-18)
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-05-18
+last_updated: 2026-05-18T00:05:00Z
+project: Voyager
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Foundation & First Vertical Slice (Cruise Viewer)
+  epic-1: in-progress
+  1-1-initialize-monorepo-with-web-and-bake-halves: done
+  1-2-author-phase-0-adr-catalogue-25-entries: backlog
+  1-3-acquire-and-hash-pin-naif-and-pds-kernels: backlog
+  1-4-bake-pipeline-scaffold-and-l1-python-validation-harness: backlog
+  1-5-three-js-renderer-foundation-with-reverse-z-and-floating-origin: backlog
+  1-6-asset-manifest-loader-and-ephemerisservice: backlog
+  1-7-design-tokens-lit-3-scaffold-and-self-hosted-typography: backlog
+  1-8-v-fallback-page-and-boot-time-capability-probe: backlog
+  1-9-designed-first-paint-sequence-and-v-timeline-scrubber-mission-variant: backlog
+  1-10-v-play-button-simulation-clock-and-v-speed-multiplier: backlog
+  1-11-v-hud-container-and-hud-sub-components: backlog
+  1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines: backlog
+  1-13-celestial-bodies-sun-eight-planets-and-one-moon: backlog
+  1-14-baseline-ci-and-static-cdn-deploy: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Mission Spine — Chapter Navigation, Deep-Linking and Embed
+  epic-2: backlog
+  2-1-chapterdirector-fsm-and-11-declarative-chapter-specs: backlog
+  2-2-chapter-markers-on-mission-scrubber-vertebrae: backlog
+  2-3-v-chapter-index-listbox-and-chapter-jump-keyboard-shortcuts: backlog
+  2-4-per-chapter-url-slug-scheme-and-pushstate-navigation: backlog
+  2-5-embed-true-chrome-less-mode: backlog
+  2-6-pre-rendered-open-graph-cards-per-chapter: backlog
+  2-7-v-about-page-and-v-attribution-panel: backlog
+  2-8-v-help-overlay-modal-with-full-keyboard-shortcut-inventory: backlog
+  2-9-heliopause-text-cards-and-instrument-shutoff-hud-integration: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Attitude Reconstruction — the Differentiator
+  epic-3: backlog
+  3-1-ck-kernel-bake-pipeline-and-sign-flip-walk-pre-bake: backlog
+  3-2-attitudeservice-slerp-interpolation-and-synthesized-hga-cruise-attitude: backlog
+  3-3-articulated-spacecraft-glb-with-scan-platform-node: backlog
+  3-4-apply-attitude-per-frame-to-both-spacecraft-bus-scan-platform: backlog
+  3-5-narrow-angle-camera-boresight-cone: backlog
+  3-6-v-attitude-indicator-hud-provenance-element: backlog
+  3-7-l2-js-vs-spice-attitude-consistency-validation-in-ci: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Encounter Chapters — All Six Gas-Giant Flybys
+  epic-4: backlog
+  4-1-viewframe-service-and-translation-only-smoothstep-blend: backlog
+  4-2-voyagercameracontroller-manual-override-and-restore-default: backlog
+  4-3-cadence-shift-trajectory-chunks-and-4k-8k-texture-upgrade: backlog
+  4-4-v-timeline-scrubber-variant-detail-detail-scrubber-variant: backlog
+  4-5-v1-jupiter-encounter-1979-03-05-with-body-centered-framing: backlog
+  4-6-v2-jupiter-v1-saturn-titan-slingshot-and-v2-saturn-encounters: backlog
+  4-7-v2-uranus-and-v2-neptune-encounters-triton-bend-fr12: backlog
+  4-8-gravity-assist-trajectory-visual-validation: backlog
+  4-9-l4-playwright-visual-regression-at-six-encounter-scenes-launch-pbd-stub: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Pale Blue Dot — the Hero Scene
+  epic-5: backlog
+  5-1-pbd-dedicated-module-and-internal-substates: backlog
+  5-2-choreographed-spacecraft-turn-ck-or-synthesized-per-coverage: backlog
+  5-3-photo-plate-compositing-pipeline-at-historical-instants: backlog
+  5-4-pbd-l4-playwright-visual-regression-suite: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Audio, Reduced Motion and Full Accessibility Pass
+  epic-6: backlog
+  6-1-golden-record-audio-bundle-v-audio-toggle-and-chapter-marker-activation: backlog
+  6-2-v-hud-dismiss-restore-and-final-hud-compaction-polish: backlog
+  6-3-full-reduced-motion-sweep-across-all-chapters-and-components: backlog
+  6-4-axe-core-ci-expansion-and-manual-accessibility-test-layer: backlog
+  6-5-friendly-user-qualitative-testing-differentiator-perception-launch-gate: backlog
+  6-6-final-contrast-typography-and-provenance-label-polish: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Operational Substrate and Launch Readiness
+  epic-7: backlog
+  7-1-drift-report-tool-and-path-filtered-kernel-update-workflow: backlog
+  7-2-l2-trajectory-consistency-and-l5-playwright-e2e-mission-timeline: backlog
+  7-3-build-manifest-observability-and-dependency-advisory-checks: backlog
+  7-4-content-hashed-immutable-headers-csp-and-deploy-rollback-rehearsal: backlog
+  7-5-third-party-md-and-mission-facts-md-final-audit: backlog
+  7-6-final-performance-pass-on-mid-range-laptop: backlog
+  7-7-cross-browser-and-real-device-tier-1-2-3-testing: backlog
+  7-8-25-adr-completion-audit-and-index-cleanup: backlog
+  7-9-public-launch-playbook-and-launch-gate-pre-flight: backlog
+  epic-7-retrospective: optional
