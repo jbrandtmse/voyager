@@ -87,11 +87,16 @@ def test_uv_lock_is_committed() -> None:
 
 
 def test_gitattributes_declares_naif_lfs_patterns() -> None:
-    """AC2: .gitattributes must declare the six NAIF kernel extensions as LFS-tracked."""
+    """AC2: .gitattributes must declare the NAIF kernel extensions as LFS-tracked.
+
+    Story 1.1 declared six; Story 1.3 added `.tpc` (the actual extension on
+    text PCK kernels we ship — Story 1.1's list said `.pck` but the generic
+    PCK file is `pck00011.tpc`).
+    """
     gitattrs = REPO_ROOT / ".gitattributes"
     assert gitattrs.exists(), f".gitattributes not found at {gitattrs}"
     contents = gitattrs.read_text()
-    for ext in ("*.bsp", "*.bc", "*.tf", "*.tsc", "*.tls", "*.pck"):
+    for ext in ("*.bsp", "*.bc", "*.tf", "*.tsc", "*.tls", "*.pck", "*.tpc"):
         # Each NAIF extension must be declared with LFS filter.
         pattern = re.compile(
             rf"^\s*{re.escape(ext)}\s+.*filter=lfs",

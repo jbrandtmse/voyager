@@ -14,3 +14,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-18T20:00:00Z	Story 1.2	dev_complete	files=docs/adr/(28_files),scripts/adr-index.py,bake/tests/test_adr_catalogue.py,.gitattributes,README.md tests=164/164
 2026-05-18T20:30:00Z	Story 1.2	qa_complete	tests=bake/tests/test_adr_catalogue_defense.py passed=222 skipped=2 failed=0
 2026-05-18T20:45:00Z	Story 1.2	cr_complete	resolved=2 deferred=1 dismissed=0 tests_passing=222 ac_status=all_pass
+2026-05-18T20:50:00Z	Story 1.2	committed	sha=2b1385c submodules= remote=origin/epic1
+2026-05-18T20:55:00Z	Story 1.3	story_created	path=_bmad-output/implementation-artifacts/1-3-acquire-and-hash-pin-naif-and-pds-kernels.md user_scope=full_execution
+2026-05-18T22:00:00Z	Story 1.3	dev_complete	files=bake/src/(5_scripts),kernels/(17_kernels+manifest+frame-ids),docs/kernels/ckbrief-inventory.md,bake/tests/(3_new) kernels_size_mb=187 tests=172_passed_2_skipped
+2026-05-18T22:30:00Z	Story 1.3	qa_complete	tests=bake/tests/test_kernels_defense.py passed=280 skipped=2 failed=0 hardening=schema_version_guard
+2026-05-18T22:50:00Z	Story 1.3	cr_complete	resolved=1 deferred=5 dismissed=0 tests_passing=280 skipped=2 ac_status=all_pass security_fix=sha_verify_before_atomic_rename

@@ -11,6 +11,7 @@ bake/.venv/
 bake/__pycache__/
 bake/out/
 bake/tests/**/__pycache__/
+bake/src/**/__pycache__/
 
 # OS noise
 **/.DS_Store
