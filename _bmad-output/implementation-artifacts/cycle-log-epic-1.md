@@ -64,3 +64,6 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T16:00:00Z	Story 1.12	dev_complete	files=web/src/render/(spacecraft+trajectory),web/public/models/voyager.glb,THIRD_PARTY.md glb_mb=1.72 tests=1092_web_233_fast_bake_2_skipped
 2026-05-19T16:30:00Z	Story 1.12	qa_complete	tests=web/tests/spacecraft-defense.test.ts passed=1110_web_244_bake skipped=2 failed=0
 2026-05-19T17:00:00Z	Story 1.12	cr_complete	resolved=1 deferred=4 dismissed=0 tests_passing=1110_web_233_bake skipped=2 ac_status=all_pass high_fix=trajectory_polyline_from_zeros
+2026-05-19T17:05:00Z	Story 1.12	committed	sha=e85dc1f submodules= remote=origin/epic1 lfs_mb=1.7
+2026-05-19T17:10:00Z	Story 1.13	story_created	path=_bmad-output/implementation-artifacts/1-13-celestial-bodies-sun-eight-planets-and-one-moon.md user_scope=full_quality
+2026-05-19T17:30:00Z	Story 1.5	adr_verifications_complete	tool=chrome_devtools_mcp ac=ac5 result=pass evidence=_bmad-output/implementation-artifacts/1-5-ac5-precision-smoke-screens/ env_note=brotli_probe_bypass_required post_hoc=true

@@ -122,6 +122,7 @@ Requires Claude Code v2.1.32 or later.
   - `### Retrospective Per Epic (User Decision Point)`
   - `### Lead Creates Story Files (Critical Gate)`
   - `### Context Handoff Between Stages (Critical)`
+  - `### ADR-Aware Execution (Required)`
   - `### Shutdown-Before-Respawn Sequencing (Critical)`
   - `### Agent Prompt Requirements`
 - `## When to Pause`
@@ -225,6 +226,7 @@ This completely eliminates self-scheduling — terminated agents can't poll Task
 
 ```
 Lead calls TeamCreate({team_name: "epic-cycle-<date>", agent_type: "team-lead", description: "..."})  // once per workflow run
+Lead resolves project ADR registry path (typically docs/adr/) — persisted for every spawn prompt and per-story Layer-1 gate; see ADR-Aware Execution
 
 For each epic in range:
   Lead executes /bmad-sprint-planning via Skill tool (ensures sprint-status.yaml is current)
@@ -241,6 +243,7 @@ For each epic in range:
     Lead executes /bmad-create-story skill directly via Skill tool (pipeline gate) — sequentially for every story, even within a parallel batch
     Lead captures story file path from skill output
     Lead spawns developer → dispatches with story file path → waits for completion (captures file list) → shuts down → waits for shutdown approval
+    Lead executes ADR-tooled AC verifications via project's MCP servers (lead-side, sequential per AC); logs adr_verifications_complete (see ADR-Aware Execution)
     Lead spawns qa-test-author → dispatches with file list from developer → waits for completion (captures test file list) → shuts down → waits for shutdown approval
     Lead spawns code-reviewer → dispatches with combined file list (dev files + QA test files) → waits for completion → shuts down → waits for shutdown approval
     Lead does feat commit + push (submodules first if applicable, then parent — see Submodule Commit Order)
@@ -261,6 +264,7 @@ When the lead can confirm that two or more stories within the same epic touch **
 - **Story-file creation** — `/bmad-create-story` runs in the lead, one story at a time, for every story in the batch *before* any agent is spawned. This preserves the pipeline-gate discipline that prevents agents from racing ahead.
 - **Commits and pushes** — git operations are serialized one story at a time. In sequential mode the commit fires immediately after each story's cr_complete. In parallel-batch mode commits fire after the batch's cr-barrier releases — the lead then commits each batch member in story order, one at a time. Either way, no two git operations interleave; this avoids merge conflicts and keeps the cycle log readable.
 - **Sprint planning, retrospective review, Story X.0 creation, and per-epic retrospective** — all single-threaded.
+- **ADR-tooled AC verifications (Layer 1 of ADR-Aware Execution)** — single-threaded per story even within a parallel batch. The lead drives the project's MCP servers (Chrome DevTools MCP, etc.) sequentially across batch members to avoid context-channel collisions.
 
 **What runs in parallel:**
 
@@ -283,6 +287,7 @@ Lead identifies parallel batch [S_a, S_b, S_c] meeting all three independence cr
 Lead executes /bmad-create-story for S_a, then S_b, then S_c (sequentially — pipeline gate stays)
 Lead spawns dev-{epic}-a, dev-{epic}-b, dev-{epic}-c concurrently with task-in-prompt
 Lead waits for ALL dev completions (captures three file lists), then shuts down all three devs
+Lead executes ADR-tooled AC verifications for S_a, then S_b, then S_c sequentially (lead-side, not parallelized); logs adr_verifications_complete per story
 Lead spawns qa-{epic}-a, qa-{epic}-b, qa-{epic}-c concurrently with respective file lists
 Lead waits for ALL qa completions (captures three test file lists), then shuts down all three qas
 Lead spawns cr-{epic}-a, cr-{epic}-b, cr-{epic}-c concurrently with combined file lists
@@ -381,6 +386,36 @@ The **story file path** is the canonical context anchor and is passed forward to
 4. **Code reviewer → Commit**: The lead uses the union of file lists from the developer and QA agents to stage the correct files for commit. (The story file path itself is also committed if `/bmad-create-story` produced or modified it.)
 
 Without explicit context handoff, downstream agents lack the information to do their job effectively.
+
+### ADR-Aware Execution (Required)
+
+Projects with an Accepted-Decisions registry (typically `docs/adr/` for ADRs, but verify your project's actual path) commit to specific tooling, methodology, and architectural patterns that constrain HOW agents do their work, not just WHAT they produce. An AC satisfied by the wrong tool stack is equivalent to a HIGH-severity defect — it violates an Accepted ADR.
+
+Two-layer enforcement:
+
+**Layer 1 — Lead-executed ADR-tooling gate (between `dev_complete` and `qa_spawn`).**
+
+After the developer's shutdown is approved and before the qa agent is spawned, the lead inspects the story's ACs for any that map to ADR-committed agent-time tooling (visual / precision verification, performance profiling, Lighthouse audits, WebGL state inspection, etc.). For each matched AC, the lead drives the verification itself using its own tool inventory — typically the project's MCP servers (Chrome DevTools MCP, etc., per the relevant ADR).
+
+This gate exists because **MCP tool inventories may not propagate reliably to spawned subagents** — a dev agent reporting "I cannot drive a real WebGL canvas from this environment" may be literally true at its spawn time even when the lead has the MCP fully connected. The lead always has the MCP servers at the session level; relocating the ADR-mandated verification to the lead guarantees access without depending on subagent inheritance. This is the same pattern that locates `/bmad-retrospective` in the lead (because `AskUserQuestion` requires the lead's UI context).
+
+Mechanics:
+
+1. Lead reads the story file (the same path captured at `story_created`).
+2. For each AC, lead consults the project's ADR registry (path resolved once per workflow run — see top of Pipeline Flow). If any Accepted ADR commits to a specific tool stack for the work the AC describes, the AC is "ADR-tooled."
+3. Lead drives each ADR-tooled AC verification: navigate via `mcp__chrome-devtools-mcp__navigate_page` (or equivalent for the relevant tool), capture screenshots / console / network / perf trace as the ADR or AC requires, record pass/fail + evidence paths.
+4. Lead appends one cycle-log entry per story: `<UTC> TAB Story <id> TAB adr_verifications_complete TAB <metadata>` where `<metadata>` is whitespace-separated `key=value` pairs covering each verified AC (e.g., `tool=chrome_devtools_mcp ac=ac5 result=pass evidence=path/to/screens/`). One log line per story regardless of AC count; multi-AC verifications collapse into multi-valued metadata fields per the existing cycle-log grammar.
+5. On any failure, the lead surfaces it to the user before spawning qa (the qa stage assumes the implementation is functionally correct; a failed ADR-tooled verification means it isn't).
+6. The verification results (pass/fail + evidence pointers) are included in the code reviewer's spawn-prompt context.
+7. If the story has zero ADR-tooled ACs (the common case for non-visual stories), this gate is a one-line check that finds no work; lead emits a single `adr_verifications_complete result=none_required` entry and proceeds.
+
+**Layer 2 — Project ADR registry path in every spawn prompt.**
+
+The lead resolves the project's ADR registry path once at the start of the workflow run (after Team Lifecycle setup, before the first sprint planning step) and persists it for the run. The lead includes this path as factual context in every agent spawn prompt (e.g., `Project ADR registry: docs/adr/`). Agents are not required to consult ADRs for tooling decisions (Layer 1 absorbs that responsibility) but they MUST consult them for architectural and methodology decisions referenced in their story's ACs and Dev Notes.
+
+The code reviewer specifically must verify that implementations match the architectural / methodology commitments in Accepted ADRs. An implementation that violates an Accepted ADR is a **HIGH-severity finding**, not a deferrable LOW. The code-reviewer spawn prompt must include an explicit instruction to this effect.
+
+This gate was elevated to mandatory after a prior project's Story 1.5 AC5 (a "Phase 0 reverse-Z precision spike") was deferred to "manual run" when ADR 0010 explicitly committed Chrome DevTools MCP for that exact use case at agent-time. Neither the dev agent nor the code reviewer surfaced the ADR violation; the gap was caught only when a human read the story file and the ADR together.
 
 ### Shutdown-Before-Respawn Sequencing (Critical)
 
@@ -504,7 +539,7 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 
 - Fields are separated by a single literal TAB character (`\t`), not by runs of spaces.
 - The **metadata** field is whitespace-separated `key=value` pairs. Values are comma-separated lists when multi-valued; values must NOT contain spaces or tabs (percent-encode if needed). Keys are lowercase snake_case.
-- Valid stages, in order: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committed`.
+- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete` — see ADR-Aware Execution; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `committed`.
 
 **Example** (TABs shown as `→` for visibility; the actual file contains literal tabs):
 
@@ -551,6 +586,8 @@ These patterns were tested and failed due to agent self-scheduling behavior:
 - **Spawning teammates without `team_name`** — The `Agent` tool needs both `team_name` (which team to join) and `name` (the unique teammate name) to attach the spawned agent to the existing team. Omitting `team_name` produces a standalone subagent that the lead cannot address via `SendMessage`
 - **Leaving teams undeleted across runs** — `TeamCreate` writes persistent state under `~/.claude/teams/{team-name}/` (and `~/.claude/tasks/{team-name}/`). Without `TeamDelete` at the end of each workflow run, those directories accumulate forever. Always call `TeamDelete` after the last epic completes (and after every teammate has been shut down)
 - **Omitting `summary` on plain-text `SendMessage` calls** — The `SendMessage` API requires `summary` (5–10 word UI preview) whenever `message` is a plain string. Structured messages like `{type: "shutdown_request"}` don't need `summary`. Forgetting `summary` on a clarification response causes the message to fail validation
+- **Deferring ADR-mandated agent-time verification without surfacing it** — Saying "I can't do X from this environment" or "deferred to manual run" for work the project's ADRs commit to specific agent-time tooling. Real example: a Story 1.5 AC5 reverse-Z precision spike was deferred to "manual run" when ADR 0010 explicitly committed Chrome DevTools MCP for that exact use case at agent-time. The fix: the lead executes ADR-tooled AC verifications directly (Layer 1 in ADR-Aware Execution), because MCP tool inventories may not propagate reliably to subagents. The dev agent is no longer responsible for this kind of verification
+- **Treating ADR violations as LOW deferrable findings** — An AC implementation that violates an Accepted ADR is a **HIGH-severity** finding because it breaks a committed architectural / methodology decision. Code-reviewer spawn prompts must explicitly include this rule; otherwise reviewers tend to file ADR-violation findings as ordinary LOW deferrables and the violation silently ships
 
 ## Lessons Learned (Accumulated From Prior Project Runs)
 
@@ -562,3 +599,4 @@ These lessons were earned on prior projects' epic-cycle runs and are carried for
 4. **Mock-based testing is sufficient for foundation epics** — document infrastructure constraints in story dev notes
 5. **Story X.0 cleanup pattern (MANDATORY)** — deferred work from epic N gets a tracked cleanup story at the start of epic N+1. The lead MUST review the previous retrospective and triage ALL action items and deferred findings — include, defer with rationale, or drop. Story X.0 is created even if all items are deferred, to document the triage decision. Elevated from optional to mandatory after a prior project's mid-run retrospective revealed that skipping X.0 caused deferred items to silently accumulate across epics.
 6. **Pipeline must support resume** — on restart, the lead reads `sprint-status.yaml` and the cycle log (see Completion Logging § Cycle Log Format) to compute the resume point. Per-story resume granularity is at the stage level: `story_created` / `dev_complete` / `qa_complete` / `cr_complete` / `committed`. The lead skips completed stages and re-spawns only the agents needed for the first incomplete stage. For parallel batches, see Smart Parallelism § Resume Policy.
+7. **ADR-aware execution (lead-executed gate)** — projects with an Accepted-Decisions registry commit the workflow to specific tooling for specific kinds of work. The lead must drive ADR-tooled AC verifications directly (between `dev_complete` and `qa_complete`), because subagent MCP / tool propagation is unreliable. Code reviewers must treat ADR violations as HIGH severity, not LOW deferrable. This lesson was earned on a prior project's Story 1.5 / ADR 0010 mismatch (a Phase 0 reverse-Z precision spike committed to Chrome DevTools MCP, deferred by the dev agent to "manual run" because it lacked MCP access at spawn time).
