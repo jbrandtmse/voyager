@@ -167,6 +167,12 @@ The python-direct invocations (e.g. `python bake/src/acquire_kernels.py`) are do
 
 **Validation thresholds (NFR-P9, per SPK segment):** `just validate` exits non-zero if any baked VTRJ exceeds `max_position_error_km > 20` or `rms_position_error_km > 5` against a 10x-denser SPICE reference grid. Per-segment chunking is load-bearing here — the Voyager merged SPKs contain segment-boundary discontinuities that no single-VTRJ-per-body bake can satisfy.
 
+## Rendering
+
+The renderer (`web/src/render/render-engine.ts`) uses **Three.js native reverse-Z** (constructor parameter `reversedDepthBuffer: true`, gated on the WebGL2 `EXT_clip_control` extension; see [ADR 0002](docs/adr/0002-floating-origin-reverse-z-over-logarithmic-depth.md), [ADR 0008](docs/adr/0008-threejs-webglrenderer-over-webgpurenderer-v1.md), [ADR 0012](docs/adr/0012-scale-1km-render-space-branded-vector-types.md)). A boot-time `GPUCapabilityProbe` runs offscreen; if reverse-Z is unavailable, the renderer falls back to `logarithmicDepthBuffer: true` and emits one `console.warn`. Render-space units are kilometers (`SCALE = 1`); a `WorldGroup` is recentered on the camera every frame via `WorldGroup.position = -cameraWorldPos`, keeping Float32 precision dense near the camera while Float64 `WorldVec3` values are authoritative upstream. The Float64 → Float32 cast lives in exactly two files (`web/src/types/branded.ts`, `web/src/math/floating-origin.ts`), enforced by `web/tests/no-float32-leakage.test.ts`.
+
+**Dev-mode precision smoke:** navigate to `http://localhost:5173/?dev=precision` after `cd web && npm run dev`. A 1-meter cube at the origin and a 1-cm cube 1 m away orbit-zoom from 1 m to 165 AU and back over 30 seconds; the cubes should remain distinct without jitter or z-fighting at every distance. The full Playwright visual regression at these extreme zoom states is deferred to Story 7.6 (NFR-P8 long-form gate). The `?force-log-depth=1` flag forces the logarithmic-depth fallback path for manual testing.
+
 ## Kernels
 
 The simulation is driven by 17 NAIF / PDS Rings Node SPICE kernels (~187 MB total: ~115 MB DE440 planetary ephemeris + ~51 MB Voyager super CKs + ~6 MB encounter CKs + the rest LSK/PCK/FK/SCLK/SPK). All kernels live directly under `kernels/`, are SHA-256-pinned in `kernels/kernels-manifest.json`, and are Git LFS-tracked (rules in `.gitattributes`, established by Story 1.1).

@@ -24,3 +24,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T00:30:00Z	Story 1.4	dev_complete	files=bake/src/(4_modules),bake/tests/(4_new),justfile,README.md,brotli_dep segments=v1_7_v2_11 worst_max_km=10.387 worst_rms_km=0.081 nfr_p9=pass tests=221_passed_2_skipped
 2026-05-19T00:45:00Z	Story 1.4	qa_complete	tests=bake/tests/test_bake_defense.py passed_slow=237 skipped=2 failed=0
 2026-05-19T01:00:00Z	Story 1.4	cr_complete	resolved=1 deferred=9 dismissed=0 tests_passing_fast=228_slow=10 skipped=2 ac_status=all_pass schema_fix=kernels_source_url
+2026-05-19T01:05:00Z	Story 1.4	committed	sha=40144d1 submodules= remote=origin/epic1
+2026-05-19T01:10:00Z	Story 1.5	story_created	path=_bmad-output/implementation-artifacts/1-5-three-js-renderer-foundation-with-reverse-z-and-floating-origin.md
+2026-05-19T02:00:00Z	Story 1.5	dev_complete	files=web/src/(8_modules+8_tests),web/tests/(2_new),main.ts threejs=0.184.0 tests=161_web_228_bake_2_skipped ac5_browser_deferred=true
+2026-05-19T02:30:00Z	Story 1.5	qa_complete	tests=web/tests/renderer-defense.test.ts passed=187_web_228_bake skipped=2 failed=0
+2026-05-19T03:00:00Z	Story 1.5	cr_complete	resolved=3 deferred=8 dismissed=0 tests_passing=187_web_228_bake skipped=2 ac_status=all_pass fixes=lookAt_target,resize_handler_smoke_mode,fallback_warn_misleading

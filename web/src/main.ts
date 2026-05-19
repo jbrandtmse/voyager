@@ -1,60 +1,74 @@
-import './style.css'
-import typescriptLogo from './assets/typescript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.ts'
+import './style.css';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
+import { getUrlParams } from './boot/url-params';
+import { RenderEngine } from './render/render-engine';
+import {
+  isPrecisionSmokeMode,
+  startPrecisionSmoke,
+} from './dev/precision-smoke';
 
-<div class="ticks"></div>
+const bootstrap = (): void => {
+  const params = getUrlParams();
+  const capabilities = GPUCapabilityProbe.run();
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+  const canvas = ensureCanvas();
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+  if (isPrecisionSmokeMode(params.devMode)) {
+    // Dev-mode precision smoke scene (AC5). Renders 1 m + 1 cm cubes with a
+    // 30 s orbit from 1 m to 165 AU and back to verify reverse-Z + floating-
+    // origin precision visually.
+    const handle = startPrecisionSmoke(capabilities, canvas, params.forceLogDepth);
+    window.addEventListener('resize', () => {
+      sizeCanvasToWindow(canvas);
+      handle.engine.setSize(window.innerWidth, window.innerHeight);
+    });
+    return;
+  }
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+  // Normal app flow: empty scene. Subsequent stories populate it.
+  const engine = new RenderEngine(capabilities, {
+    forceLogDepth: params.forceLogDepth,
+  });
+  engine.init(canvas);
+  engine.start();
+
+  window.addEventListener('resize', () => {
+    sizeCanvasToWindow(canvas);
+    engine.setSize(window.innerWidth, window.innerHeight);
+  });
+};
+
+const ensureCanvas = (): HTMLCanvasElement => {
+  const existing = document.querySelector<HTMLCanvasElement>('canvas#voyager-canvas');
+  if (existing) {
+    sizeCanvasToWindow(existing);
+    return existing;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.id = 'voyager-canvas';
+  sizeCanvasToWindow(canvas);
+
+  // Mount the canvas into the existing #app container if present, else body.
+  const mount = document.getElementById('app') ?? document.body;
+  // Clear placeholder content from the Vite scaffold.
+  while (mount.firstChild) {
+    mount.removeChild(mount.firstChild);
+  }
+  mount.appendChild(canvas);
+  return canvas;
+};
+
+const sizeCanvasToWindow = (canvas: HTMLCanvasElement): void => {
+  canvas.style.display = 'block';
+  canvas.style.width = '100vw';
+  canvas.style.height = '100vh';
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrap);
+} else {
+  bootstrap();
+}
