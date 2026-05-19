@@ -29,3 +29,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T02:00:00Z	Story 1.5	dev_complete	files=web/src/(8_modules+8_tests),web/tests/(2_new),main.ts threejs=0.184.0 tests=161_web_228_bake_2_skipped ac5_browser_deferred=true
 2026-05-19T02:30:00Z	Story 1.5	qa_complete	tests=web/tests/renderer-defense.test.ts passed=187_web_228_bake skipped=2 failed=0
 2026-05-19T03:00:00Z	Story 1.5	cr_complete	resolved=3 deferred=8 dismissed=0 tests_passing=187_web_228_bake skipped=2 ac_status=all_pass fixes=lookAt_target,resize_handler_smoke_mode,fallback_warn_misleading
+2026-05-19T03:10:00Z	Story 1.5	committed	sha=fc378fa submodules= remote=origin/epic1
+2026-05-19T03:15:00Z	Story 1.6	story_created	path=_bmad-output/implementation-artifacts/1-6-asset-manifest-loader-and-ephemerisservice.md
+2026-05-19T04:00:00Z	Story 1.6	dev_complete	files=web/src/(3_services+1_math+1_dev),web/public/data/,scripts/copy_bake_to_web.py,bake/src/generate_l2_fixtures.py,l2-fixtures.json zod=4.4.3 tests=240_web_233_fast_bake l2_max_km_v1=0.195_v2=0.178
+2026-05-19T04:30:00Z	Story 1.6	qa_complete	tests=web/tests/ephemeris-defense.test.ts passed=277_web_244_bake skipped=2 failed=0
+2026-05-19T05:00:00Z	Story 1.6	cr_complete	resolved=1 deferred=8 dismissed=0 tests_passing=277_web_233_fast_bake skipped=2 ac_status=all_pass fix=ephemeris_silent_swallow

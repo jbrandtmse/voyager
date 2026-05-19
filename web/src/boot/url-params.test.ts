@@ -6,6 +6,13 @@ describe('getUrlParams', () => {
     const p = getUrlParams('');
     expect(p.forceLogDepth).toBe(false);
     expect(p.devMode).toBe(null);
+    expect(p.perfMode).toBe(null);
+  });
+
+  it('parses ?perf=ephemeris', () => {
+    const p = getUrlParams('?perf=ephemeris');
+    expect(p.perfMode).toBe('ephemeris');
+    expect(p.devMode).toBe(null);
   });
 
   it('parses ?force-log-depth=1 as true', () => {

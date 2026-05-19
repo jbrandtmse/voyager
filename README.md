@@ -43,6 +43,7 @@ Curated 20–40 hand-picked image plates · wide-angle camera boresight · broad
 | A11y primitives | Hand-rolled WAI-ARIA APG patterns + `focus-trap`/`tabbable` (≤5 KB) | Bespoke visual register; no third-party UI library |
 | Build-time data | Python 3.13 + SpiceyPy 8.1.0 + scipy + numpy | NAIF SPICE kernel extraction; cubic Hermite trajectory baking |
 | Trajectory format | Custom 40-byte VTRJ header + Float64Array binary, brotli-compressed | ~3–5 bytes/scalar on wire; zero parse cost |
+| Manifest validation | Zod 4 (runtime schema validator) | Fail-fast on malformed `manifest.json` at boot |
 | Hosting | Cloudflare Pages or Vercel (free tier) | Static CDN; ≤$15/year recurring cost |
 | Testing | Vitest + Playwright + axe-core; 6-layer validation harness | L1 Python interpolation vs SPICE → L5 E2E mission-timeline assertion |
 
@@ -172,6 +173,33 @@ The python-direct invocations (e.g. `python bake/src/acquire_kernels.py`) are do
 The renderer (`web/src/render/render-engine.ts`) uses **Three.js native reverse-Z** (constructor parameter `reversedDepthBuffer: true`, gated on the WebGL2 `EXT_clip_control` extension; see [ADR 0002](docs/adr/0002-floating-origin-reverse-z-over-logarithmic-depth.md), [ADR 0008](docs/adr/0008-threejs-webglrenderer-over-webgpurenderer-v1.md), [ADR 0012](docs/adr/0012-scale-1km-render-space-branded-vector-types.md)). A boot-time `GPUCapabilityProbe` runs offscreen; if reverse-Z is unavailable, the renderer falls back to `logarithmicDepthBuffer: true` and emits one `console.warn`. Render-space units are kilometers (`SCALE = 1`); a `WorldGroup` is recentered on the camera every frame via `WorldGroup.position = -cameraWorldPos`, keeping Float32 precision dense near the camera while Float64 `WorldVec3` values are authoritative upstream. The Float64 → Float32 cast lives in exactly two files (`web/src/types/branded.ts`, `web/src/math/floating-origin.ts`), enforced by `web/tests/no-float32-leakage.test.ts`.
 
 **Dev-mode precision smoke:** navigate to `http://localhost:5173/?dev=precision` after `cd web && npm run dev`. A 1-meter cube at the origin and a 1-cm cube 1 m away orbit-zoom from 1 m to 165 AU and back over 30 seconds; the cubes should remain distinct without jitter or z-fighting at every distance. The full Playwright visual regression at these extreme zoom states is deferred to Story 7.6 (NFR-P8 long-form gate). The `?force-log-depth=1` flag forces the logarithmic-depth fallback path for manual testing.
+
+## Data Flow
+
+Trajectory data flows from the offline bake to the runtime over a deterministic, hash-pinned pipeline (Story 1.4 + 1.6):
+
+```text
+bake/out/*.bin.br + manifest.json     (Story 1.4 — offline bake)
+        │
+        │  `just copy-bake-to-web` (Story 1.6 AC6)
+        ▼
+web/public/data/manifest.json + *.bin.br   (runtime assets, served statically)
+        │
+        │  ManifestLoader.load('/data/manifest.json')   — Zod schema check at boot
+        ▼
+ChunkLoader.load(file)   — fetch + DecompressionStream('br') + SHA-256 verify
+        │                  + LRU cache (capacity 12; per architecture line 874
+        │                    `loading` is observable via .subscribe())
+        ▼
+EphemerisService.getStateAt(et, bodyId)    — cubic Hermite over Float64 samples
+        │                                     returns WorldVec3 | null (never throws)
+        ▼
+render-engine / scene consumer (next stories)
+```
+
+`manifest.json` is the runtime contract (architecture Decision 1b) — schema is locked at `schemaVersion: 1`. `bake/out/manifest.json` is regenerable; `web/public/data/manifest.json` is committed because the runtime needs it at boot. The brotli `*.bin.br` chunks are .gitignored on both sides (regenerable from kernels via `just bake && just copy-bake-to-web`).
+
+**Dev-mode ephemeris perf:** navigate to `http://localhost:5173/?perf=ephemeris` after `cd web && npm run dev`. The harness loads every V1 + V2 chunk and reports median / p95 / p99 `EphemerisService.getStateAt` cost over 1000 iterations per body. NFR-P7 targets 1 ms median for 12 bodies; the 2-body Story 1.6 gate is 0.2 ms. The full 12-body re-measurement lives in Story 1.13.
 
 ## Kernels
 

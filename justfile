@@ -66,6 +66,13 @@ test-bake-slow:
 test-web:
     npm test
 
-# Stub — Story 1.6 owns the real implementation.
+# Copy `bake/out/manifest.json` + `bake/out/*.bin.br` into `web/public/data/`.
+# Idempotent — re-running with unchanged inputs produces no diff. Story 1.6 AC6.
 copy-bake-to-web:
-    @echo "stub: copies bake/out/* into web/public/data/ - implemented in Story 1.6"
+    uv run python scripts/copy_bake_to_web.py
+
+# Generate L2 reference fixtures (sparse SpiceyPy ground truth) for the
+# web-side EphemerisService AC4 hook test. Story 1.6 AC4.
+[working-directory("bake")]
+generate-l2-fixtures:
+    uv run python -m src.generate_l2_fixtures

@@ -51,7 +51,7 @@ development_status:
   1-3-acquire-and-hash-pin-naif-and-pds-kernels: done
   1-4-bake-pipeline-scaffold-and-l1-python-validation-harness: done
   1-5-three-js-renderer-foundation-with-reverse-z-and-floating-origin: done
-  1-6-asset-manifest-loader-and-ephemerisservice: backlog
+  1-6-asset-manifest-loader-and-ephemerisservice: done
   1-7-design-tokens-lit-3-scaffold-and-self-hosted-typography: backlog
   1-8-v-fallback-page-and-boot-time-capability-probe: backlog
   1-9-designed-first-paint-sequence-and-v-timeline-scrubber-mission-variant: backlog

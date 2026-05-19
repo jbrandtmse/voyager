@@ -363,6 +363,7 @@ REQUIRED_RECIPES = {
     "test-bake",
     "test-web",
     "copy-bake-to-web",
+    "generate-l2-fixtures",
 }
 
 
@@ -393,32 +394,71 @@ def test_just_list_exposes_required_recipes() -> None:
     )
 
 
-# --- 6. `copy-bake-to-web` is genuinely a stub (AC7) -----------------------
+# --- 6. `copy-bake-to-web` invokes the script and is idempotent (Story 1.6 AC6) ---
 
 
-def test_copy_bake_to_web_is_a_stub() -> None:
-    """`just copy-bake-to-web` must announce itself as a stub (AC7).
+def test_copy_bake_to_web_invokes_python_script() -> None:
+    """`just copy-bake-to-web` must invoke scripts/copy_bake_to_web.py.
 
-    Locks the semantics so a future story can't accidentally activate the
-    copy without anyone noticing.
+    Story 1.4 left this recipe as a stub; Story 1.6 activated it. Locks the
+    new contract so the recipe stays wired to the Python script (platform-
+    portable; no `cp -r` / `robocopy` divergence between OSes).
     """
     just_exe = _find_just()
     if just_exe is None:
         pytest.skip("`just` not found on PATH or in winget Links — install via `winget install Casey.Just`")
-    result = subprocess.run(
-        [just_exe, "--justfile", str(JUSTFILE), "copy-bake-to-web"],
-        capture_output=True,
-        text=True,
-        timeout=30,
+    # Confirm the recipe text references the Python script (don't actually
+    # invoke it — that requires `uv` and a live bake/out/). The recipe must
+    # mention `copy_bake_to_web.py` so the contract is text-locked.
+    text = JUSTFILE.read_text(encoding="utf-8")
+    assert "scripts/copy_bake_to_web.py" in text, (
+        "`copy-bake-to-web` recipe must invoke scripts/copy_bake_to_web.py"
     )
-    assert result.returncode == 0, (
-        f"`just copy-bake-to-web` exited non-zero ({result.returncode}); stderr:\n{result.stderr}"
+    # Stub markers must be gone — guards against accidental regression.
+    assert "stub" not in text.lower().split("copy-bake-to-web")[1].split("\n", 4)[1].lower(), (
+        "`copy-bake-to-web` recipe still references 'stub' near its body — Story 1.6 removed the stub."
     )
-    combined = (result.stdout + result.stderr).lower()
-    assert "stub" in combined or "story 1.6" in combined, (
-        "Expected the stub marker ('stub' or 'Story 1.6') in `just copy-bake-to-web` output.\n"
-        f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
-    )
+
+
+def test_copy_bake_to_web_script_exists_and_is_idempotent() -> None:
+    """`scripts/copy_bake_to_web.py` exists and re-running copies nothing new."""
+    script = REPO_ROOT /"scripts" / "copy_bake_to_web.py"
+    assert script.exists(), f"Story 1.6 expects {script} to exist"
+    # Idempotence check: run the script twice against a tmp_path and assert
+    # the second run is a no-op (everything reports SKIP).
+    bake_out = REPO_ROOT /"bake" / "out"
+    if not (bake_out / "manifest.json").exists():
+        pytest.skip("bake/out/manifest.json missing; run `just bake` first")
+    import tempfile
+
+    venv_python = REPO_ROOT /"bake" / ".venv" / "Scripts" / "python.exe"
+    if not venv_python.exists():
+        # POSIX layout fallback
+        venv_python = REPO_ROOT /"bake" / ".venv" / "bin" / "python"
+    if not venv_python.exists():
+        pytest.skip("bake/.venv python not present; cannot exercise the idempotence path")
+    with tempfile.TemporaryDirectory() as tmp:
+        result1 = subprocess.run(
+            [str(venv_python), str(script), "--web-data", tmp],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result1.returncode == 0, f"first run failed:\n{result1.stderr}"
+        result2 = subprocess.run(
+            [str(venv_python), str(script), "--web-data", tmp],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result2.returncode == 0, f"second run failed:\n{result2.stderr}"
+        # On the second run, no file should be a COPY action — only SKIPs.
+        for line in result2.stdout.split("\n"):
+            if line.startswith("[COPY]"):
+                raise AssertionError(
+                    f"second run was not idempotent — COPY happened: {line}\n"
+                    f"stdout:\n{result2.stdout}"
+                )
 
 
 # --- 7. Brotli quality is locked at 11 (NFR-R4) ---------------------------
