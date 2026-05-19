@@ -1,4 +1,10 @@
-import './style.css';
+// Story 1.7 — design-system style chain. tokens.css MUST load first so all
+// downstream consumers (fonts.css unicode-ranges, global.css var(--v-*)
+// references, component CSS) can resolve the tokens. Order matters.
+import './styles/tokens.css';
+import './styles/fonts.css';
+import './styles/global.css';
+import './styles/breakpoints.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';

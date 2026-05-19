@@ -13,3 +13,8 @@
 *.tls filter=lfs diff=lfs merge=lfs -text
 *.pck filter=lfs diff=lfs merge=lfs -text
 *.tpc filter=lfs diff=lfs merge=lfs -text
+
+# Self-hosted typography (Story 1.7). Subsetted .woff2 files under
+# web/public/fonts/ are LFS-tracked: binary, opaque to diff. Total budget
+# ~120 KB across three faces (JetBrains Mono, Inter, Source Serif 4).
+*.woff2 filter=lfs diff=lfs merge=lfs -text

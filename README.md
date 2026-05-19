@@ -99,6 +99,30 @@ Per the PRD, success is **recognizable quality, not engagement metrics**. The la
 
 Voyager 1's 50th anniversary is 2027-09-05. That is **opportunity timing, not a deadline.** The artifact ships when it clears its own bar.
 
+## Design System
+
+The visual register is locked in [Direction B (AiRT Canonical)](_bmad-output/planning-artifacts/ux-design-directions.html). Implementation lives across four CSS files under `web/src/styles/` plus a TS sibling for matchMedia constants:
+
+| File | Role |
+| --- | --- |
+| `tokens.css` | **Single source of truth** for design tokens at `:root` (`--v-*` prefix). Colors, typography families + size scale, spacing (4-px discrete + `clamp()` edge margin), motion durations/easings, z-index, breakpoint values. Component CSS consumes via `var(--v-*)` — never redefines. |
+| `fonts.css` | `@font-face` declarations for the three self-hosted faces (JetBrains Mono Regular, Inter Regular, Source Serif 4 variable). `font-display: swap`; latin + extended-latin punctuation `unicode-range`. |
+| `global.css` | Minimal reset, document defaults, global `:focus-visible` outline, and the `prefers-reduced-motion` / `prefers-reduced-transparency` token overrides at `:root`. |
+| `breakpoints.css` | The **only** three structural breakpoints allowed in the codebase: `max-width: 767px` (mobile), `max-width: 1023px` (tablet), `min-width: 1920px` (wide). Everything else uses `clamp()`. |
+| `breakpoints.ts` | TS-side constants + matchMedia query strings that mirror the CSS. |
+
+### Typography — self-hosted, OFL, ≤ 120 KB
+
+No Google Fonts CDN. No analytics-adjacent font host. All three faces are subsetted to latin + extended-latin punctuation via `scripts/font-subset.py` (a one-off `fonttools pyftsubset` invocation; not a runtime dep). The resulting `.woff2` files are LFS-tracked under `web/public/fonts/`, preloaded from `web/index.html`, and total **≤ 120 KB compressed**. Attribution + OFL compliance in [`THIRD_PARTY.md`](THIRD_PARTY.md).
+
+### Reduced motion is global
+
+`prefers-reduced-motion: reduce` collapses every motion-duration token (`--v-duration-fast`/`-base`/`-slow`) to `0ms` at `:root`. Components consume the variables and inherit the override automatically — there is no per-component opt-in.
+
+### Lit 3+ Web Components
+
+UI components extend [`BaseElement`](web/src/components/base-element.ts) (or `LitElement` directly — both are explicitly allowed). The minimal `<v-version>` component at `web/src/components/v-version.ts` demonstrates the file shape: kebab-case filename matches the custom-element tag, Shadow DOM-scoped CSS via Lit's `static styles`, tokens consumed via `var(--v-*)`.
+
 ## Attribution and data provenance
 
 The artifact uses only published, historical, public-domain NASA mission data and supplementary public-domain or attribution-required third-party assets:

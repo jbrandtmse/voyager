@@ -4,7 +4,58 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta name="color-scheme" content="dark" />
+    <title>Voyager</title>
+    <!-- Story 1.7 AC2 — critical first-paint tokens, FOUC shim. The full
+         token sheet at src/styles/tokens.css loads via Vite's CSS chain;
+         this block exists only so bg/fg/font don't flash light during the
+         initial paint. ≤1 KB minified. -->
+    <style>
+      :root {
+        --v-color-bg: #0a0e14;
+        --v-color-fg: #e8eaed;
+        --v-font-sans: system-ui, sans-serif;
+        --v-font-size-body: 16px;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--v-color-bg);
+        color: var(--v-color-fg);
+        font-family: var(--v-font-sans);
+        font-size: var(--v-font-size-body);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root {
+          --v-duration-fast: 0ms;
+          --v-duration-base: 0ms;
+          --v-duration-slow: 0ms;
+        }
+      }
+    </style>
+    <!-- Self-hosted font preloads — Story 1.7 AC3. crossorigin is required
+         even for same-origin fonts (woff2 fetches are always anonymous-CORS). -->
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/inter-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/source-serif-4-variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
   </head>
   <body>
     <div id="app"></div>

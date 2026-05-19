@@ -795,15 +795,14 @@ describe('?perf=ephemeris URL gate is exact-match (defense)', () => {
 // === 14. No new framework imports in web/src/ ========================
 
 describe('No unexpected framework imports in web/src/ (defense, Story 1.6 boundary)', () => {
-  // Story 1.7 will introduce Lit; until then this list is exhaustive.
+  // Story 1.7 introduced Lit 3+ as the sanctioned component framework.
+  // The architectural ban on React/Preact/Vue/Svelte/state libs holds; Lit
+  // (lit / lit-html / lit-element / lit-* subpaths) is explicitly allowed.
   // Match common bare-module specifiers in `import ... from '<pkg>'` or
   // `import('<pkg>')` to catch any sneaked-in framework.
   const FORBIDDEN_PACKAGES = [
     'react',
     'react-dom',
-    'lit',
-    'lit-html',
-    'lit-element',
     'preact',
     'vue',
     'svelte',

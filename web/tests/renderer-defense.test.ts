@@ -510,14 +510,10 @@ describe('Story 1.5 defense — no premature framework imports under web/src/', 
       reason:
         'OrbitControls is intentionally rejected (Decision 3c — Story 4.2 will introduce a custom VoyagerCameraController)',
     },
-    {
-      pattern: /from\s+['"]lit['"]/,
-      reason: 'Lit is introduced in Story 1.7, not 1.5',
-    },
-    {
-      pattern: /from\s+['"]lit\//,
-      reason: 'Lit is introduced in Story 1.7, not 1.5',
-    },
+    // Lit was introduced in Story 1.7 as the sanctioned component framework;
+    // the entries that used to forbid `from 'lit'` / `from 'lit/...'` were
+    // removed when that story landed. Defense continues to forbid the
+    // alternate-frameworks below.
     {
       pattern: /from\s+['"]react['"]/,
       reason: 'React is not part of this project',

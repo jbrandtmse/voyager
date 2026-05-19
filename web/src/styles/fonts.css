@@ -1,0 +1,47 @@
+/* Voyager typography — self-hosted, latin-subsetted, OFL-licensed. */
+/* Source files: web/public/fonts/ (LFS-tracked); subsetting recipe at */
+/* scripts/font-subset.py. Total compressed budget ≤ 120 KB across three faces. */
+/* */
+/* font-display: swap — FOUT (Flash of Unstyled Text), not FOIT. UX spec */
+/* §1118 / NFR-A5: text must remain readable while custom fonts load. */
+/* */
+/* unicode-range — basic-latin + extended-latin punctuation only. Mirrors */
+/* the subset shipped by scripts/font-subset.py (SUBSET_UNICODES). Any */
+/* glyph outside the range falls back to the next family in the stack. */
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-regular.woff2') format('woff2');
+  unicode-range: U+0020-007F, U+00A0, U+00A9-00AE, U+00B0, U+00B7, U+00D7,
+    U+2002-2003, U+2009, U+200B, U+2013-2014, U+2018-2019, U+201C-201D,
+    U+2026, U+202F, U+2122, U+2212;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter-regular.woff2') format('woff2');
+  unicode-range: U+0020-007F, U+00A0, U+00A9-00AE, U+00B0, U+00B7, U+00D7,
+    U+2002-2003, U+2009, U+200B, U+2013-2014, U+2018-2019, U+201C-201D,
+    U+2026, U+202F, U+2122, U+2212;
+}
+
+/* Source Serif 4 variable — wght axis 350-600 (after subset). The */
+/* font-weight range matches the variable axis range; the browser */
+/* interpolates instances within 350-600 from this single file. */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 350 600;
+  font-display: swap;
+  src: url('/fonts/source-serif-4-variable.woff2') format('woff2-variations'),
+    url('/fonts/source-serif-4-variable.woff2') format('woff2');
+  unicode-range: U+0020-007F, U+00A0, U+00A9-00AE, U+00B0, U+00B7, U+00D7,
+    U+2002-2003, U+2009, U+200B, U+2013-2014, U+2018-2019, U+201C-201D,
+    U+2026, U+202F, U+2122, U+2212;
+}
