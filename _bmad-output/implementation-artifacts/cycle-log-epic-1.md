@@ -19,3 +19,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-18T22:00:00Z	Story 1.3	dev_complete	files=bake/src/(5_scripts),kernels/(17_kernels+manifest+frame-ids),docs/kernels/ckbrief-inventory.md,bake/tests/(3_new) kernels_size_mb=187 tests=172_passed_2_skipped
 2026-05-18T22:30:00Z	Story 1.3	qa_complete	tests=bake/tests/test_kernels_defense.py passed=280 skipped=2 failed=0 hardening=schema_version_guard
 2026-05-18T22:50:00Z	Story 1.3	cr_complete	resolved=1 deferred=5 dismissed=0 tests_passing=280 skipped=2 ac_status=all_pass security_fix=sha_verify_before_atomic_rename
+2026-05-18T23:00:00Z	Story 1.3	committed	sha=7f850fe submodules= remote=origin/epic1 lfs_mb=188
+2026-05-18T23:05:00Z	Story 1.4	story_created	path=_bmad-output/implementation-artifacts/1-4-bake-pipeline-scaffold-and-l1-python-validation-harness.md
+2026-05-19T00:30:00Z	Story 1.4	dev_complete	files=bake/src/(4_modules),bake/tests/(4_new),justfile,README.md,brotli_dep segments=v1_7_v2_11 worst_max_km=10.387 worst_rms_km=0.081 nfr_p9=pass tests=221_passed_2_skipped
+2026-05-19T00:45:00Z	Story 1.4	qa_complete	tests=bake/tests/test_bake_defense.py passed_slow=237 skipped=2 failed=0
+2026-05-19T01:00:00Z	Story 1.4	cr_complete	resolved=1 deferred=9 dismissed=0 tests_passing_fast=228_slow=10 skipped=2 ac_status=all_pass schema_fix=kernels_source_url

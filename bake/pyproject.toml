@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.13.*"
 dependencies = [
+    "brotli>=1.2.0",
     "numpy>=2.4.5",
     "scipy>=1.17.1",
     "spiceypy==8.1.0",
@@ -15,4 +16,9 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.13",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: end-to-end tests against real SPICE kernels (~30-60s; excluded from default run)",
 ]
