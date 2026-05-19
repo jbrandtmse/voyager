@@ -123,6 +123,20 @@ No Google Fonts CDN. No analytics-adjacent font host. All three faces are subset
 
 UI components extend [`BaseElement`](web/src/components/base-element.ts) (or `LitElement` directly — both are explicitly allowed). The minimal `<v-version>` component at `web/src/components/v-version.ts` demonstrates the file shape: kebab-case filename matches the custom-element tag, Shadow DOM-scoped CSS via Lit's `static styles`, tokens consumed via `var(--v-*)`.
 
+## Browser Compatibility
+
+Voyager requires **WebGL 2**, **WebAssembly**, and **modern brotli decoding** (`DecompressionStream('br')`) — the three together gate the simulation. Per [ADR 0022](docs/adr/0022-browser-unsupported-fallback-page-not-degraded-render.md), a boot-time capability probe (Story 1.8) checks each capability *before* the main bundle loads; any missing capability redirects to a static `/unsupported.html` page rather than attempting a degraded render.
+
+The probe:
+
+- Runs as a ≤ 1 KB inline `<script>` at the top of `<head>` in `web/index.html` — placed before any external script tag.
+- Probes in the order **WebGL2 → WebAssembly → brotli**. The first failing capability becomes the `?reason=<webgl2|wasm|brotli>` URL parameter on the fallback page.
+- On full success, dynamic-imports the main bundle. The bundle never loads on an unsupported browser.
+
+The fallback page is generated at build time from the [`<v-fallback-page>`](web/src/components/v-fallback-page.ts) Lit component. The Vite plugin in [`web/vite.config.ts`](web/vite.config.ts) pre-renders `web/dist/unsupported.html` with the default `?reason=webgl2` variant baked in, inlines the page's CSS (tokens + `@font-face` declarations matching the main app), and inlines a tiny swap script that handles the `?reason` query parameter. The page works fully with JavaScript disabled — the `?reason` swap is progressive enhancement only.
+
+Supported browser baseline: Chrome 120+, Firefox 126+, Safari 17.5+ (the `DecompressionStream('br')` floor).
+
 ## Attribution and data provenance
 
 The artifact uses only published, historical, public-domain NASA mission data and supplementary public-domain or attribution-required third-party assets:

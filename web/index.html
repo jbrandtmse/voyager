@@ -56,9 +56,17 @@
       type="font/woff2"
       crossorigin
     />
+    <!-- Story 1.8 AC1 — boot-time capability probe. The Vite plugin in
+         vite.config.ts substitutes this comment with a minified inline
+         <script> that probes WebGL2 → WebAssembly → brotli; on any failure
+         redirects to /unsupported.html?reason=<X>; on success dynamic-
+         imports the main bundle. Inline body ≤ 1 KB minified. Placed
+         FIRST in <head> so it runs before any external script tag. The
+         dynamic import (NOT a static <script type="module" src> tag) is
+         what gates the bundle load behind the probe. -->
+    <!-- FEATURE_PROBE -->
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

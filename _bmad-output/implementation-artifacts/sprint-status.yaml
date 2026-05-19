@@ -38,6 +38,8 @@
 generated: 2026-05-18
 last_updated: 2026-05-18
 # 1.5 set to done on 2026-05-18 after code review (cr-1-5 / epic-cycle-2026-05-18)
+# 1.8 set to in-progress on 2026-05-18 (dev-1-8 / epic-cycle-2026-05-18)
+# 1.8 set to review on 2026-05-18 (dev-1-8 / epic-cycle-2026-05-18)
 project: Voyager
 project_key: NOKEY
 tracking_system: file-system
@@ -53,7 +55,7 @@ development_status:
   1-5-three-js-renderer-foundation-with-reverse-z-and-floating-origin: done
   1-6-asset-manifest-loader-and-ephemerisservice: done
   1-7-design-tokens-lit-3-scaffold-and-self-hosted-typography: done
-  1-8-v-fallback-page-and-boot-time-capability-probe: backlog
+  1-8-v-fallback-page-and-boot-time-capability-probe: review
   1-9-designed-first-paint-sequence-and-v-timeline-scrubber-mission-variant: backlog
   1-10-v-play-button-simulation-clock-and-v-speed-multiplier: backlog
   1-11-v-hud-container-and-hud-sub-components: backlog

@@ -39,3 +39,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T06:00:00Z	Story 1.7	dev_complete	files=web/src/styles/(4),web/src/components/(2),web/public/fonts/(3_woff2),index.html,THIRD_PARTY.md,scripts/font-subset.py lit=3.3.3 fonts_kb=98.8 tests=365_web_233_bake_2_skipped
 2026-05-19T06:30:00Z	Story 1.7	qa_complete	tests=web/tests/design-system-defense.test.ts passed=423_web_233_bake skipped=2 failed=0 ux_spec_contrast_drift_noted=true
 2026-05-19T07:00:00Z	Story 1.7	cr_complete	resolved=1 deferred=4 dismissed=18 tests_passing=423_web_233_bake skipped=2 ac_status=all_pass fix=stale_decorator_comment_v_version_test
+2026-05-19T07:05:00Z	Story 1.7	committed	sha=85fc2ce submodules= remote=origin/epic1 lfs_kb=101
+2026-05-19T07:10:00Z	Story 1.8	story_created	path=_bmad-output/implementation-artifacts/1-8-v-fallback-page-and-boot-time-capability-probe.md
+2026-05-19T08:00:00Z	Story 1.8	dev_complete	files=web/src/components/v-fallback-page.ts,web/src/boot/(feature-detect+fallback-page-static),vite.config.ts,index.html,unsupported.html probe_bytes=750 swap_bytes=179 tests=482_web_233_fast_bake_2_skipped
+2026-05-19T08:30:00Z	Story 1.8	qa_complete	tests=web/tests/fallback-defense.test.ts passed=514_web_233_bake skipped=2 failed=0
+2026-05-19T09:00:00Z	Story 1.8	cr_complete	resolved=0 deferred=3 dismissed=0 tests_passing=514_web_233_bake skipped=2 ac_status=all_pass clean=true
