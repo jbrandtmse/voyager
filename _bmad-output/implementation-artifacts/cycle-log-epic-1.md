@@ -69,4 +69,9 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T18:30:00Z	Story 1.13	dev_complete	files=web/src/render/(celestial+skybox),web/src/services/texture-loader.ts,web/src/dev/fps-readout.ts,web/public/textures/(11_png+1_skybox),bake/src/bake_trajectories.py textures_source=solarsystemscope_cc-by-4.0 ktx2_deferred_to_4.3 tests=1211_web_233_fast_bake_10_slow
 2026-05-19T19:00:00Z	Story 1.13	qa_complete	tests=web/tests/celestial-defense-extended.test.ts passed=1276_web_233_bake skipped=2 failed=0 fix=uranus_neptune_radius_ordering
 2026-05-19T19:30:00Z	Story 1.13	cr_complete	resolved=0 deferred=0 dismissed=4 tests_passing=1276_web_233_bake skipped=2 ac_status=all_pass clean=true
+2026-05-19T19:35:00Z	Story 1.13	committed	sha=cb53d62 submodules= remote=origin/epic1 lfs_mb=10
+2026-05-19T19:40:00Z	Story 1.14	story_created	path=_bmad-output/implementation-artifacts/1-14-baseline-ci-and-static-cdn-deploy.md
+2026-05-19T20:30:00Z	Story 1.14	dev_complete	files=.github/workflows/ci.yml,web/public/_headers,bake/tests/test_ci_workflow.py,docs/adr/0016 cdn=cloudflare_pages tests=1276_web_244_fast_bake_2_skipped nfr_m4_interpretation_open=true
+2026-05-19T21:00:00Z	Story 1.14	qa_complete	tests=bake/tests/test_ci_defense.py passed=257_skipped=3_failed=1 web_vitest=1276 intentional_failure=nfr_m4_doc_tripwire
+2026-05-19T21:30:00Z	Story 1.14	cr_complete	resolved=1 deferred=4 dismissed=0 tests_passing=258_bake_1276_web skipped=3 ac_status=all_pass med_fix=nfr_m4_interpretation_note_added_to_deferred_work_md epic_1_complete=true
 2026-05-19T17:30:00Z	Story 1.5	adr_verifications_complete	tool=chrome_devtools_mcp ac=ac5 result=pass evidence=_bmad-output/implementation-artifacts/1-5-ac5-precision-smoke-screens/ env_note=brotli_probe_bypass_required post_hoc=true

@@ -52,6 +52,7 @@ last_updated: 2026-05-18
 # 1.12 set to in-progress on 2026-05-18 (dev-1-12 / epic-cycle-2026-05-18)
 # 1.12 set to review on 2026-05-18 (dev-1-12 / epic-cycle-2026-05-18)
 # 1.12 set to done on 2026-05-19 after code review (cr-1-12 / epic-cycle-2026-05-18) — HIGH fix applied in main.ts (prefetch V1+V2 chunks before TrajectoryLines construction)
+# 1.14 set to done on 2026-05-19 after code review (cr-1-14 / epic-cycle-2026-05-18) — Epic 1 COMPLETE; MED fix resolved NFR-M4 interpretation tripwire by adding entry to deferred-work.md
 project: Voyager
 project_key: NOKEY
 tracking_system: file-system
@@ -73,7 +74,7 @@ development_status:
   1-11-v-hud-container-and-hud-sub-components: done
   1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines: done
   1-13-celestial-bodies-sun-eight-planets-and-one-moon: done
-  1-14-baseline-ci-and-static-cdn-deploy: backlog
+  1-14-baseline-ci-and-static-cdn-deploy: done
   epic-1-retrospective: optional
 
   # Epic 2: Mission Spine — Chapter Navigation, Deep-Linking and Embed

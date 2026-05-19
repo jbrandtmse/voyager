@@ -124,20 +124,24 @@ def test_adr_0016_has_story_114_deferral_marker() -> None:
     )
 
 
-def test_adr_0016_status_is_proposed() -> None:
-    """AC2: ADR 0016 is the one ADR in the catalogue marked Proposed (selection deferred)."""
+def test_adr_0016_status_is_accepted() -> None:
+    """Story 1.14: ADR 0016 was promoted from Proposed to Accepted with the
+    Cloudflare Pages selection. The filename retains the historical
+    ``-deferred`` suffix per the ADR-immutability compromise documented in
+    the ADR's own header note.
+    """
     adr_0016 = ADR_DIR / "0016-cdn-provider-selection-deferred.md"
     content = adr_0016.read_text(encoding="utf-8")
     match = STATUS_PATTERN.search(content)
     assert match is not None
-    assert match.group(1).strip() == "Proposed", (
-        f"ADR 0016 must be 'Proposed' (selection deferred), got {match.group(1)!r}"
+    assert match.group(1).strip() == "Accepted", (
+        f"ADR 0016 must be 'Accepted' (Story 1.14 selected Cloudflare Pages), got {match.group(1)!r}"
     )
 
 
 def test_catalogue_accepted_adrs_are_accepted() -> None:
-    """AC2: ADRs 0001-0015, 0017-0027 are all marked Accepted."""
-    expected_accepted = (set(range(1, 28)) - {16})  # everything except 0016
+    """AC2: ADRs 0001-0027 are all marked Accepted (post-Story-1.14)."""
+    expected_accepted = set(range(1, 28))
     for path in _adr_files():
         number = _parse_number(path)
         if number not in expected_accepted:

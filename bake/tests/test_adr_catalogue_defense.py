@@ -199,6 +199,16 @@ KNOWN_FILENAME_TITLE_DIVERGENCES: dict[str, dict[str, str]] = {
         # "5x" in filename → "5.x" in title; alnum-collapsed title contains "5x"
         # No actual divergence after alnum collapse; listed for documentation.
     },
+    "0016-cdn-provider-selection-deferred.md": {
+        # Story 1.14 promoted ADR 0016 from Proposed to Accepted with the
+        # Cloudflare Pages selection. The filename retains the historical
+        # "-deferred" suffix per the ADR-immutability rule (ADR 0020), but
+        # the H1 was updated to drop the now-inaccurate "(Deferred)"
+        # qualifier. The "deferred" token in the filename is intentional
+        # historical residue; the divergence is documented in the ADR's
+        # own header note.
+        "deferred": "",
+    },
 }
 
 # Stopwords ignored in the filename→title comparison. These are common
@@ -253,13 +263,15 @@ def test_adr_filename_and_h1_title_are_in_sync(adr_path: Path) -> None:
             continue
         if token in allow_map:
             replacement = allow_map[token]
-            if replacement and replacement.lower() in title_alnum:
+            if not replacement:
+                # Empty/None replacement means "fully exempt — documented
+                # intentional divergence (e.g., historical filename residue
+                # that no longer appears in the H1)".
                 continue
-            # Allow-list entry with empty/None replacement means "documented,
-            # no extra check needed beyond the default substring lookup".
-            if replacement and replacement.lower() not in title_alnum:
-                missing_tokens.append(f"{token!r} (expected mapped substring {replacement!r})")
+            if replacement.lower() in title_alnum:
                 continue
+            missing_tokens.append(f"{token!r} (expected mapped substring {replacement!r})")
+            continue
         if token not in title_alnum:
             missing_tokens.append(token)
 

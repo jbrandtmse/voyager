@@ -27,7 +27,7 @@ New ADRs use the template at [`0000-template.md`](0000-template.md).
 | 0013 | [ADR 0013 — Lit 3+ Web Components over React / Preact / Svelte](0013-lit3-web-components-over-react-preact-svelte.md) | Accepted | `docs/adr/0013-lit3-web-components-over-react-preact-svelte.md` |
 | 0014 | [ADR 0014 — Hybrid Chapter Definition (Spec for 10, Module for PBD)](0014-hybrid-chapter-definition-spec-for-10-module-for-pbd.md) | Accepted | `docs/adr/0014-hybrid-chapter-definition-spec-for-10-module-for-pbd.md` |
 | 0015 | [ADR 0015 — Service Graph + Lit Reactive Controllers (No Global Store)](0015-service-graph-lit-reactive-controllers-no-global-store.md) | Accepted | `docs/adr/0015-service-graph-lit-reactive-controllers-no-global-store.md` |
-| 0016 | [ADR 0016 — CDN Provider Selection (Deferred)](0016-cdn-provider-selection-deferred.md) | Proposed | `docs/adr/0016-cdn-provider-selection-deferred.md` |
+| 0016 | [ADR 0016 — CDN Provider Selection](0016-cdn-provider-selection-deferred.md) | Accepted | `docs/adr/0016-cdn-provider-selection-deferred.md` |
 | 0017 | [ADR 0017 — GitHub Actions for Build + CDN for Hosting](0017-github-actions-for-build-cdn-for-hosting.md) | Accepted | `docs/adr/0017-github-actions-for-build-cdn-for-hosting.md` |
 | 0018 | [ADR 0018 — OG Card Generation via Playwright Against Built Site](0018-og-card-generation-via-playwright-against-built-site.md) | Accepted | `docs/adr/0018-og-card-generation-via-playwright-against-built-site.md` |
 | 0019 | [ADR 0019 — Zero Analytics; localStorage-Only Error Capture](0019-zero-analytics-localstorage-only-error-capture.md) | Accepted | `docs/adr/0019-zero-analytics-localstorage-only-error-capture.md` |

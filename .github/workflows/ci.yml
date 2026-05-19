@@ -1,0 +1,292 @@
+# Voyager baseline CI pipeline (Story 1.14).
+#
+# Triggers on every push to main and every PR targeting main. Runs lint,
+# typecheck, bake (with determinism re-bake + SHA compare per NFR-R4),
+# Layer-1 validation (NFR-P9), and the web vitest suite (Layer-3) in
+# parallel where possible, gated by `needs:` edges. Builds `web/dist/`
+# and deploys it to Cloudflare Pages on green-main pushes (ADR 0016).
+#
+# Load-bearing pins:
+#   - `runs-on: ubuntu-22.04` — NFR-R4 byte-identical bake (CSPICE wheel
+#     platform pin, architecture line 486).
+#   - `actions/checkout@v4` with `lfs: true` — without LFS the kernels
+#     and textures aren't pulled and the bake fails.
+#   - Deploy job gated on `github.ref == 'refs/heads/main' &&
+#     github.event_name == 'push'` — never deploys from PRs.
+#
+# Required GitHub repo secrets (must be set by the maintainer before the
+# first push to main; see README → Deployment):
+#   - CLOUDFLARE_API_TOKEN  (scoped to Pages:Edit)
+#   - CLOUDFLARE_ACCOUNT_ID
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs for the same ref when a new commit lands.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  # --- Lint -----------------------------------------------------------------
+  lint-bake:
+    name: lint (bake — ruff)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: bake/uv.lock
+      - name: uv sync
+        working-directory: bake
+        run: uv sync --frozen
+      - name: ruff check
+        working-directory: bake
+        run: uv run ruff check .
+
+  lint-web:
+    name: lint (web — eslint)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: eslint
+        working-directory: web
+        run: npm run lint
+
+  # --- Typecheck ------------------------------------------------------------
+  typecheck-web:
+    name: typecheck (web — tsc --noEmit)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: tsc --noEmit
+        working-directory: web
+        run: npm run typecheck
+
+  # --- Bake + determinism gate (NFR-R4) -------------------------------------
+  bake:
+    name: bake (VTRJ + determinism)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: bake/uv.lock
+      - name: uv sync
+        working-directory: bake
+        run: uv sync --frozen
+      - name: bake — first run
+        working-directory: bake
+        run: uv run python -m src.bake_trajectories
+      - name: snapshot SHA-256 of first bake outputs
+        run: |
+          cd bake/out
+          find . -type f \( -name '*.bin*' -o -name 'manifest.json' \) | sort \
+            | xargs sha256sum > ../../first-bake-shas.txt
+          echo "--- first bake ---"
+          cat ../../first-bake-shas.txt
+      - name: bake — re-run for determinism
+        working-directory: bake
+        run: uv run python -m src.bake_trajectories
+      - name: assert determinism (NFR-R4 byte-identical re-bake)
+        run: |
+          cd bake/out
+          find . -type f \( -name '*.bin*' -o -name 'manifest.json' \) | sort \
+            | xargs sha256sum > ../../second-bake-shas.txt
+          echo "--- second bake ---"
+          cat ../../second-bake-shas.txt
+          diff -u first-bake-shas.txt second-bake-shas.txt
+      - name: upload bake outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bake-out
+          path: bake/out/
+          retention-days: 7
+
+  # --- L1 Python validation (NFR-P9) ----------------------------------------
+  validate-l1:
+    name: validate L1 (NFR-P9)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: [bake]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: bake/uv.lock
+      - name: uv sync
+        working-directory: bake
+        run: uv sync --frozen
+      - name: download bake outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: bake-out
+          path: bake/out/
+      - name: validate L1
+        working-directory: bake
+        run: uv run python -m src.validate_l1
+      - name: upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report
+          path: bake/out/validation-report.md
+          retention-days: 14
+
+  # --- Bake test suite (fast tier) ------------------------------------------
+  test-bake:
+    name: test (bake — pytest fast)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: bake/uv.lock
+      - name: uv sync
+        working-directory: bake
+        run: uv sync --frozen
+      - name: pytest (fast tier — excludes @slow)
+        working-directory: bake
+        run: uv run pytest -m "not slow"
+
+  # --- L3 web vitest (1276 tests) -------------------------------------------
+  test-web:
+    name: test (web — vitest L3)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true  # committed L2 fixtures + .glb model are LFS-tracked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: vitest
+        working-directory: web
+        run: npm test
+
+  # --- Vite build (content-hashed assets) -----------------------------------
+  build:
+    name: build (web — vite)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: [typecheck-web, test-web]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: vite build
+        working-directory: web
+        run: npm run build
+      - name: upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 7
+
+  # --- Deploy to Cloudflare Pages (main + push only) ------------------------
+  #
+  # Gated on `github.ref == 'refs/heads/main' && github.event_name == 'push'`
+  # so PRs never trigger this job (Cloudflare's GitHub integration handles
+  # PR preview deploys automatically — no workflow step needed). The
+  # `needs:` edge transitively requires every fast-tier gate to be green
+  # before deploy fires.
+  deploy-cloudflare:
+    name: deploy (Cloudflare Pages)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: [lint-bake, lint-web, typecheck-web, bake, validate-l1, test-bake, test-web, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - name: download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+      - name: deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: voyager
+          directory: web/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
