@@ -15,6 +15,7 @@ import {
 } from './dev/precision-smoke';
 import { ManifestLoader } from './services/manifest-loader';
 import { ChunkLoader } from './services/chunk-loader';
+import { EphemerisService } from './services/ephemeris-service';
 import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
@@ -63,24 +64,30 @@ const bootstrap = (): void => {
   engine.init(canvas);
   engine.start();
 
-  // Story 1.9 — first-paint sequence:
+  // Story 1.9 — first-paint sequence + Story 1.11 HUD wiring:
   //   1. Mount <v-title-card> immediately (no waiting for the manifest)
-  //   2. Mount <v-timeline-scrubber> hidden until the card dissolves
-  //   3. Parse ?t= via URLSync — silent reject per NFR-S7
-  //   4. Kick off manifest load in parallel
-  startFirstPaint(canvas.parentElement ?? document.body);
+  //   2. Mount <v-timeline-scrubber>, <v-play-button>, <v-speed-multiplier>
+  //      hidden until the card dissolves
+  //   3. Mount <v-hud> wired with ClockManager + RenderEngine.onFrame for
+  //      per-frame visible-DOM mutation (architecture line 424)
+  //   4. Parse ?t= via URLSync — silent reject per NFR-S7
+  //   5. Kick off manifest load in parallel; once it lands, wire the
+  //      EphemerisService into <v-hud-distance> so V1/V2 readouts show
+  //      real values.
+  const firstPaintHandle = startFirstPaint(
+    canvas.parentElement ?? document.body,
+    { renderEngine: engine },
+  );
 
-  // Story 1.6 AC1 + Task 10: load the manifest at boot. ChunkLoader and
-  // EphemerisService aren't wired into the (empty) scene yet — the
-  // cruise-viewer scene in Story 1.10+ consumes them. We load the manifest
-  // early so a malformed bake surfaces a friendly error before users see a
-  // blank screen.
+  // Story 1.6 AC1 + Task 10: load the manifest at boot. Once loaded, we
+  // construct the ChunkLoader + EphemerisService and wire the service into
+  // the HUD so the distance readouts come alive. Before the manifest lands
+  // the HUD shows "— AU" placeholders (graceful per Story 1.11 AC4).
   ManifestLoader.load(MANIFEST_URL).then(
-    (_manifest) => {
-      // ChunkLoader is constructed but not yet referenced; held for the
-      // future scene wiring. We don't store it on a global because the
-      // empty scene doesn't use it; future story refactors the wiring.
-      void new ChunkLoader();
+    (manifest) => {
+      const chunkLoader = new ChunkLoader();
+      const ephemerisService = new EphemerisService(manifest, chunkLoader);
+      firstPaintHandle.hud.ephemerisService = ephemerisService;
     },
     (err: unknown) => {
       console.error('[manifest] load failed:', err);

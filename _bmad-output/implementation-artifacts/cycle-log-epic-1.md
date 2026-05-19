@@ -54,3 +54,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T12:00:00Z	Story 1.10	dev_complete	files=web/src/services/clock-manager.ts,web/src/components/(2_new+1_refactored),web/src/math/speed-readout.ts,web/src/boot/keyboard-shortcuts.ts tests=826_web_233_fast_bake_2_skipped spec_issue=nfr_p6_unrealizable_at_literal_rate
 2026-05-19T12:30:00Z	Story 1.10	qa_complete	tests=web/tests/clock-multiplier-defense.test.ts passed=862_web_233_bake skipped=2 failed=0 nfr_p6_doc=added_by_qa
 2026-05-19T13:00:00Z	Story 1.10	cr_complete	resolved=0 deferred=5 dismissed=4 tests_passing=862_web_233_bake skipped=2 ac_status=all_pass clean=true
+2026-05-19T13:05:00Z	Story 1.10	committed	sha=f467b2b submodules= remote=origin/epic1
+2026-05-19T13:10:00Z	Story 1.11	story_created	path=_bmad-output/implementation-artifacts/1-11-v-hud-container-and-hud-sub-components.md
+2026-05-19T14:00:00Z	Story 1.11	dev_complete	files=web/src/components/v-hud(+5_subcomponents),web/src/math/au-format.ts,web/src/primitives/debounce.ts,first-paint.ts,main.ts pattern=per_frame_tick+aria_live_debounce tests=997_web_233_fast_bake_2_skipped
+2026-05-19T14:30:00Z	Story 1.11	qa_complete	tests=web/tests/hud-defense.test.ts passed=1052_web_233_bake skipped=2 failed=0
+2026-05-19T15:00:00Z	Story 1.11	cr_complete	resolved=0 deferred=8 dismissed=0 tests_passing=1052_web_233_bake skipped=2 ac_status=all_pass clean=true

@@ -159,3 +159,19 @@ export const formatForHud = (et: number): string => {
   const minute = iso.slice(0, 16); // "YYYY-MM-DDTHH:MM"
   return `${minute.slice(0, 10)} ${minute.slice(11)} UT`;
 };
+
+/**
+ * HUD value-only form (Story 1.11 AC3): `YYYY-MM-DD HH:MM` — minute
+ * granularity, without the trailing "UT" suffix that `formatForHud` adds.
+ *
+ * Used by `<v-hud-date>` where the "UT" label is a separate visual
+ * element rendered ahead of the value. Kept distinct from `formatForHud`
+ * so callers that need the scrubber's `aria-valuetext` form (with the
+ * inline "UT") and callers that need the HUD's separate-label form don't
+ * have to string-strip.
+ */
+export const dateForHud = (et: number): string => {
+  if (!Number.isFinite(et)) return '';
+  const iso = isoFromEt(et);
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+};

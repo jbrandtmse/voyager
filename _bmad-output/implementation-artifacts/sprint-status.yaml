@@ -46,6 +46,9 @@ last_updated: 2026-05-18
 # 1.10 set to in-progress on 2026-05-18 (dev-1-10 / epic-cycle-2026-05-18)
 # 1.10 set to review on 2026-05-18 (dev-1-10 / epic-cycle-2026-05-18)
 # 1.10 set to done on 2026-05-18 after code review (cr-1-10 / epic-cycle-2026-05-18)
+# 1.11 set to in-progress on 2026-05-18 (dev-1-11 / epic-cycle-2026-05-18)
+# 1.11 set to review on 2026-05-18 (dev-1-11 / epic-cycle-2026-05-18)
+# 1.11 set to done on 2026-05-18 after code review (cr-1-11 / epic-cycle-2026-05-18)
 project: Voyager
 project_key: NOKEY
 tracking_system: file-system
@@ -64,7 +67,7 @@ development_status:
   1-8-v-fallback-page-and-boot-time-capability-probe: done
   1-9-designed-first-paint-sequence-and-v-timeline-scrubber-mission-variant: done
   1-10-v-play-button-simulation-clock-and-v-speed-multiplier: done
-  1-11-v-hud-container-and-hud-sub-components: backlog
+  1-11-v-hud-container-and-hud-sub-components: done
   1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines: backlog
   1-13-celestial-bodies-sun-eight-planets-and-one-moon: backlog
   1-14-baseline-ci-and-static-cdn-deploy: backlog

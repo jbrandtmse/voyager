@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { etFromIso, isoFromEt, formatForHud } from './et-conversions';
+import { etFromIso, isoFromEt, formatForHud, dateForHud } from './et-conversions';
 
 // Reference values produced by SpiceyPy 8.1.0 + naif0012.tls via
 // `bake/.venv/Scripts/python.exe -c "import spiceypy as sp; sp.furnsh(...);
@@ -98,6 +98,26 @@ describe('Story 1.9 Task 1 — et-conversions', () => {
 
     it('returns empty string for Infinity', () => {
       expect(formatForHud(Number.POSITIVE_INFINITY)).toBe('');
+    });
+  });
+
+  describe('Story 1.11 — dateForHud() — YYYY-MM-DD HH:MM (no UT suffix)', () => {
+    it('produces minute-granularity value without the "UT" suffix', () => {
+      const et = etFromIso('1989-08-25T09:23:00Z');
+      expect(dateForHud(et)).toBe('1989-08-25 09:23');
+    });
+
+    it('truncates seconds (does not round)', () => {
+      const et = etFromIso('1989-08-25T09:23:59Z');
+      expect(dateForHud(et)).toBe('1989-08-25 09:23');
+    });
+
+    it('returns empty string for NaN', () => {
+      expect(dateForHud(Number.NaN)).toBe('');
+    });
+
+    it('returns empty string for Infinity', () => {
+      expect(dateForHud(Number.POSITIVE_INFINITY)).toBe('');
     });
   });
 

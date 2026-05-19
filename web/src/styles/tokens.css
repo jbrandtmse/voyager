@@ -44,6 +44,9 @@
   --v-font-size-body: clamp(16px, 0.95rem + 0.25vw, 18px);
   /* HUD mono caption-sized. */
   --v-font-size-hud: 14px;
+  /* HUD numeric readouts — fluid mono sizes used by <v-hud-*>. */
+  --v-size-hud-mono: clamp(13px, 1vw, 16px);
+  --v-size-hud-mono-sm: clamp(11px, 0.85vw, 13px);
   /* Chapter title — sans, large. UX spec §993. */
   --v-font-size-chapter-title: clamp(28px, 1.4rem + 1.2vw, 40px);
   /* Chapter copy — serif, body-grade. UX spec §992 (line-height 1.55 on serif). */

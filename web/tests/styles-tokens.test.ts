@@ -33,6 +33,8 @@ const REQUIRED_TOKEN_NAMES = [
   // Typography size scale
   '--v-font-size-body',
   '--v-font-size-hud',
+  '--v-size-hud-mono',
+  '--v-size-hud-mono-sm',
   '--v-font-size-chapter-title',
   '--v-font-size-chapter-copy',
   '--v-font-size-caption',
