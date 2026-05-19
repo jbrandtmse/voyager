@@ -9,6 +9,7 @@ import {
 import { isoFromEt, formatForHud } from '../math/et-conversions';
 import { attachPointerHandlers } from '../primitives/pointer-events';
 import { URLSync } from '../services/url-sync';
+import type { ClockManager, ClockState } from '../services/clock-manager';
 
 const ONE_DAY_SECONDS = 86400;
 const TEN_DAYS_SECONDS = 10 * ONE_DAY_SECONDS;
@@ -31,16 +32,21 @@ const clampEt = (et: number): number => {
  *
  * The mission-variant is anchored to the viewport bottom with a track
  * spanning V2 launch (1977-08-20) → projected mission end (2030-12-31).
- * The thumb tracks `simEt` and is the primary control surface for time
- * scrubbing (UX-DR8).
+ * The thumb tracks `clockManager.simTimeEt` and is the primary control
+ * surface for time scrubbing (UX-DR8).
  *
- * ## Story 1.9 placeholder
+ * ## Story 1.10 — ClockManager consumer
  *
- * No `ClockManager` exists yet (Story 1.10 introduces it). For now the
- * scrubber owns its own `simEt` reactive prop and the
- * `wasPlayingBeforeScrub`/`isPlaying` state. Story 1.10 will refactor
- * this to consume `ClockManager.simTimeEt` and let the clock be the
- * source-of-truth.
+ * Story 1.9 owned a local `simEt` placeholder. Story 1.10 introduced
+ * `ClockManager` as the single source of truth for simulation time. The
+ * scrubber subscribes to the clock in `connectedCallback`, reads
+ * `clockManager.simTimeEt` for rendering, and routes every scrub action
+ * through `clockManager.scrubTo(et)` (which pauses as a deliberate side
+ * effect). For test back-compat the `simEt` property is preserved as a
+ * proxy: writing to it calls `scrubTo`; reading it returns the clock's
+ * current ET (or `MISSION_START_ET` when no clock is wired). The
+ * `wasPlayingBeforeScrub` resume-after-300ms debounce is a UI keyboard
+ * concern and stays in the scrubber.
  *
  * ## Accessibility
  *
@@ -157,29 +163,66 @@ export class VTimelineScrubber extends BaseElement {
 
   static override properties = {
     variant: { type: String, reflect: true },
+    // simEt and isPlaying are kept as Lit-reactive proxies so test code that
+    // writes `el.simEt = X` continues to work; the canonical storage moved
+    // to the wired `ClockManager`. See get/set definitions below.
     simEt: { type: Number, reflect: false },
     isPlaying: { type: Boolean, reflect: false },
   };
 
   declare variant: ScrubberVariant;
-  declare isPlaying: boolean;
 
-  private _simEt: number = MISSION_START_ET;
+  /**
+   * Story 1.10 source-of-truth. When non-null, the scrubber subscribes to
+   * the clock in `connectedCallback`, reads `clockManager.simTimeEt` for
+   * rendering, and routes every scrub through `scrubTo(et)`. When null
+   * the scrubber falls back to local state — only used by older Story 1.9
+   * tests that haven't been migrated to inject a mock clock.
+   */
+  clockManager: ClockManager | null = null;
 
-  // Clamp at the property boundary so external writers (Story 1.10's
-  // ClockManager subscription, tests, direct attribute hydration) cannot push
-  // simEt outside [MISSION_START_ET, MISSION_END_ET]. The keyboard and
-  // pointer paths already clamp via applyEt; this is the defensive third
-  // line for everyone else.
+  // Fallback simEt storage used only when no clockManager is wired. Story
+  // 1.9 tests that drive the scrubber directly still rely on this.
+  private _simEtFallback: number = MISSION_START_ET;
+
   get simEt(): number {
-    return this._simEt;
+    if (this.clockManager !== null) return this.clockManager.simTimeEt;
+    return this._simEtFallback;
   }
   set simEt(value: number) {
     const clamped = clampEt(value);
-    if (clamped === this._simEt) return;
-    const old = this._simEt;
-    this._simEt = clamped;
+    if (this.clockManager !== null) {
+      // Proxy to scrubTo. ClockManager also pauses on scrub — same contract
+      // as direct scrubber input. Idempotent on no-change.
+      if (clamped !== this.clockManager.simTimeEt) {
+        this.clockManager.scrubTo(clamped);
+      }
+      return;
+    }
+    if (clamped === this._simEtFallback) return;
+    const old = this._simEtFallback;
+    this._simEtFallback = clamped;
     this.requestUpdate('simEt', old);
+  }
+
+  // isPlaying mirrors clockManager.playing when wired; otherwise local. The
+  // Story 1.9 tests set it directly to seed the resume-on-scrub behavior.
+  private _isPlayingFallback: boolean = false;
+  get isPlaying(): boolean {
+    if (this.clockManager !== null) return this.clockManager.playing;
+    return this._isPlayingFallback;
+  }
+  set isPlaying(value: boolean) {
+    if (this.clockManager !== null) {
+      if (value === this.clockManager.playing) return;
+      if (value) this.clockManager.play();
+      else this.clockManager.pause();
+      return;
+    }
+    if (value === this._isPlayingFallback) return;
+    const old = this._isPlayingFallback;
+    this._isPlayingFallback = value;
+    this.requestUpdate('isPlaying', old);
   }
 
   /**
@@ -192,12 +235,11 @@ export class VTimelineScrubber extends BaseElement {
   private isDragging = false;
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
   private detachPointer: (() => void) | null = null;
+  private clockUnsub: (() => void) | null = null;
 
   constructor() {
     super();
     this.variant = 'mission';
-    this.simEt = MISSION_START_ET;
-    this.isPlaying = false;
   }
 
   override connectedCallback(): void {
@@ -205,10 +247,17 @@ export class VTimelineScrubber extends BaseElement {
     if (this.urlSync === null && typeof window !== 'undefined') {
       this.urlSync = new URLSync();
     }
+    if (this.clockManager !== null && this.clockUnsub === null) {
+      this.clockUnsub = this.clockManager.subscribe(this.onClockChange);
+    }
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    if (this.clockUnsub !== null) {
+      this.clockUnsub();
+      this.clockUnsub = null;
+    }
     if (this.resumeTimer !== null) {
       clearTimeout(this.resumeTimer);
       this.resumeTimer = null;
@@ -218,6 +267,13 @@ export class VTimelineScrubber extends BaseElement {
       this.detachPointer = null;
     }
   }
+
+  private onClockChange = (_state: ClockState): void => {
+    // Subscribe fires on play/pause/setRate/scrubTo/autoCap. tick()-driven
+    // per-frame advances are read directly by render(); they don't fire
+    // here, which is correct — we don't want 60 Hz Lit reactivity.
+    this.requestUpdate();
+  };
 
   private computeFraction(): number {
     const span = MISSION_END_ET - MISSION_START_ET;
@@ -242,8 +298,19 @@ export class VTimelineScrubber extends BaseElement {
       // We were already scrubbing — preserve the existing wasPlayingBeforeScrub.
       return;
     }
-    this.wasPlayingBeforeScrub = this.isPlaying;
-    this.isPlaying = false;
+    // Capture the pre-scrub playing state. With ClockManager, scrubTo() will
+    // pause as its own side effect; without one, mutate the fallback to
+    // preserve the Story 1.9 keyboard pause semantics.
+    if (this.clockManager !== null) {
+      this.wasPlayingBeforeScrub = this.clockManager.playing;
+      // No need to manually pause — scrubTo() will.
+    } else {
+      this.wasPlayingBeforeScrub = this._isPlayingFallback;
+      if (this._isPlayingFallback) {
+        this._isPlayingFallback = false;
+        this.requestUpdate('isPlaying', true);
+      }
+    }
   }
 
   private scheduleResume(): void {
@@ -252,21 +319,37 @@ export class VTimelineScrubber extends BaseElement {
     }
     this.resumeTimer = setTimeout(() => {
       this.resumeTimer = null;
-      if (this.wasPlayingBeforeScrub) {
-        this.isPlaying = true;
+      if (!this.wasPlayingBeforeScrub) return;
+      if (this.clockManager !== null) {
+        this.clockManager.play();
+      } else if (!this._isPlayingFallback) {
+        this._isPlayingFallback = true;
+        this.requestUpdate('isPlaying', false);
       }
     }, SCRUB_RESUME_DELAY_MS);
   }
 
   private applyEt(newEt: number, source: ScrubSource): void {
-    this.simEt = clampEt(newEt);
+    const clamped = clampEt(newEt);
+    if (this.clockManager !== null) {
+      // Route through scrubTo (which also pauses). Subscriber fires →
+      // requestUpdate → re-render with new ET.
+      this.clockManager.scrubTo(clamped);
+    } else {
+      if (clamped !== this._simEtFallback) {
+        const old = this._simEtFallback;
+        this._simEtFallback = clamped;
+        this.requestUpdate('simEt', old);
+      }
+    }
     this.emitScrub(source);
+    const writeEt = clamped;
     if (source === 'pointer' && !this.isDragging) {
       // Track-click (jump-to-here). The release path didn't drag, so we
       // bypass the throttle.
-      this.urlSync?.writeEtImmediate(this.simEt);
+      this.urlSync?.writeEtImmediate(writeEt);
     } else {
-      this.urlSync?.writeEtThrottled(this.simEt);
+      this.urlSync?.writeEtThrottled(writeEt);
     }
   }
 

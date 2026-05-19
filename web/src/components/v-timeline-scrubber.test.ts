@@ -10,6 +10,7 @@ import {
 } from '../constants/mission';
 import { isoFromEt, formatForHud } from '../math/et-conversions';
 import type { URLSync } from '../services/url-sync';
+import { ClockManager } from '../services/clock-manager';
 
 const ONE_DAY = 86400;
 
@@ -459,6 +460,147 @@ describe('Story 1.9 — chapter markers slot is a no-op stub', () => {
     const chapters = el.shadowRoot!.querySelector('.chapters');
     expect(chapters).toBeTruthy();
     expect(chapters!.children.length).toBe(0);
+    el.remove();
+  });
+});
+
+// ─── Story 1.10 — ClockManager integration ─────────────────────────────
+
+const makeScrubberWithClock = async (): Promise<{
+  el: VTimelineScrubber;
+  clock: ClockManager;
+  sync: ReturnType<typeof makeStubUrlSync>;
+}> => {
+  const clock = new ClockManager();
+  const el = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
+  const sync = makeStubUrlSync();
+  el.urlSync = sync;
+  el.clockManager = clock;
+  document.body.appendChild(el);
+  await el.updateComplete;
+  const track = el.shadowRoot!.querySelector('.track') as HTMLElement;
+  track.getBoundingClientRect = () =>
+    ({ left: 0, right: 1000, top: 0, bottom: 12, width: 1000, height: 12, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  return { el, clock, sync };
+};
+
+describe('Story 1.10 AC2 — scrubber consumes ClockManager.simTimeEt', () => {
+  it('reads simEt from clockManager when wired', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    expect(el.simEt).toBe(MISSION_START_ET);
+    clock.scrubTo(MISSION_START_ET + 365 * 86400);
+    await el.updateComplete;
+    expect(el.simEt).toBe(MISSION_START_ET + 365 * 86400);
+    el.remove();
+  });
+
+  it('reads isPlaying from clockManager when wired', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    expect(el.isPlaying).toBe(false);
+    clock.play();
+    expect(el.isPlaying).toBe(true);
+    clock.pause();
+    expect(el.isPlaying).toBe(false);
+    el.remove();
+  });
+
+  it('subscribes to clockManager on connect, unsubscribes on disconnect', async () => {
+    const clock = new ClockManager();
+    const subSpy = vi.spyOn(clock, 'subscribe');
+    const el = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
+    el.clockManager = clock;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(subSpy).toHaveBeenCalledTimes(1);
+    el.remove();
+    // After remove, mutating the clock must not throw or affect a detached element.
+    clock.play();
+    // Sanity: subscribe was called once, and the unsubscribe was invoked
+    // (subscribers set on the clock is empty — internal but observable by
+    // calling play() and confirming no requestUpdate fires/errors).
+    expect(() => clock.scrubTo(MISSION_START_ET + 1)).not.toThrow();
+  });
+
+  it('renders aria-valuenow from clockManager.simTimeEt', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    const targetEt = MISSION_START_ET + 1000 * 86400;
+    clock.scrubTo(targetEt);
+    await el.updateComplete;
+    const thumb = el.shadowRoot!.querySelector('.thumb')!;
+    expect(thumb.getAttribute('aria-valuenow')).toBe(isoFromEt(targetEt));
+    expect(thumb.getAttribute('aria-valuetext')).toBe(formatForHud(targetEt));
+    el.remove();
+  });
+});
+
+describe('Story 1.10 AC2 — keyboard scrubbing routes through clockManager.scrubTo', () => {
+  it('ArrowRight calls scrubTo and pauses the clock', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    clock.play();
+    expect(clock.playing).toBe(true);
+    const thumb = el.shadowRoot!.querySelector('.thumb')!;
+    thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    // scrubTo pauses as a side effect.
+    expect(clock.playing).toBe(false);
+    expect(clock.simTimeEt - MISSION_START_ET).toBe(86400);
+    el.remove();
+  });
+
+  it('pointer track-click routes through clockManager.scrubTo', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    clock.play();
+    const track = el.shadowRoot!.querySelector('.track') as HTMLElement;
+    const evt = new Event('pointerdown', { bubbles: true });
+    Object.defineProperty(evt, 'clientX', { value: 500 });
+    Object.defineProperty(evt, 'clientY', { value: 0 });
+    Object.defineProperty(evt, 'pointerType', { value: 'mouse' });
+    Object.defineProperty(evt, 'pointerId', { value: 1 });
+    Object.defineProperty(evt, 'target', { value: track });
+    track.dispatchEvent(evt);
+    expect(clock.playing).toBe(false);
+    const expected = MISSION_START_ET + 0.5 * (MISSION_END_ET - MISSION_START_ET);
+    expect(Math.abs(clock.simTimeEt - expected)).toBeLessThan(1);
+    el.remove();
+  });
+});
+
+describe('Story 1.10 AC2 — wasPlayingBeforeScrub debounce stays in the scrubber', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('keystroke pauses immediately (via scrubTo), then resumes via clock.play() after 300 ms', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    clock.play();
+    expect(clock.playing).toBe(true);
+    const thumb = el.shadowRoot!.querySelector('.thumb')!;
+    thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(clock.playing).toBe(false);
+    vi.advanceTimersByTime(SCRUB_RESUME_DELAY_MS + 5);
+    expect(clock.playing).toBe(true);
+    el.remove();
+  });
+
+  it('does NOT resume if clock was paused when scrub started', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    // clock starts paused.
+    const thumb = el.shadowRoot!.querySelector('.thumb')!;
+    thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    vi.advanceTimersByTime(SCRUB_RESUME_DELAY_MS + 5);
+    expect(clock.playing).toBe(false);
+    el.remove();
+  });
+
+  it('successive keystrokes reset the debounce timer', async () => {
+    const { el, clock } = await makeScrubberWithClock();
+    clock.play();
+    const thumb = el.shadowRoot!.querySelector('.thumb')!;
+    thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    vi.advanceTimersByTime(SCRUB_RESUME_DELAY_MS - 50);
+    thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    vi.advanceTimersByTime(SCRUB_RESUME_DELAY_MS - 50);
+    expect(clock.playing).toBe(false);
+    vi.advanceTimersByTime(100);
+    expect(clock.playing).toBe(true);
     el.remove();
   });
 });

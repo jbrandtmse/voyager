@@ -9,7 +9,8 @@ export interface UrlParams {
   // smoke scene). Future dev modes can extend.
   devMode: string | null;
   // ?perf=<name> — perf harness trigger. Story 1.6 introduced "ephemeris"
-  // (interpolation cost; NFR-P7).
+  // (interpolation cost; NFR-P7). Story 1.10 added "mission-scrub" (ClockManager
+  // synthetic perf at 1M×; NFR-P6).
   perfMode: string | null;
 }
 
