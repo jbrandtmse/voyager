@@ -19,11 +19,27 @@
  * @see web/src/constants/mission.test.ts for the re-derivation guard test.
  */
 
-/** ISO-8601 UTC string for 1977-08-20T00:00:00Z (Voyager 2 launch). */
+/** ISO-8601 UTC string for 1977-08-20T00:00:00Z (Voyager 2 launch day, midnight). */
 export const MISSION_START_ISO = '1977-08-20T00:00:00Z';
 
 /** ISO-8601 UTC string for 2030-12-31T23:59:59Z (projected mission end). */
 export const MISSION_END_ISO = '2030-12-31T23:59:59Z';
+
+/**
+ * ISO-8601 UTC string for the Voyager 1 launch instant (1977-09-05T12:56:00Z).
+ *
+ * Reference: NASA JPL Voyager 1 mission record. Cape Canaveral LC-41 liftoff.
+ */
+export const V1_LAUNCH_ISO = '1977-09-05T12:56:00Z';
+
+/**
+ * ISO-8601 UTC string for the Voyager 2 launch instant (1977-08-20T14:29:00Z).
+ *
+ * Reference: NASA JPL Voyager 2 mission record. Cape Canaveral LC-41 liftoff.
+ * Voyager 2 launched first chronologically; "Voyager 1" is so named for being
+ * the lead probe at the Jupiter encounter.
+ */
+export const V2_LAUNCH_ISO = '1977-08-20T14:29:00Z';
 
 /**
  * SPICE ET (TDB seconds past J2000) for 1977-08-20T00:00:00Z UTC.
@@ -41,6 +57,24 @@ export const MISSION_START_ET = -705844751.8171712;
  * IERS announces a new leap second.
  */
 export const MISSION_END_ET = 978264068.1839114;
+
+/**
+ * SPICE ET (TDB seconds past J2000) for V1 launch (1977-09-05T12:56:00Z UTC).
+ *
+ * Reference: SpiceyPy `str2et('1977-09-05T12:56:00')` with naif0012.tls.
+ * Used by `TrajectoryLines` (Story 1.12) to determine the start of V1's past
+ * trajectory polyline.
+ */
+export const V1_LAUNCH_ET = -704415791.8174509;
+
+/**
+ * SPICE ET (TDB seconds past J2000) for V2 launch (1977-08-20T14:29:00Z UTC).
+ *
+ * Reference: SpiceyPy `str2et('1977-08-20T14:29:00')` with naif0012.tls.
+ * Used by `TrajectoryLines` (Story 1.12) and the V2-pre-launch visibility
+ * gate in `SpacecraftModels`.
+ */
+export const V2_LAUNCH_ET = -705792611.8171833;
 
 /** Title card hold duration before dissolve, in milliseconds (Story 1.9 AC1). */
 export const TITLE_CARD_HOLD_MS = 2000;

@@ -5,6 +5,10 @@ import {
   MISSION_END_ISO,
   MISSION_START_ET,
   MISSION_END_ET,
+  V1_LAUNCH_ISO,
+  V2_LAUNCH_ISO,
+  V1_LAUNCH_ET,
+  V2_LAUNCH_ET,
   TITLE_CARD_HOLD_MS,
   URL_WRITEBACK_THROTTLE_MS,
   SCRUB_RESUME_DELAY_MS,
@@ -49,6 +53,38 @@ describe('Story 1.9 Task 2 — mission constants', () => {
 
     it('MISSION_END_ISO is 2030-12-31T23:59:59Z (projected mission end)', () => {
       expect(MISSION_END_ISO).toBe('2030-12-31T23:59:59Z');
+    });
+  });
+
+  describe('Spacecraft launch ETs (Story 1.12)', () => {
+    it('V1_LAUNCH_ISO is 1977-09-05T12:56:00Z (V1 liftoff)', () => {
+      expect(V1_LAUNCH_ISO).toBe('1977-09-05T12:56:00Z');
+    });
+
+    it('V2_LAUNCH_ISO is 1977-08-20T14:29:00Z (V2 liftoff)', () => {
+      expect(V2_LAUNCH_ISO).toBe('1977-08-20T14:29:00Z');
+    });
+
+    it('V1_LAUNCH_ET matches etFromIso(V1_LAUNCH_ISO) within 5 ms', () => {
+      const derived = etFromIso(V1_LAUNCH_ISO);
+      expect(Math.abs(derived - V1_LAUNCH_ET)).toBeLessThan(0.005);
+    });
+
+    it('V2_LAUNCH_ET matches etFromIso(V2_LAUNCH_ISO) within 5 ms', () => {
+      const derived = etFromIso(V2_LAUNCH_ISO);
+      expect(Math.abs(derived - V2_LAUNCH_ET)).toBeLessThan(0.005);
+    });
+
+    it('V2 launched chronologically before V1 (despite the numbering)', () => {
+      expect(V2_LAUNCH_ET).toBeLessThan(V1_LAUNCH_ET);
+    });
+
+    it('V2_LAUNCH_ET is after MISSION_START_ET (which is V2-launch-day midnight)', () => {
+      expect(V2_LAUNCH_ET).toBeGreaterThan(MISSION_START_ET);
+      // V2 launched at 14:29:00 UTC — ~52,140 s after midnight.
+      const deltaSec = V2_LAUNCH_ET - MISSION_START_ET;
+      expect(deltaSec).toBeGreaterThan(14 * 3600); // > 14h
+      expect(deltaSec).toBeLessThan(15 * 3600); // < 15h
     });
   });
 

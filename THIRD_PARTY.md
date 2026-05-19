@@ -70,3 +70,32 @@ This repository satisfies the OFL's redistribution requirement by:
    License Info URL) inside each shipped .woff2 — the subsetter at
    `scripts/font-subset.py` discards only the optional records (sample
    text, WWS family/subfamily, postScript CID variants).
+
+## Voyager spacecraft model (Story 1.12)
+
+The binary GLB at `web/public/models/voyager.glb` is the NASA 3D Resources
+"Voyager Probe (B)" model, redistributed unmodified.
+
+- **Source:** <https://github.com/nasa/NASA-3D-Resources> — file path
+  `3D Models/Voyager Probe (B)/Voyager Probe (B).glb`.
+- **Upstream URL:**
+  `https://raw.githubusercontent.com/nasa/NASA-3D-Resources/master/3D%20Models/Voyager%20Probe%20(B)/Voyager%20Probe%20(B).glb`
+- **Author:** NASA / JPL-Caltech.
+- **License:** NASA Media Usage Guidelines (public-domain in the United
+  States; attribution to "NASA/JPL-Caltech" requested but not legally
+  required for non-commercial use). See
+  <https://www.nasa.gov/nasa-brand-center/images-and-media/>.
+- **SHA-256:** `bd86ded828dd3f459293aee4ffc3cd0998d8db67439317c8299650a1174c3289`
+- **Size:** 1,720,864 bytes (~1.72 MB) — well under the Story 1.12 ≤ 5 MB
+  budget; full LOD chain is deferred to Story 4.3.
+- **LFS-tracked:** `*.glb filter=lfs` line in `.gitattributes`.
+
+The Story 1.12 PRD calls for the NASA 3D Resources `jpl-vtad-voyager` model
+(OBJ format). NASA's standalone `nasa3d.arc.nasa.gov` site appears to be
+deprecated as of 2026-05; the equivalent asset (a higher-fidelity GLB
+already in glTF 2.0 form) is maintained in NASA's GitHub repository
+above. The GLB is preferred over the legacy OBJ because (1) no headless-
+Blender conversion is required, (2) the topology and texture coordinates
+are already glTF-baked, and (3) the file size is smaller post-conversion.
+The downloaded GLB is committed unmodified; no re-export or re-baking
+happens in this story.

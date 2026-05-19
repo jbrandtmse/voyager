@@ -212,6 +212,14 @@ The renderer (`web/src/render/render-engine.ts`) uses **Three.js native reverse-
 
 **Dev-mode precision smoke:** navigate to `http://localhost:5173/?dev=precision` after `cd web && npm run dev`. A 1-meter cube at the origin and a 1-cm cube 1 m away orbit-zoom from 1 m to 165 AU and back over 30 seconds; the cubes should remain distinct without jitter or z-fighting at every distance. The full Playwright visual regression at these extreme zoom states is deferred to Story 7.6 (NFR-P8 long-form gate). The `?force-log-depth=1` flag forces the logarithmic-depth fallback path for manual testing.
 
+### Spacecraft + Trajectories
+
+Both Voyager spacecraft are rendered (Story 1.12; FR8, FR9, FR10, UX-DR33). The model is the NASA 3D Resources Voyager Probe (B) GLB, served at `/models/voyager.glb` and loaded once at boot via Three.js `GLTFLoader`. Two scene-graph clones — `voyager-1` and `voyager-2` — are children of the engine's `WorldGroup`. Per frame, `SpacecraftModels.tick(et)` queries `EphemerisService.getStateAt(et, -31|-32)` and applies the resulting `WorldVec3` to each spacecraft's local position; the floating-origin recenter happens at `WorldGroup` (Story 1.5), so the spacecraft transforms remain in J2000 ecliptic kilometers. Null returns from `getStateAt` (chunk not yet loaded) cause the spacecraft to hold its previous-frame position — no flicker, no jump-to-origin. Visual distinction is encoded by a `THREE.Sprite` label tag rendered alongside each spacecraft ("V1" / "V2" in JetBrains Mono) — the FR49-accessible choice that does not rely on color alone.
+
+Each spacecraft also owns two `Line2` trajectory polylines (past + future) drawn with `LineMaterial` from `three/examples/jsm/lines/`. The past line is solid, ~1.5 px screen-space, and uses `var(--v-color-trajectory-past)`; the future line is dashed, ~1.0 px, and uses `var(--v-color-trajectory-future)`. The full polyline is sampled once at construction at ~500 vertices per spacecraft from launch (V1 1977-09-05, V2 1977-08-20) to `MISSION_END_ET` (2030-12-31), and `tick(et)` only updates the split-point between past and future. Per AC6 / NFR-P2, `BufferGeometry.dispose()` is **never** called inside the per-frame path — `web/tests/trajectory-no-dispose.test.ts` is the load-bearing tripwire. Backward scrubbing (non-monotonic `et` jumps) is handled by the same idempotent `tick()` — the past line shrinks rather than grows.
+
+`web/public/models/voyager.glb` is LFS-tracked via the `*.glb` line in `.gitattributes`; SHA-256 and acquisition steps in [`THIRD_PARTY.md`](THIRD_PARTY.md) and [`web/public/models/README.md`](web/public/models/README.md). Full 4-level LOD chain via `acquire_models.py` is deferred to Story 4.3.
+
 ### First-Paint Sequence
 
 The cold-start experience is a designed sequence (Story 1.9; FR1, FR6, FR42, FR45, UX-DR8, UX-DR28):

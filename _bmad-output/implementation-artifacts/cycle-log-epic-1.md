@@ -59,3 +59,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T14:00:00Z	Story 1.11	dev_complete	files=web/src/components/v-hud(+5_subcomponents),web/src/math/au-format.ts,web/src/primitives/debounce.ts,first-paint.ts,main.ts pattern=per_frame_tick+aria_live_debounce tests=997_web_233_fast_bake_2_skipped
 2026-05-19T14:30:00Z	Story 1.11	qa_complete	tests=web/tests/hud-defense.test.ts passed=1052_web_233_bake skipped=2 failed=0
 2026-05-19T15:00:00Z	Story 1.11	cr_complete	resolved=0 deferred=8 dismissed=0 tests_passing=1052_web_233_bake skipped=2 ac_status=all_pass clean=true
+2026-05-19T15:05:00Z	Story 1.11	committed	sha=0856377 submodules= remote=origin/epic1
+2026-05-19T15:10:00Z	Story 1.12	story_created	path=_bmad-output/implementation-artifacts/1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines.md
+2026-05-19T16:00:00Z	Story 1.12	dev_complete	files=web/src/render/(spacecraft+trajectory),web/public/models/voyager.glb,THIRD_PARTY.md glb_mb=1.72 tests=1092_web_233_fast_bake_2_skipped
+2026-05-19T16:30:00Z	Story 1.12	qa_complete	tests=web/tests/spacecraft-defense.test.ts passed=1110_web_244_bake skipped=2 failed=0
+2026-05-19T17:00:00Z	Story 1.12	cr_complete	resolved=1 deferred=4 dismissed=0 tests_passing=1110_web_233_bake skipped=2 ac_status=all_pass high_fix=trajectory_polyline_from_zeros

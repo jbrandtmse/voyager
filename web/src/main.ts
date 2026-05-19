@@ -13,7 +13,7 @@ import {
   isPrecisionSmokeMode,
   startPrecisionSmoke,
 } from './dev/precision-smoke';
-import { ManifestLoader } from './services/manifest-loader';
+import { ManifestLoader, type Manifest } from './services/manifest-loader';
 import { ChunkLoader } from './services/chunk-loader';
 import { EphemerisService } from './services/ephemeris-service';
 import {
@@ -21,6 +21,8 @@ import {
   startEphemerisPerfHarness,
 } from './dev/ephemeris-perf';
 import { startFirstPaint } from './boot/first-paint';
+import { SpacecraftModels } from './render/spacecraft-models';
+import { TrajectoryLines } from './render/trajectory-lines';
 
 const MANIFEST_URL = '/data/manifest.json';
 
@@ -79,15 +81,49 @@ const bootstrap = (): void => {
     { renderEngine: engine },
   );
 
+  // Story 1.12 — spacecraft + trajectory rendering. SpacecraftModels is
+  // constructed up-front so the scene-graph structure is stable; its GLB
+  // load is async and adds the body mesh once it lands. TrajectoryLines
+  // construction is deferred until the EphemerisService is available (it
+  // samples the polyline at construction).
+  const spacecraftModels = new SpacecraftModels();
+  engine.worldGroup.add(spacecraftModels.root);
+  spacecraftModels.load().catch((err: unknown) => {
+    console.error('[main] spacecraft GLB load failed:', err);
+  });
+  let trajectoryLines: TrajectoryLines | null = null;
+
   // Story 1.6 AC1 + Task 10: load the manifest at boot. Once loaded, we
   // construct the ChunkLoader + EphemerisService and wire the service into
   // the HUD so the distance readouts come alive. Before the manifest lands
   // the HUD shows "— AU" placeholders (graceful per Story 1.11 AC4).
   ManifestLoader.load(MANIFEST_URL).then(
-    (manifest) => {
+    async (manifest) => {
       const chunkLoader = new ChunkLoader();
       const ephemerisService = new EphemerisService(manifest, chunkLoader);
       firstPaintHandle.hud.ephemerisService = ephemerisService;
+
+      // Hook spacecraft updates onto the render loop immediately — V1/V2
+      // tick() handles chunk-load gaps via hold-previous, so it's safe even
+      // before any chunks are cached.
+      engine.onFrame((et: number) => {
+        spacecraftModels.tick(et, ephemerisService);
+        if (trajectoryLines !== null) trajectoryLines.tick(et);
+      });
+
+      // Story 1.12 — the trajectory polyline samples at construction time,
+      // so the V1 + V2 chunks must be in the ChunkLoader cache BEFORE we
+      // construct TrajectoryLines. Without this prefetch, every sample
+      // would hit a cache miss and the polyline would be built from zeros
+      // (visible as a degenerate dot at the Sun). Spacecraft positions
+      // themselves remain correct — they re-query each frame.
+      await prefetchSpacecraftChunks(manifest, chunkLoader);
+
+      trajectoryLines = new TrajectoryLines(
+        (et, naifId) => ephemerisService.getPosition(et, naifId),
+        { width: window.innerWidth, height: window.innerHeight },
+      );
+      engine.worldGroup.add(trajectoryLines.root);
     },
     (err: unknown) => {
       console.error('[manifest] load failed:', err);
@@ -98,9 +134,42 @@ const bootstrap = (): void => {
   window.addEventListener('resize', () => {
     sizeCanvasToWindow(canvas);
     engine.setSize(window.innerWidth, window.innerHeight);
+    if (trajectoryLines !== null) {
+      trajectoryLines.setResolution(window.innerWidth, window.innerHeight);
+    }
   });
 };
 
+
+/**
+ * Story 1.12 — eagerly load every V1 + V2 ephemeris chunk so the trajectory
+ * polyline's one-shot sampling at construction sees real position data
+ * instead of cache-miss `null`s (which would collapse the polyline to a
+ * zero-vector dot at the Sun). Errors are logged but don't reject — partial
+ * coverage produces a less-smooth polyline (held-previous segments), which
+ * is the same degraded-but-functional posture as a runtime chunk-load gap.
+ */
+const prefetchSpacecraftChunks = async (
+  manifest: Manifest,
+  chunkLoader: ChunkLoader,
+): Promise<void> => {
+  const SPACECRAFT_NAIF_IDS = new Set<number>([-31, -32]);
+  const loads: Promise<unknown>[] = [];
+  for (const body of manifest.bodies) {
+    if (!SPACECRAFT_NAIF_IDS.has(body.naifId)) continue;
+    for (const file of body.files) {
+      loads.push(
+        chunkLoader.load(file).catch((err: unknown) => {
+          console.warn(
+            `[main] trajectory prefetch failed for ${file.url}; polyline will hold previous segment:`,
+            err,
+          );
+        }),
+      );
+    }
+  }
+  await Promise.all(loads);
+};
 
 const renderCanvasOverlayError = (canvas: HTMLCanvasElement, message: string): void => {
   // Placeholder for Story 1.8's full fallback page. Renders a single overlay

@@ -18,3 +18,7 @@
 # web/public/fonts/ are LFS-tracked: binary, opaque to diff. Total budget
 # ~120 KB across three faces (JetBrains Mono, Inter, Source Serif 4).
 *.woff2 filter=lfs diff=lfs merge=lfs -text
+
+# Spacecraft GLB models (Story 1.12). Committed at web/public/models/voyager.glb
+# at ~1.7 MB; full LOD chain (Story 4.3) will add larger variants.
+*.glb filter=lfs diff=lfs merge=lfs -text
