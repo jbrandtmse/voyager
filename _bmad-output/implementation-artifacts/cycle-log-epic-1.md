@@ -44,3 +44,8 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T08:00:00Z	Story 1.8	dev_complete	files=web/src/components/v-fallback-page.ts,web/src/boot/(feature-detect+fallback-page-static),vite.config.ts,index.html,unsupported.html probe_bytes=750 swap_bytes=179 tests=482_web_233_fast_bake_2_skipped
 2026-05-19T08:30:00Z	Story 1.8	qa_complete	tests=web/tests/fallback-defense.test.ts passed=514_web_233_bake skipped=2 failed=0
 2026-05-19T09:00:00Z	Story 1.8	cr_complete	resolved=0 deferred=3 dismissed=0 tests_passing=514_web_233_bake skipped=2 ac_status=all_pass clean=true
+2026-05-19T09:05:00Z	Story 1.8	committed	sha=24c7d7e submodules= remote=origin/epic1
+2026-05-19T09:10:00Z	Story 1.9	story_created	path=_bmad-output/implementation-artifacts/1-9-designed-first-paint-sequence-and-v-timeline-scrubber-mission-variant.md
+2026-05-19T10:00:00Z	Story 1.9	dev_complete	files=web/src/(2_components+1_primitive+1_service+2_math/constants),first-paint.ts,main.ts mission_start_et=-705844751.8171712 mission_end_et=978264068.1839114 tests=658_web_233_fast_bake_2_skipped
+2026-05-19T10:30:00Z	Story 1.9	qa_complete	tests=web/tests/first-paint-defense.test.ts passed=695_web_233_bake skipped=2 failed=0 surfaced_gap=property_assignment_clamp
+2026-05-19T11:00:00Z	Story 1.9	cr_complete	resolved=1 deferred=0 dismissed=0 tests_passing=695_web_233_bake skipped=2 ac_status=all_pass fix=clamp_on_property_write

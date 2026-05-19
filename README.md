@@ -212,6 +212,16 @@ The renderer (`web/src/render/render-engine.ts`) uses **Three.js native reverse-
 
 **Dev-mode precision smoke:** navigate to `http://localhost:5173/?dev=precision` after `cd web && npm run dev`. A 1-meter cube at the origin and a 1-cm cube 1 m away orbit-zoom from 1 m to 165 AU and back over 30 seconds; the cubes should remain distinct without jitter or z-fighting at every distance. The full Playwright visual regression at these extreme zoom states is deferred to Story 7.6 (NFR-P8 long-form gate). The `?force-log-depth=1` flag forces the logarithmic-depth fallback path for manual testing.
 
+### First-Paint Sequence
+
+The cold-start experience is a designed sequence (Story 1.9; FR1, FR6, FR42, FR45, UX-DR8, UX-DR28):
+
+1. **Title card** — `<v-title-card>` renders "Voyager. 1977 to 2030." centered in Inter at `var(--v-size-title-card)` against `var(--v-color-bg)`. It holds for **2 seconds** (`TITLE_CARD_HOLD_MS`) — the documented "two beats" — then dissolves over `var(--v-duration-slow)` (400 ms). Under `prefers-reduced-motion: reduce` the dissolve collapses to an instant cut via the global `--v-duration-slow → 0ms` rule in `global.css`.
+2. **Scrubber reveal** — when the title card emits `voyager:title-card-complete`, `main.ts` removes it and reveals the `<v-timeline-scrubber variant="mission">` underneath. The scrubber is the primary time control surface, anchored to the viewport bottom with the full mission range **1977-08-20 → 2030-12-31** as the track domain. It implements the [WAI-ARIA APG Slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider/): `role="slider"`, ISO-8601 `aria-valuemin/max/now`, and an `aria-valuetext` in the human-readable `YYYY-MM-DD HH:MM UT` form. Keyboard controls are `←/→` (±1 day), `Shift+←/→` (±10 days), and `Home/End` (jump to mission start/end). The visible thumb glyph is 14 px but the effective click/tap target is ≥ 44 × 44 px via a transparent `::before` pseudo-element (WCAG 2.5.5).
+3. **`?t=` deep-link contract** — `voyager.app/?t=<iso-8601>` (e.g. `/?t=1989-08-25T09:23:00Z`) initializes the simulation paused at that exact instant. **Invalid `?t=`** values (non-ISO, out-of-mission-range, or any parse error) are silently rejected (NFR-S7) — the simulation falls back to `MISSION_START_ET` with no error UI. The address bar always reflects the current simulation timestamp via `history.replaceState` (throttled at 250 ms during continuous scrub; final write on `pointerup`) — `pushState` is intentionally not used so the back button does not pollute with every drag.
+
+The ET ↔ ISO-8601 conversion table (`web/src/math/et-conversions.ts`) embeds the SPICE leap-second table from `kernels/naif0012.tls` and matches `spiceypy.str2et` to within 2 ms across the full mission window (the omitted K·sin(E) periodic correction is below that bound).
+
 ## Data Flow
 
 Trajectory data flows from the offline bake to the runtime over a deterministic, hash-pinned pipeline (Story 1.4 + 1.6):

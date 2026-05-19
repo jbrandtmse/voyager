@@ -19,6 +19,7 @@ import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
 } from './dev/ephemeris-perf';
+import { startFirstPaint } from './boot/first-paint';
 
 const MANIFEST_URL = '/data/manifest.json';
 
@@ -62,6 +63,13 @@ const bootstrap = (): void => {
   engine.init(canvas);
   engine.start();
 
+  // Story 1.9 — first-paint sequence:
+  //   1. Mount <v-title-card> immediately (no waiting for the manifest)
+  //   2. Mount <v-timeline-scrubber> hidden until the card dissolves
+  //   3. Parse ?t= via URLSync — silent reject per NFR-S7
+  //   4. Kick off manifest load in parallel
+  startFirstPaint(canvas.parentElement ?? document.body);
+
   // Story 1.6 AC1 + Task 10: load the manifest at boot. ChunkLoader and
   // EphemerisService aren't wired into the (empty) scene yet — the
   // cruise-viewer scene in Story 1.10+ consumes them. We load the manifest
@@ -85,6 +93,7 @@ const bootstrap = (): void => {
     engine.setSize(window.innerWidth, window.innerHeight);
   });
 };
+
 
 const renderCanvasOverlayError = (canvas: HTMLCanvasElement, message: string): void => {
   // Placeholder for Story 1.8's full fallback page. Renders a single overlay

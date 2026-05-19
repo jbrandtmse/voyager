@@ -50,6 +50,10 @@
   --v-font-size-chapter-copy: clamp(17px, 1rem + 0.2vw, 20px);
   /* Captions / labels — sans, small. */
   --v-font-size-caption: 12px;
+  /* Title card — sans, hero-scale (Story 1.9 first-paint sequence). */
+  /* UX spec §986 — sized to dominate the held card without overflowing */
+  /* small-viewport widths. */
+  --v-size-title-card: clamp(36px, 4vw, 56px);
 
   /* ---------- Spacing — discrete 4-px scale ---------- */
   --v-space-1: 4px;
