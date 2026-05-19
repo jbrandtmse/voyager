@@ -590,7 +590,7 @@ describe('ChunkLoader coalesces concurrent in-flight requests (defense)', () => 
 // === 9. web/public/data/manifest.json lockfile contract ==============
 
 describe('Runtime manifest.json lockfile contract (defense)', () => {
-  it('exists, parses with Zod, and declares exactly 18 file entries across V1 (7) + V2 (11)', async () => {
+  it('exists, parses with Zod, and declares the V1+V2+celestial body set with the expected file counts', async () => {
     expect(existsSync(RUNTIME_MANIFEST_PATH), `missing ${RUNTIME_MANIFEST_PATH}`).toBe(true);
     __resetCacheForTests();
     const raw = JSON.parse(readFileSync(RUNTIME_MANIFEST_PATH, 'utf-8'));
@@ -598,15 +598,29 @@ describe('Runtime manifest.json lockfile contract (defense)', () => {
     const manifest = await ManifestLoader.load('test://runtime-lock', { fetchImpl });
     __resetCacheForTests();
 
-    expect(manifest.bodies.length).toBe(2);
+    // Story 1.13: manifest extended with 10 celestial bodies (Sun, 8
+    // planet barycenters, Moon). Total bodies = 2 spacecraft + 10
+    // celestial = 12.
+    expect(manifest.bodies.length).toBe(12);
     const v1 = manifest.bodies.find((b) => b.naifId === -31);
     const v2 = manifest.bodies.find((b) => b.naifId === -32);
     expect(v1, 'V1 (NAIF -31) missing from runtime manifest').toBeDefined();
     expect(v2, 'V2 (NAIF -32) missing from runtime manifest').toBeDefined();
     expect(v1!.files.length).toBe(7);
     expect(v2!.files.length).toBe(11);
+
+    // Each of the 10 celestial bodies has exactly one VTRJ file (DE440 is
+    // continuous; no per-segment chunking).
+    const celestialIds = [10, 1, 2, 3, 4, 5, 6, 7, 8, 301];
+    for (const naifId of celestialIds) {
+      const body = manifest.bodies.find((b) => b.naifId === naifId);
+      expect(body, `celestial NAIF ${naifId} missing from manifest`).toBeDefined();
+      expect(body!.files.length).toBe(1);
+    }
+
+    // Total files = 7 V1 + 11 V2 + 10 celestial = 28.
     const total = manifest.bodies.reduce((acc, b) => acc + b.files.length, 0);
-    expect(total).toBe(18);
+    expect(total).toBe(28);
   });
 });
 

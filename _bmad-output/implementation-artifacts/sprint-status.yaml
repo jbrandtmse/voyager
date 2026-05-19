@@ -72,7 +72,7 @@ development_status:
   1-10-v-play-button-simulation-clock-and-v-speed-multiplier: done
   1-11-v-hud-container-and-hud-sub-components: done
   1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines: done
-  1-13-celestial-bodies-sun-eight-planets-and-one-moon: backlog
+  1-13-celestial-bodies-sun-eight-planets-and-one-moon: done
   1-14-baseline-ci-and-static-cdn-deploy: backlog
   epic-1-retrospective: optional
 

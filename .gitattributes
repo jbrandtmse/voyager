@@ -22,3 +22,10 @@
 # Spacecraft GLB models (Story 1.12). Committed at web/public/models/voyager.glb
 # at ~1.7 MB; full LOD chain (Story 4.3) will add larger variants.
 *.glb filter=lfs diff=lfs merge=lfs -text
+
+# Story 1.13 — equirectangular planet + skybox PNG textures live under
+# web/public/textures/ at the 2k tier (~1 MB-class each). The pattern is
+# scoped to that directory so smaller PNGs elsewhere in the repo (icons,
+# favicons, screenshots) do not unexpectedly land in LFS. Story 4.3 will
+# convert these to KTX2 and add the *.ktx2 LFS pattern.
+web/public/textures/*.png filter=lfs diff=lfs merge=lfs -text

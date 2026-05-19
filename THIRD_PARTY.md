@@ -99,3 +99,88 @@ Blender conversion is required, (2) the topology and texture coordinates
 are already glTF-baked, and (3) the file size is smaller post-conversion.
 The downloaded GLB is committed unmodified; no re-export or re-baking
 happens in this story.
+
+## Solar System Scope planet + skybox textures (Story 1.13)
+
+The 11 equirectangular planet textures and the Milky Way skybox under
+`web/public/textures/` come from **Solar System Scope**
+(<https://www.solarsystemscope.com/textures>), redistributed under
+[Creative Commons Attribution 4.0 International
+(CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/) with attribution
+preserved per the licence terms.
+
+### License terms
+
+CC-BY-4.0 grants explicit permission to copy, redistribute, remix, and
+build upon the material in any medium or format, including commercial use,
+provided that:
+
+1. **Attribution** — credit "Solar System Scope" (<https://www.solarsystemscope.com>)
+   as the source.
+2. **No additional restrictions** — recipients of redistributions may not
+   apply terms beyond CC-BY-4.0.
+
+This README + the [`web/public/textures/README.md`](web/public/textures/README.md)
+satisfy the attribution requirement at the artifact level. The repository
+itself is also licensed compatibly.
+
+### Why Solar System Scope and not Björn Jónsson?
+
+The Story 1.13 PRD originally proposed Björn Jónsson's planetary maps
+(<https://bjj.mmedia.is/data/planetary_maps.html>) as the primary source.
+Jónsson's explicit usage statement on that page forbids redistribution:
+
+> "please do not place a copy of the maps on your website. One reason for
+> this is that from time to time I 'upgrade' the maps with improved
+> versions and I don't want to have old, obsolete versions of my maps
+> scattered around on the web."
+
+Bundling the maps into a self-hosted, LFS-tracked repository conflicts
+with that wish even with attribution. Solar System Scope's CC-BY-4.0
+licence explicitly permits redistribution, so the textures used here
+are Solar System Scope's.
+
+### Sources per body
+
+All textures sourced from `https://www.solarsystemscope.com/textures/download/`
+(2026-05-19 acquisition):
+
+- Sun: `2k_sun.jpg`
+- Mercury: `2k_mercury.jpg`
+- Venus: `2k_venus_atmosphere.jpg` (atmospheric variant; the surface variant
+  is colour-mapped Magellan radar data which is harder to recognise as
+  "Venus" without context)
+- Earth: `2k_earth_daymap.jpg` (daytime continents only; the city-lights /
+  night-side variant is deferred to a later story)
+- Mars: `2k_mars.jpg`
+- Jupiter: `2k_jupiter.jpg`
+- Saturn: `2k_saturn.jpg` (no rings — rings are deferred to Story 4.3 with
+  the rest of the full LOD chain)
+- Uranus: `2k_uranus.jpg`
+- Neptune: `2k_neptune.jpg`
+- Moon: `2k_moon.jpg` (full disc, Earth-facing hemisphere prominent)
+- Milky Way: `2k_stars_milky_way.jpg` (equirectangular galactic-coordinate
+  panorama; serves as the `Skybox` background)
+
+### Format conversion
+
+The upstream JPGs are converted to PNG via the pipeline documented in
+[`web/public/textures/README.md`](web/public/textures/README.md). Most
+bodies use a PNG-8 (256-colour indexed palette) for compactness; Earth
+uses PNG-24 for full multi-hue continent + ocean fidelity. KTX2-Basis
+compression is deferred to Story 4.3 (Option C of the Story 1.13 task
+spec, after toktx was unavailable in the bake environment).
+
+### LFS tracking
+
+All 11 textures + the Milky Way skybox are LFS-tracked via the
+`web/public/textures/*.png filter=lfs` pattern in `.gitattributes`. The
+pattern is scoped to this single directory so smaller PNGs elsewhere in
+the repo (favicons, icons, screenshots) are not unexpectedly committed
+to LFS.
+
+### Total LFS footprint
+
+~9.7 MB across 11 textures, well under the 30-80 MB approved budget for
+Story 1.13. Story 4.3's 4k + 8k tier acquisition is expected to add an
+additional ~80-160 MB at the KTX2-Basis compression ratio.

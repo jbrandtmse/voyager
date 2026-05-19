@@ -1,6 +1,6 @@
 {
-  "bakeCommit": "7f850febaa40f2dc4443ef1f539a0f93c5ea539b",
-  "bakeTimestamp": "2026-05-19T00:04:39Z",
+  "bakeCommit": "fba894d46a89dca0056dcf17d1202d226cdd76f0",
+  "bakeTimestamp": "2026-05-19T09:58:08Z",
   "bodies": [
     {
       "files": [
@@ -211,6 +211,176 @@
       ],
       "naifId": -32,
       "name": "Voyager 2"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "159ea303d939b60cd5bf9948080dc8fc61a58a248b4402ed70b9e920a462e9d5",
+          "sizeBytes": 783938,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/sun.bin.br"
+        }
+      ],
+      "naifId": 10,
+      "name": "Sun"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 14400.000171019587,
+          "kind": "trajectory",
+          "sha256": "4f70ab628dc515083d5e2879f511f99abf45f8a6ee4f4ac2eefb5824ff4e8056",
+          "sizeBytes": 4639464,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/mercury.bin.br"
+        }
+      ],
+      "naifId": 1,
+      "name": "Mercury barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "26a437cf08990cbd427e15da0d5630e728729258aca689a02079e2f3771684cd",
+          "sizeBytes": 825456,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/venus.bin.br"
+        }
+      ],
+      "naifId": 2,
+      "name": "Venus barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "61fa7f4a201bf1fd44a9b7fde84b4e5b422f18d2c273d6c4611f31dda5faabf1",
+          "sizeBytes": 776750,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/earth.bin.br"
+        }
+      ],
+      "naifId": 3,
+      "name": "Earth-Moon barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "125d71064ac5e50d11e1162b2890a6a5e161f101ed41031c0deb3cb99599ce5e",
+          "sizeBytes": 783057,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/mars.bin.br"
+        }
+      ],
+      "naifId": 4,
+      "name": "Mars barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "8a0c4e3069517a6d86e12b8834055eca621abf575a4b3f5f2d8d71c2cdd3bd57",
+          "sizeBytes": 774854,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/jupiter.bin.br"
+        }
+      ],
+      "naifId": 5,
+      "name": "Jupiter barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "2a4b61835380e71c2f44cd586535afb7cf8fead4f4ae12ee56e259165695b722",
+          "sizeBytes": 761915,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/saturn.bin.br"
+        }
+      ],
+      "naifId": 6,
+      "name": "Saturn barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "9fc67df8bd4a14428189d4cd5b406f80ae9f197d292432ffbbdd55339f54f66f",
+          "sizeBytes": 742065,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/uranus.bin.br"
+        }
+      ],
+      "naifId": 7,
+      "name": "Uranus barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "446ce8233ab8be88eb9e53ac4c5546452509a54a0b73b2dbafb5463fbaa25a0b",
+          "sizeBytes": 727567,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/neptune.bin.br"
+        }
+      ],
+      "naifId": 8,
+      "name": "Neptune barycenter"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 21600.00025652938,
+          "kind": "trajectory",
+          "sha256": "5fc9d8365ec523a45a5fe3606a677576fc68416ef3e5b707b983e88bc1435dac",
+          "sizeBytes": 3177163,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/moon.bin.br"
+        }
+      ],
+      "naifId": 301,
+      "name": "Moon"
     }
   ],
   "chapters": [],

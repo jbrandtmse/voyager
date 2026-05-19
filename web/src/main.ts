@@ -23,6 +23,14 @@ import {
 import { startFirstPaint } from './boot/first-paint';
 import { SpacecraftModels } from './render/spacecraft-models';
 import { TrajectoryLines } from './render/trajectory-lines';
+import { CelestialBodies } from './render/celestial-bodies';
+import { Skybox } from './render/skybox';
+import { TextureLoaderService } from './services/texture-loader';
+import {
+  isFpsReadoutMode,
+  startFpsReadout,
+} from './dev/fps-readout';
+import { CELESTIAL_BODY_NAIF_IDS } from './constants/body-radii';
 
 const MANIFEST_URL = '/data/manifest.json';
 
@@ -66,6 +74,14 @@ const bootstrap = (): void => {
   engine.init(canvas);
   engine.start();
 
+  // Story 1.13 AC5 — FPS readout dev-mode (?perf=fps). Attached to the
+  // engine immediately so the very first ticks are recorded. The overlay
+  // is unobtrusive (top-right, monospace, 4 lines) and disposed via the
+  // returned handle on hot-reload (not currently wired but available).
+  if (isFpsReadoutMode(params.perfMode)) {
+    startFpsReadout(engine);
+  }
+
   // Story 1.9 — first-paint sequence + Story 1.11 HUD wiring:
   //   1. Mount <v-title-card> immediately (no waiting for the manifest)
   //   2. Mount <v-timeline-scrubber>, <v-play-button>, <v-speed-multiplier>
@@ -93,6 +109,17 @@ const bootstrap = (): void => {
   });
   let trajectoryLines: TrajectoryLines | null = null;
 
+  // Story 1.13 — celestial bodies + Milky Way skybox. Constructed before
+  // the manifest lands so the scene graph is structurally stable; their
+  // tick callbacks are wired once the EphemerisService is available. The
+  // skybox loads its texture asynchronously and attaches to the
+  // SkyboxGroup (NOT worldGroup) so it doesn't floating-origin-recenter
+  // (Story 1.5 architectural contract — Architecture lines 374–376).
+  const textureLoader = new TextureLoaderService();
+  const skybox = new Skybox({ textureLoader });
+  engine.skyboxGroup.add(skybox.root);
+  let celestialBodies: CelestialBodies | null = null;
+
   // Story 1.6 AC1 + Task 10: load the manifest at boot. Once loaded, we
   // construct the ChunkLoader + EphemerisService and wire the service into
   // the HUD so the distance readouts come alive. Before the manifest lands
@@ -103,27 +130,44 @@ const bootstrap = (): void => {
       const ephemerisService = new EphemerisService(manifest, chunkLoader);
       firstPaintHandle.hud.ephemerisService = ephemerisService;
 
-      // Hook spacecraft updates onto the render loop immediately — V1/V2
-      // tick() handles chunk-load gaps via hold-previous, so it's safe even
-      // before any chunks are cached.
+      // Hook spacecraft + celestial-body updates onto the render loop
+      // immediately. All three modules handle null returns via
+      // hold-previous semantics, so it's safe to register the tick before
+      // any chunks land.
       engine.onFrame((et: number) => {
         spacecraftModels.tick(et, ephemerisService);
         if (trajectoryLines !== null) trajectoryLines.tick(et);
+        if (celestialBodies !== null) celestialBodies.tick(et, ephemerisService);
       });
 
-      // Story 1.12 — the trajectory polyline samples at construction time,
-      // so the V1 + V2 chunks must be in the ChunkLoader cache BEFORE we
-      // construct TrajectoryLines. Without this prefetch, every sample
-      // would hit a cache miss and the polyline would be built from zeros
-      // (visible as a degenerate dot at the Sun). Spacecraft positions
-      // themselves remain correct — they re-query each frame.
+      // Story 1.12 + Story 1.13 — the trajectory polyline samples at
+      // construction time, so V1 + V2 chunks must be in the ChunkLoader
+      // cache BEFORE we construct TrajectoryLines. Without this prefetch,
+      // every sample would hit a cache miss and the polyline would be
+      // built from zeros (visible as a degenerate dot at the Sun).
+      //
+      // Story 1.13 extends the prefetch to ALSO cover the 11 celestial
+      // body chunks before constructing CelestialBodies. Although the
+      // celestial bodies are not pre-sampled at construction (they tick
+      // per-frame), the architectural fix for the "polyline-from-zeros"
+      // bug applies equally — we want the first frame to render the
+      // bodies at their real positions, not at the origin.
       await prefetchSpacecraftChunks(manifest, chunkLoader);
+      await prefetchCelestialBodyChunks(manifest, chunkLoader);
 
       trajectoryLines = new TrajectoryLines(
         (et, naifId) => ephemerisService.getPosition(et, naifId),
         { width: window.innerWidth, height: window.innerHeight },
       );
       engine.worldGroup.add(trajectoryLines.root);
+
+      // Story 1.13 — construct CelestialBodies AFTER the celestial chunks
+      // are in cache so the first tick after this point renders at real
+      // SPICE-derived positions. The texture loads run in parallel and
+      // attach to material maps as they land (planets are visible with
+      // a fallback grey tint before then).
+      celestialBodies = new CelestialBodies({ textureLoader });
+      engine.worldGroup.add(celestialBodies.root);
     },
     (err: unknown) => {
       console.error('[manifest] load failed:', err);
@@ -162,6 +206,40 @@ const prefetchSpacecraftChunks = async (
         chunkLoader.load(file).catch((err: unknown) => {
           console.warn(
             `[main] trajectory prefetch failed for ${file.url}; polyline will hold previous segment:`,
+            err,
+          );
+        }),
+      );
+    }
+  }
+  await Promise.all(loads);
+};
+
+/**
+ * Story 1.13 — eagerly load each of the 11 celestial-body chunks so the
+ * first frame after `CelestialBodies` construction renders at real SPICE
+ * positions, not the world origin. Mirror of Story 1.12's
+ * polyline-from-zeros fix applied to the planet/Sun/Moon meshes.
+ *
+ * Each celestial body is a single VTRJ at daily cadence covering the
+ * full mission window — one load per body, 10 total chunks. Errors are
+ * logged but never thrown: a missing chunk degrades to the body holding
+ * its previous position (or staying hidden on the very first frame),
+ * which is the same posture as a runtime chunk-load gap.
+ */
+const prefetchCelestialBodyChunks = async (
+  manifest: Manifest,
+  chunkLoader: ChunkLoader,
+): Promise<void> => {
+  const naifSet = new Set<number>(CELESTIAL_BODY_NAIF_IDS);
+  const loads: Promise<unknown>[] = [];
+  for (const body of manifest.bodies) {
+    if (!naifSet.has(body.naifId)) continue;
+    for (const file of body.files) {
+      loads.push(
+        chunkLoader.load(file).catch((err: unknown) => {
+          console.warn(
+            `[main] celestial-body prefetch failed for ${file.url}; body will be hidden until chunk lands:`,
             err,
           );
         }),

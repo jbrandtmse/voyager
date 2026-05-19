@@ -31,3 +31,10 @@ web/public/data/*.bin.br.part
 
 # OS noise
 **/.DS_Store
+
+# Story 1.13 scratch — temporary KTX-Software installer + libktx-web zip +
+# Solar System Scope JPG source masters used during texture acquisition,
+# plus a uv-managed Python 3.12 venv used briefly to probe pyktx. The
+# committed PNG textures live under web/public/textures/.
+.toolchain/
+.ktx-venv/

@@ -35,7 +35,11 @@ MAGIC = b"VTRJ"
 VERSION = 1
 HEADER_SIZE = 40
 BYTES_PER_SAMPLE = 48
-ALLOWED_BODY_IDS = frozenset({-31, -32})
+# Story 1.13: extended from {-31, -32} to also accept the Sun, the eight
+# planet barycenters (NAIF 1..8), and the Moon (NAIF 301). The barycenters
+# are used for the planets (lower error from binary moon systems and
+# sufficient for visual rendering — see Story 1.13 AC1).
+ALLOWED_BODY_IDS = frozenset({-31, -32, 10, 1, 2, 3, 4, 5, 6, 7, 8, 301})
 BROTLI_QUALITY = 11  # max, deterministic for identical input
 
 # struct format for the 40-byte header. Little-endian, no padding.
@@ -88,7 +92,8 @@ def _validate_inputs(
 ) -> None:
     if body_id not in ALLOWED_BODY_IDS:
         raise ValueError(
-            f"body_id must be one of {sorted(ALLOWED_BODY_IDS)} (V1=-31, V2=-32); got {body_id}"
+            f"body_id must be one of {sorted(ALLOWED_BODY_IDS)} "
+            f"(V1=-31, V2=-32, Sun=10, planet-barycenters 1..8, Moon=301); got {body_id}"
         )
     if not (et_start < et_end):
         raise ValueError(f"et_start ({et_start}) must be strictly less than et_end ({et_end})")

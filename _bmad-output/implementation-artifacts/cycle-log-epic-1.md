@@ -66,4 +66,7 @@ Stages: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committe
 2026-05-19T17:00:00Z	Story 1.12	cr_complete	resolved=1 deferred=4 dismissed=0 tests_passing=1110_web_233_bake skipped=2 ac_status=all_pass high_fix=trajectory_polyline_from_zeros
 2026-05-19T17:05:00Z	Story 1.12	committed	sha=e85dc1f submodules= remote=origin/epic1 lfs_mb=1.7
 2026-05-19T17:10:00Z	Story 1.13	story_created	path=_bmad-output/implementation-artifacts/1-13-celestial-bodies-sun-eight-planets-and-one-moon.md user_scope=full_quality
+2026-05-19T18:30:00Z	Story 1.13	dev_complete	files=web/src/render/(celestial+skybox),web/src/services/texture-loader.ts,web/src/dev/fps-readout.ts,web/public/textures/(11_png+1_skybox),bake/src/bake_trajectories.py textures_source=solarsystemscope_cc-by-4.0 ktx2_deferred_to_4.3 tests=1211_web_233_fast_bake_10_slow
+2026-05-19T19:00:00Z	Story 1.13	qa_complete	tests=web/tests/celestial-defense-extended.test.ts passed=1276_web_233_bake skipped=2 failed=0 fix=uranus_neptune_radius_ordering
+2026-05-19T19:30:00Z	Story 1.13	cr_complete	resolved=0 deferred=0 dismissed=4 tests_passing=1276_web_233_bake skipped=2 ac_status=all_pass clean=true
 2026-05-19T17:30:00Z	Story 1.5	adr_verifications_complete	tool=chrome_devtools_mcp ac=ac5 result=pass evidence=_bmad-output/implementation-artifacts/1-5-ac5-precision-smoke-screens/ env_note=brotli_probe_bypass_required post_hoc=true

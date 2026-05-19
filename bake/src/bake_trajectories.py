@@ -53,6 +53,55 @@ BODIES: list[tuple[int, str, str]] = [
     (-32, "Voyager 2", "voyager-2"),
 ]
 
+# Story 1.13 — Sun, eight planet barycenters, Moon. DE440 is continuous over
+# the mission window, so each celestial body emits ONE VTRJ at daily cadence
+# (single segment). The barycenters (1..8) are used for the planets rather
+# than the planet-itself IDs (199, 299, 399, 499, 599, 699, 799, 899): on the
+# binary moon systems (Earth-Moon, Pluto-Charon) the barycenter is closer to
+# a clean two-body inertial path than the planet centre, and the visual
+# distance from the planet centre to the planet-Moon barycenter is far below
+# one rendered pixel at solar-system zoom. The Moon (NAIF 301) is queried
+# separately, so its ~4,670-km wobble around Earth's centre is preserved.
+# See Story 1.13 AC1 for the locked NAIF table.
+CELESTIAL_BODIES: list[tuple[int, str, str]] = [
+    # (naif_id, name, file slug used for bake/out/<slug>.bin.br)
+    (10, "Sun", "sun"),
+    (1, "Mercury barycenter", "mercury"),
+    (2, "Venus barycenter", "venus"),
+    (3, "Earth-Moon barycenter", "earth"),
+    (4, "Mars barycenter", "mars"),
+    (5, "Jupiter barycenter", "jupiter"),
+    (6, "Saturn barycenter", "saturn"),
+    (7, "Uranus barycenter", "uranus"),
+    (8, "Neptune barycenter", "neptune"),
+    (301, "Moon", "moon"),
+]
+
+# Per-body bake cadence for celestial bodies (Story 1.13 AC1). DE440 is
+# continuous, so a single VTRJ per body is the architecturally clean answer;
+# but Mercury's 88-day orbit and the Moon's 27-day orbit are fast enough
+# that daily cadence breaches the NFR-P9 thresholds (max ≤ 20 km / RMS ≤ 5
+# km) — verified by the L1 validation harness. Slower bodies (Sun, gas
+# giants, ice giants) are comfortably inside the thresholds at daily
+# cadence (Jupiter/Saturn/Uranus/Neptune all <0.001 km max).
+#
+# Keys are NAIF IDs. Bodies not in this map default to
+# `CELESTIAL_DEFAULT_CADENCE_SECONDS`.
+CELESTIAL_DEFAULT_CADENCE_SECONDS = 86400.0  # daily
+CELESTIAL_CADENCE_OVERRIDES: dict[int, float] = {
+    1: 14400.0,    # Mercury barycenter — 6 hourly (88-day orbit, fast inner planet)
+    301: 21600.0,  # Moon — 6 hourly (27-day Earth orbit, ~1 km/s relative to Earth)
+}
+
+# Mission window for celestial bodies, in ET (TDB s past J2000). These mirror
+# `web/src/constants/mission.ts` MISSION_START_ET and MISSION_END_ET — the
+# same SPICE-derived values, restated as plain literals so this module stays
+# stdlib-only at module-import time. A defense test in
+# `bake/tests/test_bake_trajectories.py` re-derives them via str2et and
+# asserts they match within 5 ms.
+CELESTIAL_ET_START = -705844751.8171712  # 1977-08-20T00:00:00 UTC
+CELESTIAL_ET_END = 978264068.1839114  # 2030-12-31T23:59:59 UTC
+
 # Kernel furnish order: LSK first (time conversions), then PCK / FK / SCLK / SPK
 _FURNISH_PRIORITY: dict[str, int] = {
     "lsk": 0,
@@ -192,6 +241,34 @@ def _sample_segment(
     return et_grid, out, actual_cadence
 
 
+def _sample_celestial_body(
+    naif_id: int, et_start: float, et_end: float, cadence_seconds: float
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Sample a celestial body's heliocentric state at uniform daily cadence.
+
+    Story 1.13 AC1: identical SPICE query shape to `_sample_segment`
+    (observer=SSB, ECLIPJ2000, km/s), but DE440 is continuous over the
+    mission window so no per-segment chunking is needed and no endpoint
+    boundary inset is applied (there are no SPK stitch points to avoid).
+
+    Returns (et_grid, samples, actual_cadence).
+    """
+    import spiceypy as spice
+
+    span = et_end - et_start
+    if span <= 0:
+        raise ValueError(f"celestial body window must be positive; got {span}")
+    n_samples = max(2, int(np.floor(span / cadence_seconds)) + 1)
+    et_grid = np.linspace(et_start, et_end, n_samples, dtype=np.float64)
+    actual_cadence = (et_end - et_start) / (n_samples - 1)
+
+    out = np.empty((n_samples, 6), dtype=np.float64)
+    for i, et in enumerate(et_grid):
+        state, _light_time = spice.spkgeo(targ=naif_id, et=float(et), ref="ECLIPJ2000", obs=0)
+        out[i] = state
+    return et_grid, out, actual_cadence
+
+
 def bake(
     root: Path | None = None,
     out_dir: Path | None = None,
@@ -278,6 +355,59 @@ def bake(
 
             body_records.append(BodyEntry(naifId=naif_id, name=name, files=file_records))
 
+        # Story 1.13 — Sun + 8 planet barycenters + Moon, one VTRJ per body
+        # over the full mission window. DE440 is continuous; no segment-
+        # boundary detection is required (verified by the L1 harness finding
+        # zero per-segment discontinuities for these bodies). Cadence is
+        # per-body — see CELESTIAL_CADENCE_OVERRIDES.
+        for naif_id, name, slug in CELESTIAL_BODIES:
+            cadence = CELESTIAL_CADENCE_OVERRIDES.get(
+                naif_id, CELESTIAL_DEFAULT_CADENCE_SECONDS
+            )
+            _et_grid, samples, actual_cadence = _sample_celestial_body(
+                naif_id,
+                CELESTIAL_ET_START,
+                CELESTIAL_ET_END,
+                cadence,
+            )
+            n = samples.shape[0]
+            # Single-segment naming convention: `<slug>.bin.br`. No segNN
+            # suffix because there is no per-segment chunking here.
+            file_name = f"{slug}.bin.br"
+            target = out / file_name
+            sha = write_vtrj(
+                target_path=target,
+                body_id=naif_id,
+                et_start=CELESTIAL_ET_START,
+                et_end=CELESTIAL_ET_END,
+                cadence_seconds=actual_cadence,
+                samples=samples,
+            )
+            size_bytes = target.stat().st_size
+            utc_a = spice.et2utc(CELESTIAL_ET_START, "ISOC", 0)
+            utc_b = spice.et2utc(CELESTIAL_ET_END, "ISOC", 0)
+            print(
+                f"[OK]     {slug:10s} {utc_a} -> {utc_b}  "
+                f"n={n}  cadence={actual_cadence:.1f}s  "
+                f"{size_bytes:,} bytes  sha={sha[:12]}..."
+            )
+            body_records.append(
+                BodyEntry(
+                    naifId=naif_id,
+                    name=name,
+                    files=[
+                        FileEntry(
+                            timeRangeEt=(CELESTIAL_ET_START, CELESTIAL_ET_END),
+                            cadenceSec=actual_cadence,
+                            kind="trajectory",
+                            url=f"data/{file_name}",
+                            sha256=sha,
+                            sizeBytes=size_bytes,
+                        )
+                    ],
+                )
+            )
+
         manifest_kernels = [
             KernelRef(
                 file=k.file,
@@ -294,7 +424,12 @@ def bake(
             output_path=manifest_path,
             repo_root=repo,
         )
-        print(f"[OK]     {manifest_path}  ({total_segments} VTRJs across {len(BODIES)} bodies)")
+        total_vtrjs = total_segments + len(CELESTIAL_BODIES)
+        total_bodies = len(BODIES) + len(CELESTIAL_BODIES)
+        print(
+            f"[OK]     {manifest_path}  ({total_vtrjs} VTRJs across "
+            f"{total_bodies} bodies)"
+        )
         return 0
     finally:
         spice.kclear()

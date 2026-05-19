@@ -87,10 +87,13 @@ describe('ManifestLoader.load — happy path', () => {
       '/data/manifest.json',
       { fetchImpl },
     );
-    // V1 has 7 segments, V2 has 11 = 18 total
+    // Story 1.13 extended the body set: 7 V1 segments + 11 V2 + 10
+    // celestial single-files = 28 total.
     const total = manifest.bodies.reduce((acc, b) => acc + b.files.length, 0);
-    expect(total).toBe(18);
-    expect(manifest.bodies.map((b) => b.naifId).sort((a, b) => a - b)).toEqual([-32, -31]);
+    expect(total).toBe(28);
+    expect(manifest.bodies.map((b) => b.naifId).sort((a, b) => a - b)).toEqual([
+      -32, -31, 1, 2, 3, 4, 5, 6, 7, 8, 10, 301,
+    ]);
   });
 });
 
