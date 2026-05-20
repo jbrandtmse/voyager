@@ -117,12 +117,15 @@ Requires Claude Code v2.1.32 or later.
   - `### Task-in-Prompt Pattern (Required)`
   - `### Pipeline Flow`
   - `### Smart Parallelism (Opt-In Per Batch)`
+  - `### Per-Story Smoke (Critical Gate)`
   - `### Retrospective Review & Story X.0 Creation (Critical Gate)`
   - `### Sprint Planning Per Epic (Critical Gate)`
   - `### Retrospective Per Epic (User Decision Point)`
   - `### Lead Creates Story Files (Critical Gate)`
   - `### Context Handoff Between Stages (Critical)`
+  - `### ADR-Aware Execution (Required)`
   - `### Shutdown-Before-Respawn Sequencing (Critical)`
+  - `### Agent Silence Recovery (Required)`
   - `### Agent Prompt Requirements`
 - `## When to Pause`
 - `## Handling Clarifications`
@@ -225,6 +228,7 @@ This completely eliminates self-scheduling — terminated agents can't poll Task
 
 ```
 Lead calls TeamCreate({team_name: "epic-cycle-<date>", agent_type: "team-lead", description: "..."})  // once per workflow run
+Lead resolves project ADR registry path (typically docs/adr/) — persisted for every spawn prompt and per-story Layer-1 gate; see ADR-Aware Execution
 
 For each epic in range:
   Lead executes /bmad-sprint-planning via Skill tool (ensures sprint-status.yaml is current)
@@ -241,8 +245,10 @@ For each epic in range:
     Lead executes /bmad-create-story skill directly via Skill tool (pipeline gate) — sequentially for every story, even within a parallel batch
     Lead captures story file path from skill output
     Lead spawns developer → dispatches with story file path → waits for completion (captures file list) → shuts down → waits for shutdown approval
+    Lead executes ADR-tooled AC verifications via project's MCP servers (lead-side, sequential per AC); logs adr_verifications_complete (see ADR-Aware Execution)
     Lead spawns qa-test-author → dispatches with file list from developer → waits for completion (captures test file list) → shuts down → waits for shutdown approval
     Lead spawns code-reviewer → dispatches with combined file list (dev files + QA test files) → waits for completion → shuts down → waits for shutdown approval
+    Lead performs per-story smoke (mandatory, method varies by project type — see Per-Story Smoke); logs smoke_complete
     Lead does feat commit + push (submodules first if applicable, then parent — see Submodule Commit Order)
     Lead logs completion → next story (or next batch)
 
@@ -259,8 +265,10 @@ When the lead can confirm that two or more stories within the same epic touch **
 **What stays sequential (no exceptions):**
 
 - **Story-file creation** — `/bmad-create-story` runs in the lead, one story at a time, for every story in the batch *before* any agent is spawned. This preserves the pipeline-gate discipline that prevents agents from racing ahead.
-- **Commits and pushes** — git operations are serialized one story at a time. In sequential mode the commit fires immediately after each story's cr_complete. In parallel-batch mode commits fire after the batch's cr-barrier releases — the lead then commits each batch member in story order, one at a time. Either way, no two git operations interleave; this avoids merge conflicts and keeps the cycle log readable.
+- **Commits and pushes** — git operations are serialized one story at a time. In sequential mode the commit fires immediately after each story's `smoke_complete`. In parallel-batch mode commits fire after the batch's smoke-barrier releases — the lead then commits each batch member in story order, one at a time. Either way, no two git operations interleave; this avoids merge conflicts and keeps the cycle log readable.
 - **Sprint planning, retrospective review, Story X.0 creation, and per-epic retrospective** — all single-threaded.
+- **ADR-tooled AC verifications (Layer 1 of ADR-Aware Execution)** — single-threaded per story even within a parallel batch. The lead drives the project's MCP servers (Chrome DevTools MCP, etc.) sequentially across batch members to avoid context-channel collisions.
+- **Per-story smoke** — single-threaded per story even within a parallel batch. The smoke method (browser, CLI invocation, API call, etc.) varies per project; whichever method the project uses, the lead runs it for one story at a time across batch members.
 
 **What runs in parallel:**
 
@@ -283,10 +291,12 @@ Lead identifies parallel batch [S_a, S_b, S_c] meeting all three independence cr
 Lead executes /bmad-create-story for S_a, then S_b, then S_c (sequentially — pipeline gate stays)
 Lead spawns dev-{epic}-a, dev-{epic}-b, dev-{epic}-c concurrently with task-in-prompt
 Lead waits for ALL dev completions (captures three file lists), then shuts down all three devs
+Lead executes ADR-tooled AC verifications for S_a, then S_b, then S_c sequentially (lead-side, not parallelized); logs adr_verifications_complete per story
 Lead spawns qa-{epic}-a, qa-{epic}-b, qa-{epic}-c concurrently with respective file lists
 Lead waits for ALL qa completions (captures three test file lists), then shuts down all three qas
 Lead spawns cr-{epic}-a, cr-{epic}-b, cr-{epic}-c concurrently with combined file lists
 Lead waits for ALL code-review completions, then shuts down all three reviewers
+Lead performs per-story smoke for S_a, then S_b, then S_c sequentially (lead-side, not parallelized — see Per-Story Smoke); logs smoke_complete per story
 Lead commits + pushes S_a, then S_b, then S_c (sequentially — submodules first per story if applicable)
 Lead logs all three completions → next story or next batch
 ```
@@ -311,6 +321,31 @@ Sequential resume is always safe; parallel resume is an optimization. When in do
 3. *Only then* does the lead initiate the shutdown handshake, spawn the next stage's agent, or perform a git commit.
 
 If a crash occurs after step 1 but before step 2, the agent is dead (process gone), the work is on disk, but the cycle log doesn't reflect the completion — on resume the lead re-spawns the agent for that stage. This is acceptable for dev/qa stages (idempotent re-implementation against the same story spec) but **NOT acceptable for the commit stage** (would produce a duplicate commit). For the `committed` stage specifically: write the log entry immediately after `git push` returns success, before any other action. If the crash happens between `git push` success and log write, on resume the lead inspects `git log --oneline` against the expected story files; if a matching commit exists, the lead writes the missing log entry and proceeds. Do NOT re-run the commit.
+
+### Per-Story Smoke (Critical Gate)
+
+After a story's code review completes (and any HIGH/MED findings are resolved) and before the lead commits the story, the lead must perform a **per-story smoke** — a direct exercise of the story's deliverable in its target runtime. The smoke step is **mandatory**; only the *method* varies by project type. The smoke is performed by the **lead**, not by a spawned agent, for the same reason ADR-tooled verifications are lead-side: the lead reliably has access to the project's runtime tooling (MCP servers, dev server, CLI, deployment environment), while subagents may not.
+
+**Method selection — pick the smoke method that matches the deliverable's runtime:**
+
+- **UI / browser-deployed projects** — Drive the dev server (or a deployed build) via a browser-automation MCP (e.g., Chrome DevTools MCP). Navigate to the affected surface, exercise the feature the story adds or modifies, and assert on observable DOM / render state / console output. For 3D / graphics projects, this includes screenshotting and verifying actual visual change frame-over-frame.
+- **CLI / library projects** — Invoke the CLI command, or call the public test method, against a real runtime. Assert on stdout / stderr / return code / produced files. A library-only deliverable still needs a smoke: write a one-off call site exercising the new public surface and verify the result.
+- **Service / API projects** — Issue a real `curl` / HTTP request against the local server (or staging) and assert on status code + response body. Side effects (DB writes, queue publishes, etc.) should be verified by inspecting the side-effect surface, not just the response.
+- **Other** — Whatever exercise mirrors how the deliverable will be used in production. The minimum bar is "the lead actually invoked the new code path against a real runtime, and observed the expected outcome via an out-of-band channel."
+
+The smoke is NOT a substitute for the automated test tiers (unit, integration, E2E); it is a final check that the wired-up system, end to end, produces the user-observable outcome the story promises. Automated tests verify components in their tested boundary; the smoke verifies that the boundary is wired up to reality.
+
+Mechanics:
+
+1. After `cr_complete` (with all HIGH/MED findings resolved), the lead determines the appropriate smoke method for the story based on what the story touched (the story's File List and ACs make this routine — UI files imply browser smoke, CLI files imply CLI invocation, etc.).
+2. The lead executes the smoke directly, capturing evidence (screenshots, stdout, response body, etc.).
+3. If the smoke fails, the lead does NOT commit. The lead either (a) surfaces the failure to the user for guidance, or (b) creates a follow-up dev pass to fix the defect, then re-runs the smoke. Failed smoke cannot be deferred to a later story — it is a HIGH-severity finding that must clear before commit.
+4. On success, the lead appends a cycle-log entry: `<UTC> TAB Story <id> TAB smoke_complete TAB method=<browser|cli|api|other> result=pass evidence=<path-or-summary>`.
+5. Lead proceeds to commit.
+
+The smoke step is single-threaded across a parallel batch (see Smart Parallelism § What stays sequential). The lead smokes each story in story order before any commits in the batch begin.
+
+This gate was elevated to mandatory after a project's Epic 1 ship-readiness review found four HIGH-severity defects (broken core feature, missing decoder configuration, ARIA mojibake, ARIA value-bound rendering) that every automated tier had passed; only a real browser session surfaced them. The test pyramid is necessary but not sufficient; the smoke step is the bridge from "tests pass" to "the product works."
 
 ### Retrospective Review & Story X.0 Creation (Critical Gate)
 
@@ -369,6 +404,22 @@ Retrospectives surface deferred work, process improvements, and preparation task
 
 The lead executes `/bmad-create-story` directly via the `Skill` tool — NOT via an agent. This is a deliberate pipeline gate that prevents agents from racing ahead. **Capture the story file path** from the skill output to pass to the developer agent.
 
+**Integration AC validation (lead-side, also a gate).** Before the lead spawns the dev agent for a story, the lead reads the story file's ACs and asks: does this story introduce a service, module, or component that later stories (in this or any future epic) will consume? Indicators include: a new file under `services/` or `lib/`; a new exported class / factory / module; a `## Consumed-by` field naming downstream stories; or any AC describing a public surface other stories will call against.
+
+If yes — the story is **service-introducing** — it MUST contain at least one **Integration AC** of the form: "consumer X reads from this service / module / component and produces observable effect Y." If a `## Consumed-by` field is also present, even better — it names every downstream story that will hold the consumer's mirror-side integration AC.
+
+If the story is service-introducing AND lacks an integration AC, the lead pauses for the user before spawning the dev agent:
+
+> "Story <id> introduces <service-name>. No Integration AC found in its ACs. Re-run `/bmad-create-story` to populate `## Integration ACs`, OR proceed without (with the consequence that producer-consumer wire-up defects can ship green)?"
+
+Get the user's decision. Do not proceed silently.
+
+If the story is NOT service-introducing (pure refactor, doc-only, internal cleanup, defect-fix, etc.), this gate is a one-line check that finds no work to do; the lead proceeds to spawn dev as normal.
+
+This gate exists because a prior project's Epic 1 shipped four HIGH-severity defects whose common signature was: a producer story shipped green with the service correct in isolation, and every consumer story shipped green with the consumer behavior mocked; nothing in the test pyramid exercised the wire-up between them. An integration AC on the producer ("RenderEngine reads `simTimeEt` from ClockManager and the rendered ET matches") forces both sides to be wired before either ships; the Per-Story Smoke (lead-side) verifies the wiring in the real runtime. The integration AC is the planning-time catch; the smoke is the last-mile catch. See Lesson 9.
+
+The `/bmad-create-story` skill should ideally refuse to mark a service-introducing story `ready-for-dev` without at least one integration AC (a skill-level enforcement). This workflow gate is defense-in-depth for cases where the skill check fails or the project's skill is older than the integration-AC amendment.
+
 ### Context Handoff Between Stages (Critical)
 
 Each pipeline stage produces output that downstream stages need:
@@ -382,6 +433,36 @@ The **story file path** is the canonical context anchor and is passed forward to
 
 Without explicit context handoff, downstream agents lack the information to do their job effectively.
 
+### ADR-Aware Execution (Required)
+
+Projects with an Accepted-Decisions registry (typically `docs/adr/` for ADRs, but verify your project's actual path) commit to specific tooling, methodology, and architectural patterns that constrain HOW agents do their work, not just WHAT they produce. An AC satisfied by the wrong tool stack is equivalent to a HIGH-severity defect — it violates an Accepted ADR.
+
+Two-layer enforcement:
+
+**Layer 1 — Lead-executed ADR-tooling gate (between `dev_complete` and `qa_spawn`).**
+
+After the developer's shutdown is approved and before the qa agent is spawned, the lead inspects the story's ACs for any that map to ADR-committed agent-time tooling (visual / precision verification, performance profiling, Lighthouse audits, WebGL state inspection, etc.). For each matched AC, the lead drives the verification itself using its own tool inventory — typically the project's MCP servers (Chrome DevTools MCP, etc., per the relevant ADR).
+
+This gate exists because **MCP tool inventories may not propagate reliably to spawned subagents** — a dev agent reporting "I cannot drive a real WebGL canvas from this environment" may be literally true at its spawn time even when the lead has the MCP fully connected. The lead always has the MCP servers at the session level; relocating the ADR-mandated verification to the lead guarantees access without depending on subagent inheritance. This is the same pattern that locates `/bmad-retrospective` in the lead (because `AskUserQuestion` requires the lead's UI context).
+
+Mechanics:
+
+1. Lead reads the story file (the same path captured at `story_created`).
+2. For each AC, lead consults the project's ADR registry (path resolved once per workflow run — see top of Pipeline Flow). If any Accepted ADR commits to a specific tool stack for the work the AC describes, the AC is "ADR-tooled."
+3. Lead drives each ADR-tooled AC verification: navigate via `mcp__chrome-devtools-mcp__navigate_page` (or equivalent for the relevant tool), capture screenshots / console / network / perf trace as the ADR or AC requires, record pass/fail + evidence paths.
+4. Lead appends one cycle-log entry per story: `<UTC> TAB Story <id> TAB adr_verifications_complete TAB <metadata>` where `<metadata>` is whitespace-separated `key=value` pairs covering each verified AC (e.g., `tool=chrome_devtools_mcp ac=ac5 result=pass evidence=path/to/screens/`). One log line per story regardless of AC count; multi-AC verifications collapse into multi-valued metadata fields per the existing cycle-log grammar.
+5. On any failure, the lead surfaces it to the user before spawning qa (the qa stage assumes the implementation is functionally correct; a failed ADR-tooled verification means it isn't).
+6. The verification results (pass/fail + evidence pointers) are included in the code reviewer's spawn-prompt context.
+7. If the story has zero ADR-tooled ACs (the common case for non-visual stories), this gate is a one-line check that finds no work; lead emits a single `adr_verifications_complete result=none_required` entry and proceeds.
+
+**Layer 2 — Project ADR registry path in every spawn prompt.**
+
+The lead resolves the project's ADR registry path once at the start of the workflow run (after Team Lifecycle setup, before the first sprint planning step) and persists it for the run. The lead includes this path as factual context in every agent spawn prompt (e.g., `Project ADR registry: docs/adr/`). Agents are not required to consult ADRs for tooling decisions (Layer 1 absorbs that responsibility) but they MUST consult them for architectural and methodology decisions referenced in their story's ACs and Dev Notes.
+
+The code reviewer specifically must verify that implementations match the architectural / methodology commitments in Accepted ADRs. An implementation that violates an Accepted ADR is a **HIGH-severity finding**, not a deferrable LOW. The code-reviewer spawn prompt must include an explicit instruction to this effect.
+
+This gate was elevated to mandatory after a prior project's Story 1.5 AC5 (a "Phase 0 reverse-Z precision spike") was deferred to "manual run" when ADR 0010 explicitly committed Chrome DevTools MCP for that exact use case at agent-time. Neither the dev agent nor the code reviewer surfaced the ADR violation; the gap was caught only when a human read the story file and the ADR together.
+
 ### Shutdown-Before-Respawn Sequencing (Critical)
 
 After sending `SendMessage(type: "shutdown_request")`, **wait for the shutdown approval message** before spawning the next agent. Agent shutdown is asynchronous — an idle notification may arrive before the shutdown approval. If you spawn a new agent with the same name (e.g., `developer`) before the old one terminates, you get a name collision.
@@ -390,6 +471,38 @@ Pattern:
 ```
 Lead sends shutdown_request → may receive idle notification → receives shutdown_approved → safe to spawn next agent
 ```
+
+### Agent Silence Recovery (Required)
+
+A non-trivial fraction of spawned agents — empirically ~10–12% in real workflow runs — complete their work to disk but fail to send the structured `STATUS: completed` envelope before going idle. The Task-in-Prompt Pattern documents that SendMessage delivery is unreliable; the converse is also true: completion-message delivery from an agent back to the lead is unreliable. When silence happens the lead must NOT block the pipeline waiting for a message that won't arrive. The lead recovers by reconstructing the completion data from on-disk evidence.
+
+**Detection — when to trigger silence recovery:**
+
+Trigger silence recovery when ALL of these hold:
+
+1. The spawned agent reports idle / not-running (via any team status check the lead can run), AND
+2. No completion message (`STATUS: completed` or `STATUS: clarification_needed`) has been received for this spawn, AND
+3. The lead observes via filesystem inspection (e.g., `git status --short`) that files have been written matching the story's expected file list — so the agent really did do the work, it just didn't announce it.
+
+If condition (3) does NOT hold — i.e., the agent went idle WITHOUT writing files — then this is a *different* failure mode (agent stuck, agent errored, agent didn't start). For that case the lead surfaces to the user; do NOT attempt silent-completion recovery on an agent that produced no output.
+
+**Recovery protocol (lead-side, mandatory when silence is detected):**
+
+1. **Reconstruct the file list** — `git status --short` from repo root; collect modified + new files that match the story spec's `Files to Modify` table. These are the effective `FILES_MODIFIED`.
+2. **Reconstruct the test list (for QA agent silence)** — filter the file list to test files (`*.test.ts`, `test_*.py`, etc.) plus any files matching the story's `Tests / Subtasks` paths.
+3. **Reconstruct review findings (for code-reviewer silence)** — read the story file's `Review Findings` section if the agent populated it; if not, the lead reads the diff and runs the code-review skill itself directly via the `Skill` tool (lead-driven; same pattern as `/bmad-retrospective`).
+4. **Run the verification the agent should have run** — for dev silence: `npm test` / `pytest` / project equivalent + typecheck. For QA silence: same, with focus on new test files. For cr silence: lead reads through the diff to validate no obviously broken changes.
+5. **Append the cycle-log entry with hygiene metadata** — record the stage as complete, but include a `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence` (or similar) metadata key so the silence is visible in the next retrospective.
+6. **Shutdown the silent agent normally** — `SendMessage shutdown_request` works even on an idle agent; the shutdown handshake succeeds even though the completion message never arrived. If shutdown ALSO fails after a reasonable timeout, surface to the user before spawning the next stage's agent (a hanging name would collide with the next spawn).
+
+**Do NOT do these things during silence recovery:**
+
+- Do NOT block the pipeline indefinitely waiting for a completion message that won't arrive. Move forward on file evidence.
+- Do NOT skip the verification — the lead must actually run the agent's verification step, not just trust the file list. The file list is the *input* to the verification, not a substitute for it.
+- Do NOT silently absorb the silence event — it MUST appear in the cycle log so the retrospective can quantify and address it.
+- Do NOT use silence recovery as a substitute for properly-wired agent prompts. If silence happens repeatedly across multiple spawns in the same workflow run (say, 3+ in a row), pause and inform the user — the BMAD skill prompts likely need a `STATUS: completed` reinforcement update before continuing.
+
+**Long-term fix is at the skill level, not the workflow level.** The BMAD skill prompts (`/bmad-dev-story`, `/bmad-qa-generate-e2e-tests`, `/bmad-code-review`) should terminate with explicit instructions to send the structured completion message before going idle. This subsection documents the lead's recovery for cases where the skill-level fix hasn't taken or fails anyway. It is not a permanent feature of `/epic-cycle` — it is a survivability measure for the current state of the BMAD skill ecosystem, and can be retired once skill-level reinforcement is confirmed reliable across consecutive epics.
 
 ### Agent Prompt Requirements
 
@@ -504,7 +617,7 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 
 - Fields are separated by a single literal TAB character (`\t`), not by runs of spaces.
 - The **metadata** field is whitespace-separated `key=value` pairs. Values are comma-separated lists when multi-valued; values must NOT contain spaces or tabs (percent-encode if needed). Keys are lowercase snake_case.
-- Valid stages, in order: `story_created`, `dev_complete`, `qa_complete`, `cr_complete`, `committed`.
+- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete` — see ADR-Aware Execution; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed` — see Per-Story Smoke), `committed`.
 
 **Example** (TABs shown as `→` for visibility; the actual file contains literal tabs):
 
@@ -551,6 +664,12 @@ These patterns were tested and failed due to agent self-scheduling behavior:
 - **Spawning teammates without `team_name`** — The `Agent` tool needs both `team_name` (which team to join) and `name` (the unique teammate name) to attach the spawned agent to the existing team. Omitting `team_name` produces a standalone subagent that the lead cannot address via `SendMessage`
 - **Leaving teams undeleted across runs** — `TeamCreate` writes persistent state under `~/.claude/teams/{team-name}/` (and `~/.claude/tasks/{team-name}/`). Without `TeamDelete` at the end of each workflow run, those directories accumulate forever. Always call `TeamDelete` after the last epic completes (and after every teammate has been shut down)
 - **Omitting `summary` on plain-text `SendMessage` calls** — The `SendMessage` API requires `summary` (5–10 word UI preview) whenever `message` is a plain string. Structured messages like `{type: "shutdown_request"}` don't need `summary`. Forgetting `summary` on a clarification response causes the message to fail validation
+- **Deferring ADR-mandated agent-time verification without surfacing it** — Saying "I can't do X from this environment" or "deferred to manual run" for work the project's ADRs commit to specific agent-time tooling. Real example: a Story 1.5 AC5 reverse-Z precision spike was deferred to "manual run" when ADR 0010 explicitly committed Chrome DevTools MCP for that exact use case at agent-time. The fix: the lead executes ADR-tooled AC verifications directly (Layer 1 in ADR-Aware Execution), because MCP tool inventories may not propagate reliably to subagents. The dev agent is no longer responsible for this kind of verification
+- **Treating ADR violations as LOW deferrable findings** — An AC implementation that violates an Accepted ADR is a **HIGH-severity** finding because it breaks a committed architectural / methodology decision. Code-reviewer spawn prompts must explicitly include this rule; otherwise reviewers tend to file ADR-violation findings as ordinary LOW deferrables and the violation silently ships
+- **Skipping the per-story smoke** — Committing a story whose code touches a user-facing surface without exercising that surface in its target runtime. The test pyramid (unit + integration + E2E) is necessary but not sufficient; every tier can pass while the deployed product is broken because the wiring between components was never end-to-end verified. The per-story smoke is non-optional even when CI is green; failed smoke means HIGH-severity, not deferrable. See Per-Story Smoke § Critical Gate
+- **Smoke executed by a spawned subagent instead of the lead** — Spawned subagents may not have reliable access to the project's runtime tooling (MCP servers, dev server, CLI environment). The smoke step is lead-side for the same reason ADR-tooled verifications and `/bmad-retrospective` are lead-side: the lead reliably has the tools the smoke needs
+- **Blocking the pipeline indefinitely on a silent agent** — When an agent's completion message doesn't arrive, the lead must NOT wait forever for it. Silent agents (~10–12% empirically) may have completed all their work to disk and simply failed to send the structured envelope. The lead reconstructs the completion data from `git status --short` + the story spec's `Files to Modify` table, runs the verification the agent should have run, and appends a cycle-log entry with `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence`. See Agent Silence Recovery § Required
+- **Service-introducing story spawned without an Integration AC** — A story that introduces a service, module, or component that downstream stories will consume MUST contain at least one Integration AC ("consumer X reads from this service and produces observable effect Y") before the lead spawns the dev agent. Without this, the producer and every consumer can ship green with the wiring between them never built — a prior Epic 1's four HIGH defects all shared this exact signature. The lead validates integration-AC presence at the `/bmad-create-story` gate and pauses for the user if absent. See Lead Creates Story Files § Integration AC validation
 
 ## Lessons Learned (Accumulated From Prior Project Runs)
 
@@ -562,3 +681,8 @@ These lessons were earned on prior projects' epic-cycle runs and are carried for
 4. **Mock-based testing is sufficient for foundation epics** — document infrastructure constraints in story dev notes
 5. **Story X.0 cleanup pattern (MANDATORY)** — deferred work from epic N gets a tracked cleanup story at the start of epic N+1. The lead MUST review the previous retrospective and triage ALL action items and deferred findings — include, defer with rationale, or drop. Story X.0 is created even if all items are deferred, to document the triage decision. Elevated from optional to mandatory after a prior project's mid-run retrospective revealed that skipping X.0 caused deferred items to silently accumulate across epics.
 6. **Pipeline must support resume** — on restart, the lead reads `sprint-status.yaml` and the cycle log (see Completion Logging § Cycle Log Format) to compute the resume point. Per-story resume granularity is at the stage level: `story_created` / `dev_complete` / `qa_complete` / `cr_complete` / `committed`. The lead skips completed stages and re-spawns only the agents needed for the first incomplete stage. For parallel batches, see Smart Parallelism § Resume Policy.
+7. **ADR-aware execution (lead-executed gate)** — projects with an Accepted-Decisions registry commit the workflow to specific tooling for specific kinds of work. The lead must drive ADR-tooled AC verifications directly (between `dev_complete` and `qa_complete`), because subagent MCP / tool propagation is unreliable. Code reviewers must treat ADR violations as HIGH severity, not LOW deferrable. This lesson was earned on a prior project's Story 1.5 / ADR 0010 mismatch (a Phase 0 reverse-Z precision spike committed to Chrome DevTools MCP, deferred by the dev agent to "manual run" because it lacked MCP access at spawn time).
+8. **The test pyramid is necessary but not sufficient — the per-story smoke is the bridge from "tests pass" to "the product works"** — every automated tier (unit, integration, E2E, visual regression, a11y) can pass while the deployed product is broken because the wiring between independently-correct modules was never end-to-end verified. The lead must perform a per-story smoke (browser MCP for UI, CLI invocation for libraries, real `curl` for services, etc.) between code review and commit. Failed smoke is HIGH-severity, never deferrable. This lesson was earned on a project whose Epic 1 ship-readiness review found four HIGH defects (broken core feature, missing decoder configuration, ARIA mojibake, ARIA value-bound rendering) — every one passed all four automated tiers; all four were instantly obvious in a real browser. See Per-Story Smoke § Critical Gate.
+9. **Integration ACs catch the wiring gap that unit ACs miss** — when a story introduces a service, the ACs must specify not only "the service is correct in isolation" but also "consumer X reads from the service and produces observable effect Y." Without an integration AC, a producer story and its consumer stories can both ship green while the wire-up between them was never built. The story-creation skill should refuse to mark a service-introducing story `ready-for-dev` without at least one integration AC, and the code-review skill should refuse to approve such a story without evidence the integration is exercised. (Same root cause as Lesson 8; the smoke step is the last-mile catch and the integration AC is the planning-time catch.)
+10. **NFR tripwires amend planning artifacts in place** — when a dev or QA pass discovers an NFR is unmeasurable, mathematically impossible, or internally contradictory, the response is NOT to add a code comment + a `deferred-work.md` entry and continue. The PRD/architecture/epics files are amended in place to clarify the NFR's real intent; the dev/QA work then verifies against the amended NFR. Otherwise the planning artifacts and the deployed code diverge silently — a future contributor reading the PRD will not know which NFRs are "as-written" vs. "as-implemented-with-comment." This lesson was earned on a project whose NFR-P6 ("ClockManager mutations ≤ 100µs P99") was mathematically impossible on browser wall-clock and NFR-M4 ("cycle log human-readable") was conflated with lint-clean; both were worked around in comments and the deferred-work file instead of being amended at source.
+11. **Agent completion-message silence is a recurring failure mode; the lead must have a file-evidence recovery protocol** — empirically ~10–12% of agent spawns complete their work to disk but never send the `STATUS: completed` envelope before going idle. The lead must NOT block the pipeline waiting for a message that won't arrive. The lead recovers by reconstructing the completion from `git status --short` + the story spec's `Files to Modify` table, running the verification the agent should have run, and recording the silence in the cycle log via `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence`. The long-term fix is at the BMAD skill-prompt level (each skill should terminate with an explicit `STATUS: completed` instruction) but workflow-level survivability requires the recovery protocol regardless. If silence happens 3+ times consecutively in a run, pause and inform the user — the skill prompts likely need an update before continuing. See Agent Silence Recovery § Required.

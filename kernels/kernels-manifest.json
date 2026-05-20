@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "manifest_generated": "2026-05-18T19:31:20Z",
+  "kernel_count": 17,
+  "kernels": [
+    {
+      "file": "naif0012.tls",
+      "target_path": "kernels/naif0012.tls",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls",
+      "expected_sha256": "678e32bdb5a744117a467cd9601cd6b373f0e9bc9bbde1371d5eee39600a039b",
+      "size_bytes": 5257,
+      "kind": "lsk",
+      "attribution": "NAIF (JPL/NASA)"
+    },
+    {
+      "file": "pck00011.tpc",
+      "target_path": "kernels/pck00011.tpc",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc",
+      "expected_sha256": "3dff7b1dbeceaa01f25467767d3fa25816051c85d162d1edf04acb310ee28bb1",
+      "size_bytes": 131226,
+      "kind": "pck",
+      "attribution": "NAIF (JPL/NASA)"
+    },
+    {
+      "file": "de440.bsp",
+      "target_path": "kernels/de440.bsp",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440.bsp",
+      "expected_sha256": "a4ce9bf9b3282becc9f4b2ac3cebe03a2ae7599981aabd7265fd8482fff7c4b5",
+      "size_bytes": 119799808,
+      "kind": "spk",
+      "attribution": "NAIF (JPL/NASA) — JPL DE440 planetary ephemeris"
+    },
+    {
+      "file": "Voyager_1.a54206u_V0.2_merged.bsp",
+      "target_path": "kernels/Voyager_1.a54206u_V0.2_merged.bsp",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/spk/Voyager_1.a54206u_V0.2_merged.bsp",
+      "expected_sha256": "47c6f2be03668b50a1efb5f96978a2b68b2b501dae6f585841b1569baa3f4311",
+      "size_bytes": 6374400,
+      "kind": "spk",
+      "attribution": "NAIF (JPL/NASA) — Voyager 1 merged trajectory SPK"
+    },
+    {
+      "file": "Voyager_2.m05016u.merged.bsp",
+      "target_path": "kernels/Voyager_2.m05016u.merged.bsp",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/spk/Voyager_2.m05016u.merged.bsp",
+      "expected_sha256": "ce66cba12cf77bf3a1097f44142ef978f46656788ed08f9052238a102ed2e706",
+      "size_bytes": 6447104,
+      "kind": "spk",
+      "attribution": "NAIF (JPL/NASA) — Voyager 2 merged trajectory SPK"
+    },
+    {
+      "file": "vg100051.tsc",
+      "target_path": "kernels/vg100051.tsc",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/sclk/vg100051.tsc",
+      "expected_sha256": "036f5eeee519b6abae055b486e1d9e3c9531588d55ebd6da1956127baa03d1b7",
+      "size_bytes": 90650,
+      "kind": "sclk",
+      "attribution": "NAIF (JPL/NASA) — Voyager 1 spacecraft clock kernel"
+    },
+    {
+      "file": "vg200051.tsc",
+      "target_path": "kernels/vg200051.tsc",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/sclk/vg200051.tsc",
+      "expected_sha256": "bf8ae3b237a4f75362ae4bf5fe133ec4a888877f6183f1705330b9433f81dcac",
+      "size_bytes": 108191,
+      "kind": "sclk",
+      "attribution": "NAIF (JPL/NASA) — Voyager 2 spacecraft clock kernel"
+    },
+    {
+      "file": "vg1_v02.tf",
+      "target_path": "kernels/vg1_v02.tf",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/fk/vg1_v02.tf",
+      "expected_sha256": "fbca0c6f48ed373fe3106c972afb013969cade915a53f5fe22d403414fcd5e97",
+      "size_bytes": 11752,
+      "kind": "fk",
+      "attribution": "NAIF (JPL/NASA) — Voyager 1 frame kernel"
+    },
+    {
+      "file": "vg2_v02.tf",
+      "target_path": "kernels/vg2_v02.tf",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/fk/vg2_v02.tf",
+      "expected_sha256": "aa529b2dbf43b7f925b3e81e86a3d7e74a4d99c392113197e5f6d5bf13c37fcb",
+      "size_bytes": 12008,
+      "kind": "fk",
+      "attribution": "NAIF (JPL/NASA) — Voyager 2 frame kernel"
+    },
+    {
+      "file": "vgr1_super_v2.bc",
+      "target_path": "kernels/vgr1_super_v2.bc",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/ck/vgr1_super_v2.bc",
+      "expected_sha256": "7eca0d844535e9ae71366a0a2dbf791f49819ee554fe88d97f0c77f9f9b47e18",
+      "size_bytes": 18109440,
+      "kind": "ck",
+      "attribution": "NAIF (JPL/NASA) — Voyager 1 super CK v2"
+    },
+    {
+      "file": "vgr2_super_v2.bc",
+      "target_path": "kernels/vgr2_super_v2.bc",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/VOYAGER/kernels/ck/vgr2_super_v2.bc",
+      "expected_sha256": "24b57108dd9a449cce031e615224b1d55494068940907c52828ef954491d4eaa",
+      "size_bytes": 32618496,
+      "kind": "ck",
+      "attribution": "NAIF (JPL/NASA) — Voyager 2 super CK v2"
+    },
+    {
+      "file": "vg1_jup_version1_type1_iss_sedr.bc",
+      "target_path": "kernels/vg1_jup_version1_type1_iss_sedr.bc",
+      "source_url": "https://pds-rings.seti.org/voyager/ck/vg1_jup_version1_type1_iss_sedr.bc",
+      "expected_sha256": "22948ebc0ab9ab7ded946c9d58d0f79e3424adc5025170563ec4d57978425939",
+      "size_bytes": 715776,
+      "kind": "ck",
+      "attribution": "PDS Rings Node (SETI Institute) — Voyager 1 Jupiter ISS SEDR scan-platform CK (Mark R. Showalter)"
+    },
+    {
+      "file": "vg2_jup_version1_type1_iss_sedr.bc",
+      "target_path": "kernels/vg2_jup_version1_type1_iss_sedr.bc",
+      "source_url": "https://pds-rings.seti.org/voyager/ck/vg2_jup_version1_type1_iss_sedr.bc",
+      "expected_sha256": "d9444c6456c8d8f101096bdad9a08248fc0b37a759f33fd987762e96e88bd0a3",
+      "size_bytes": 593920,
+      "kind": "ck",
+      "attribution": "PDS Rings Node (SETI Institute) — Voyager 2 Jupiter ISS SEDR scan-platform CK (Mark R. Showalter)"
+    },
+    {
+      "file": "vg1_sat_version1_type1_iss_sedr.bc",
+      "target_path": "kernels/vg1_sat_version1_type1_iss_sedr.bc",
+      "source_url": "https://pds-rings.seti.org/voyager/ck/vg1_sat_version1_type1_iss_sedr.bc",
+      "expected_sha256": "468e65d75811d91fe13cd70b5596a73a0e91ff99f95a132dae98a32f3491b3d6",
+      "size_bytes": 688128,
+      "kind": "ck",
+      "attribution": "PDS Rings Node (SETI Institute) — Voyager 1 Saturn ISS SEDR scan-platform CK (Mark R. Showalter)"
+    },
+    {
+      "file": "vg2_sat_version1_type1_iss_sedr.bc",
+      "target_path": "kernels/vg2_sat_version1_type1_iss_sedr.bc",
+      "source_url": "https://pds-rings.seti.org/voyager/ck/vg2_sat_version1_type1_iss_sedr.bc",
+      "expected_sha256": "13e6d0e5b6856708b7f87af2c65a61c4e3a4cdbcd6b47ef9a286c022505abc39",
+      "size_bytes": 1551360,
+      "kind": "ck",
+      "attribution": "PDS Rings Node (SETI Institute) — Voyager 2 Saturn ISS SEDR scan-platform CK (Mark R. Showalter)"
+    },
+    {
+      "file": "vg2_ura_version1_type1_iss_sedr.bc",
+      "target_path": "kernels/vg2_ura_version1_type1_iss_sedr.bc",
+      "source_url": "https://pds-rings.seti.org/voyager/ck/vg2_ura_version1_type1_iss_sedr.bc",
+      "expected_sha256": "433f81e8c29623fa1143fb7832d4044a98a1c16c5cc641a901c8a371ee626f96",
+      "size_bytes": 272384,
+      "kind": "ck",
+      "attribution": "PDS Rings Node (SETI Institute) — Voyager 2 Uranus ISS SEDR scan-platform CK (Mark R. Showalter)"
+    },
+    {
+      "file": "vg2_nep_version1_type1_iss_sedr.bc",
+      "target_path": "kernels/vg2_nep_version1_type1_iss_sedr.bc",
+      "source_url": "https://pds-rings.seti.org/voyager/ck/vg2_nep_version1_type1_iss_sedr.bc",
+      "expected_sha256": "f181a43f5785867afc81436a202a6ec453c8dd5538172ae916ca979981051f11",
+      "size_bytes": 885760,
+      "kind": "ck",
+      "attribution": "PDS Rings Node (SETI Institute) — Voyager 2 Neptune ISS SEDR scan-platform CK (Mark R. Showalter)"
+    }
+  ]
+}

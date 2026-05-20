@@ -1,3 +1,40 @@
 # BMad personal config (installer-managed, scoped to user)
 _bmad/config.user.toml
 _bmad/custom/config.user.toml
+
+# Web (TypeScript / Vite) build artifacts
+web/node_modules/
+web/dist/
+
+# Bake (Python / uv) build artifacts
+bake/.venv/
+bake/__pycache__/
+bake/tests/**/__pycache__/
+bake/src/**/__pycache__/
+
+# bake/out/ artifacts: list contents individually so we can carve out
+# `l2-reference-fixtures.json` (committed for the web-side AC4 hook test
+# in Story 1.6). Per git docs, `!` cannot re-include a path whose parent
+# directory is ignored — so we ignore the binary subset by pattern instead
+# of the whole directory.
+bake/out/*.bin.br
+bake/out/*.bin.br.part
+bake/out/manifest.json
+bake/out/manifest.json.part
+bake/out/validation-report.md
+
+# Web public/data — manifest.json is the runtime contract (committed). The
+# brotli VTRJ binaries are regenerable via `just bake && just copy-bake-to-web`
+# and stay ignored.
+web/public/data/*.bin.br
+web/public/data/*.bin.br.part
+
+# OS noise
+**/.DS_Store
+
+# Story 1.13 scratch — temporary KTX-Software installer + libktx-web zip +
+# Solar System Scope JPG source masters used during texture acquisition,
+# plus a uv-managed Python 3.12 venv used briefly to probe pyktx. The
+# committed PNG textures live under web/public/textures/.
+.toolchain/
+.ktx-venv/

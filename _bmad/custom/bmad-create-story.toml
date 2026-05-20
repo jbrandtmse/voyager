@@ -1,0 +1,11 @@
+# Voyager project override for bmad-create-story.
+# Loads voyager-skill-rules.md so the skill enforces:
+#   - Rule 1: Integration ACs for every service-introducing story
+#   - Rule 2: Consumed-by / Consumes linkage between producer and consumer stories
+# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+]

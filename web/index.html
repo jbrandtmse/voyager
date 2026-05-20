@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Voyager</title>
+    <!-- Story 1.7 AC2 — critical first-paint tokens, FOUC shim. The full
+         token sheet at src/styles/tokens.css loads via Vite's CSS chain;
+         this block exists only so bg/fg/font don't flash light during the
+         initial paint. ≤1 KB minified. -->
+    <style>
+      :root {
+        --v-color-bg: #0a0e14;
+        --v-color-fg: #e8eaed;
+        --v-font-sans: system-ui, sans-serif;
+        --v-font-size-body: 16px;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--v-color-bg);
+        color: var(--v-color-fg);
+        font-family: var(--v-font-sans);
+        font-size: var(--v-font-size-body);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root {
+          --v-duration-fast: 0ms;
+          --v-duration-base: 0ms;
+          --v-duration-slow: 0ms;
+        }
+      }
+    </style>
+    <!-- Self-hosted font preloads — Story 1.7 AC3. crossorigin is required
+         even for same-origin fonts (woff2 fetches are always anonymous-CORS). -->
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/inter-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/source-serif-4-variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <!-- Story 1.8 AC1 — boot-time capability probe. The Vite plugin in
+         vite.config.ts substitutes this comment with a minified inline
+         <script> that probes WebGL2 → WebAssembly → brotli; on any failure
+         redirects to /unsupported.html?reason=<X>; on success dynamic-
+         imports the main bundle. Inline body ≤ 1 KB minified. Placed
+         FIRST in <head> so it runs before any external script tag. The
+         dynamic import (NOT a static <script type="module" src> tag) is
+         what gates the bundle load behind the probe. -->
+    <!-- FEATURE_PROBE -->
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

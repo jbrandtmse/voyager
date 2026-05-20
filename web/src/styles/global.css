@@ -1,0 +1,60 @@
+/* Voyager global styles — reset, document defaults, focus, and motion. */
+/* Tokens consumed from web/src/styles/tokens.css (loaded first via main.ts). */
+
+/* Minimal CSS reset — box-sizing + margin/padding hygiene. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--v-color-bg);
+  color: var(--v-color-fg);
+  font-family: var(--v-font-sans);
+  font-size: var(--v-font-size-body);
+  line-height: 1.55;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keyboard-only focus ring. Mouse clicks DO NOT trigger this — that's the */
+/* :focus-visible contract. UX spec §1100 / FR49 (WCAG 2.2 AA SC 2.4.7). */
+*:focus-visible {
+  outline: 2px solid var(--v-color-focus);
+  outline-offset: 2px;
+}
+
+/* Suppress the legacy :focus ring on mouse interactions; :focus-visible */
+/* is the canonical replacement. Keep tabindex-able focus visible to AT. */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* prefers-reduced-motion — collapses every motion token to 0 at :root. */
+/* Components consume the variables; no per-component opt-in needed. */
+/* UX spec §672, FR46, NFR-A5. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --v-duration-fast: 0ms;
+    --v-duration-base: 0ms;
+    --v-duration-slow: 0ms;
+  }
+}
+
+/* prefers-reduced-transparency — flip the modal scrim from translucent */
+/* to fully opaque so layered content remains legible. UX spec §1115. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --v-color-overlay-scrim: #0a0e14;
+  }
+}

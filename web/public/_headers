@@ -1,0 +1,50 @@
+# Cloudflare Pages headers config (Story 1.14, ADR 0016).
+#
+# Cloudflare Pages reads `_headers` from the deploy root and applies the
+# rules in path order. Documented at
+# https://developers.cloudflare.com/pages/configuration/headers/.
+#
+# Rule semantics (Netlify-compatible):
+#   - Path patterns match the request URL path (`*` is a wildcard).
+#   - Indented lines under a path are `Header-Name: value` pairs.
+#   - Later, more-specific rules override earlier broad ones.
+
+# Vite emits content-hashed filenames under /assets/ (e.g.
+# /assets/index.<hash>.js). The content hash means the URL changes on
+# every content change, so a one-year `immutable` cache is safe (NFR-R2).
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Brotli-compressed trajectory chunks served from /data/ — same
+# content-addressed immutability story as /assets/. Cloudflare serves
+# the .br files raw with `Content-Encoding: br`; the runtime uses
+# `DecompressionStream('br')` directly per ADR 0022.
+/data/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Self-hosted woff2 fonts (≤120 KB total). Content-addressed by version
+# in the build; long-cache safely.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 3D models, textures, icons — committed assets served as-is. Long-cache
+# safe because filenames change on update (LFS-tracked, content-hashed
+# in their own pipelines).
+/models/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML entry points must re-validate so a new deploy is picked up
+# immediately. A 1-hour max-age plus implicit revalidation balances
+# CDN load against freshness on the few requests per visitor that
+# load HTML (typically one).
+/*.html
+  Cache-Control: public, max-age=3600
+
+# Root path serves index.html — same caching policy as the HTML files
+# above. Cloudflare Pages does not always match `/*.html` for the bare
+# `/` request, so include an explicit rule.
+/
+  Cache-Control: public, max-age=3600

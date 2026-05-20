@@ -1,0 +1,39 @@
+/* Voyager responsive breakpoints — exactly three structural tiers. */
+/* */
+/* Per UX spec §Responsive Breakpoint Strategy: every other adaptive size */
+/* uses clamp() (already baked into tokens.css). These three @media */
+/* queries are the only structural breakpoints allowed in the codebase. */
+/* */
+/* Pixel values mirror tokens.css's --v-bp-mobile / --v-bp-tablet / */
+/* --v-bp-wide. NFR-C3 maps tiers as: */
+/*   Tier 3 (phone)   <= 767px */
+/*   Tier 2 (tablet)  <= 1023px */
+/*   Tier 1 (laptop)  768-1919px (no @media — clamp() handles it) */
+/*   Tier 0 (wide)    >= 1920px */
+/* */
+/* The actual @media usage lives in component CSS; this file is the */
+/* canonical declaration so the breakpoint-count test (and human readers) */
+/* have one anchor. Each rule below is a no-op marker comment + an empty */
+/* rule that exists solely so the breakpoint definitions appear in the */
+/* styles directory and are grep-able. */
+
+/* Mobile (Tier 3 phone) */
+@media (max-width: 767px) {
+  :root {
+    --v-breakpoint-tier: 'mobile';
+  }
+}
+
+/* Tablet (Tier 2) */
+@media (max-width: 1023px) {
+  :root {
+    --v-breakpoint-tier: 'tablet';
+  }
+}
+
+/* Wide desktop (Tier 0) */
+@media (min-width: 1920px) {
+  :root {
+    --v-breakpoint-tier: 'wide';
+  }
+}

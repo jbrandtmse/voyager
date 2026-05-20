@@ -1,0 +1,94 @@
+/* Voyager design tokens — single source of truth. */
+/* Source: _bmad-output/planning-artifacts/ux-design-specification.md §Design Tokens */
+/* (lines 614–676, 903–915, 1100–1118). No tokens may be defined outside this file. */
+/* Component CSS consumes tokens via var(--v-*); never redefine. */
+
+:root {
+  /* ---------- Colors — deep-space palette ---------- */
+  /* Background / foreground (WCAG 2.2 AA contrast verified, UX spec §930-936). */
+  --v-color-bg: #0a0e14;
+  --v-color-fg: #e8eaed;
+  --v-color-fg-muted: #9aa0a6;
+  --v-color-fg-quiet: #5f6368;
+
+  /* Accent — burnished gold, used for HUD highlights + synthesized-attitude badge. */
+  --v-color-accent: #d4a017;
+  --v-color-accent-quiet: #8a6a0e;
+
+  /* Trajectory — past flown, future projected. */
+  --v-color-trajectory-past: #e8eaed;
+  --v-color-trajectory-future: #5f6368;
+
+  /* Attitude-source semantics. ck = reconstructed (real kernel); synth = synthesized. */
+  --v-color-ck: #4a7c4e;
+  --v-color-synth: #d4a017;
+
+  /* Focus ring — keyboard navigation only (via :focus-visible). */
+  --v-color-focus: #6b8cae;
+
+  /* Overlay scrim — modal/blur backdrop. Flips to opaque under prefers-reduced-transparency. */
+  --v-color-overlay-scrim: rgba(10, 14, 20, 0.85);
+
+  /* Divider — thin rule between HUD groups. */
+  --v-color-divider: #1f2530;
+
+  /* ---------- Typography — families ---------- */
+  /* Self-hosted primaries (Story 1.7); fallback chain absorbs FOUT gracefully. */
+  --v-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --v-font-sans: 'Inter', system-ui, sans-serif;
+  --v-font-serif: 'Source Serif 4', Georgia, serif;
+
+  /* ---------- Typography — size scale ---------- */
+  /* clamp(min, vw-based, max) — fluid scaling without media-query churn. */
+  /* Body floor is 16 px; widens to 18 px on wide viewports. UX spec §614. */
+  --v-font-size-body: clamp(16px, 0.95rem + 0.25vw, 18px);
+  /* HUD mono caption-sized. */
+  --v-font-size-hud: 14px;
+  /* HUD numeric readouts — fluid mono sizes used by <v-hud-*>. */
+  --v-size-hud-mono: clamp(13px, 1vw, 16px);
+  --v-size-hud-mono-sm: clamp(11px, 0.85vw, 13px);
+  /* Chapter title — sans, large. UX spec §993. */
+  --v-font-size-chapter-title: clamp(28px, 1.4rem + 1.2vw, 40px);
+  /* Chapter copy — serif, body-grade. UX spec §992 (line-height 1.55 on serif). */
+  --v-font-size-chapter-copy: clamp(17px, 1rem + 0.2vw, 20px);
+  /* Captions / labels — sans, small. */
+  --v-font-size-caption: 12px;
+  /* Title card — sans, hero-scale (Story 1.9 first-paint sequence). */
+  /* UX spec §986 — sized to dominate the held card without overflowing */
+  /* small-viewport widths. */
+  --v-size-title-card: clamp(36px, 4vw, 56px);
+
+  /* ---------- Spacing — discrete 4-px scale ---------- */
+  --v-space-1: 4px;
+  --v-space-2: 8px;
+  --v-space-3: 12px;
+  --v-space-4: 16px;
+  --v-space-6: 24px;
+  --v-space-8: 32px;
+  --v-space-12: 48px;
+  --v-space-16: 64px;
+  /* Edge margin — viewport-aware gutter for chapter copy + HUD. */
+  --v-edge-margin: clamp(16px, 3vw, 64px);
+
+  /* ---------- Motion — durations + easings ---------- */
+  /* prefers-reduced-motion collapses all three durations to 0 via global.css. */
+  --v-duration-fast: 120ms;
+  --v-duration-base: 200ms;
+  --v-duration-slow: 400ms;
+  --v-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --v-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- Z-index — six discrete stacking layers ---------- */
+  --v-z-canvas: 0;
+  --v-z-hud: 10;
+  --v-z-scrubber: 20;
+  --v-z-overlay: 30;
+  --v-z-modal: 40;
+  --v-z-tooltip: 50;
+
+  /* ---------- Breakpoint values — also defined in breakpoints.ts ---------- */
+  /* These are tokens consumers can read; actual @media queries live in component CSS. */
+  --v-bp-mobile: 767px;
+  --v-bp-tablet: 1023px;
+  --v-bp-wide: 1920px;
+}

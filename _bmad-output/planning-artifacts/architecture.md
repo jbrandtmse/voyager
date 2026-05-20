@@ -39,12 +39,12 @@ The PRD defines 58 functional requirements organized by capability cluster:
 
 **Non-Functional Requirements (46 total, across 7 quality attributes):**
 
-- **Performance (10 NFRs):** 60 FPS at 1280×720+ on mid-range laptop (NFR-P1); P95 ≤16.7 ms, P99 ≤22 ms (NFR-P2); ≤3s TTI on broadband (NFR-P3); first-paint ≤35 MB / full bundle ≤150 MB compressed (NFR-P4/P5); 1e6× scrubs full mission in ≤60s (NFR-P6); ≤1 ms/frame trajectory interpolation for 12 bodies (NFR-P7); zero z-fighting / zero jitter at any zoom (NFR-P8); ≤20 km / ≤5 km RMS trajectory accuracy (NFR-P9); ≤1 mrad attitude accuracy in CK windows (NFR-P10).
+- **Performance (10 NFRs):** 60 FPS at 1280×720+ on mid-range laptop (NFR-P1); P95 ≤16.7 ms, P99 ≤22 ms (NFR-P2); ≤3s TTI on broadband (NFR-P3); first-paint ≤35 MB / full bundle ≤150 MB compressed (NFR-P4/P5); ClockManager mutations don't block frame budget (verified via RenderEngine frame-time histogram, not direct sub-ms ClockManager timing); 1e6× scrub honors per-frame pacing without main-thread starvation (NFR-P6, amended 2026-05-19 per Story 1.15); ≤1 ms/frame trajectory interpolation for 12 bodies (NFR-P7); zero z-fighting / zero jitter at any zoom (NFR-P8); ≤20 km / ≤5 km RMS trajectory accuracy (NFR-P9); ≤1 mrad attitude accuracy in CK windows (NFR-P10).
 - **Reliability (5 NFRs):** ≥99.9% CDN availability (NFR-R1); content-hashed immutable asset durability (NFR-R2); ≤5 min rollback (NFR-R3); byte-identical bake determinism (NFR-R4); ≤5% frame-rate drift over 30-min sessions (NFR-R5).
 - **Security (9 NFRs):** TLS 1.2+ (NFR-S1); strict CSP (NFR-S2); SRI for any external JS (NFR-S3); kernel + asset hash-pinning (NFR-S4/S5); CI dep advisory checks (NFR-S6); strict-typed URL parameter parsing (NFR-S7); zero PII / no tracking (NFR-S8); no cross-origin runtime fetches (NFR-S9).
 - **Accessibility (8 NFRs):** WCAG 2.2 AA conformance (NFR-A1); 4.5:1 body / 3:1 large contrast (NFR-A2); full keyboard reachability (NFR-A3); visible focus indication (NFR-A4); `prefers-reduced-motion` honored (NFR-A5); no photosensitive-epilepsy hazards (NFR-A6); semantic markup (NFR-A7); screen-reader floor for non-canvas surfaces (NFR-A8).
 - **Compatibility (7 NFRs):** Tier 1 desktop Chrome/Firefox/Safari, Tier 2 tablet, Tier 3 phone (NFR-C1–C3); boot-time feature detection (NFR-C4); reverse-Z → logarithmic depth fallback (NFR-C5); 8k → 4k texture fallback (NFR-C6); unsupported-browser fallback page rather than degraded render (NFR-C7).
-- **Maintainability (6 NFRs):** ADR per rejected technical idea (NFR-M1); 30-min kernel-update operational flow (NFR-M2); mission-fact provenance via `MISSION_FACTS.md` (NFR-M3); fast-tier CI ≤5 min, slow-tier ≤15 min (NFR-M4); build-manifest observability (NFR-M5); no accumulating tech debt (NFR-M6).
+- **Maintainability (6 NFRs):** ADR per rejected technical idea (NFR-M1); 30-min kernel-update operational flow (NFR-M2); mission-fact provenance via `MISSION_FACTS.md` (NFR-M3); fast-tier CI test execution (L1 Python validate + L3 Vitest) ≤5 min, slow-tier (L4 Playwright visual + L5 E2E) ≤15 min, bake-determinism re-bake is a separately-budgeted ≤10-min quality gate (NFR-M4, amended 2026-05-19 per Story 1.15); build-manifest observability (NFR-M5); no accumulating tech debt (NFR-M6).
 - **Scalability (1 NFR):** Solved architecturally by static-CDN delivery (NFR-Sc1).
 
 ### Scale & Complexity
@@ -64,7 +64,7 @@ The PRD and technical research have pre-decided a substantial fraction of normal
 - **Runtime stack:** TypeScript 5.x strict + Three.js (≥r170, reverse-Z) + Vite. Client-only; no backend.
 - **Build stack:** Python 3.13 + SpiceyPy 8.1.0 + scipy + numpy. uv for Python deps; Ruff for lint/format. gltf-transform + toktx + Blender (headless) for asset pipeline.
 - **Hosting:** Static CDN — Cloudflare Pages or Vercel free tier (provider TBD).
-- **Storage formats at runtime:** Custom 40-byte-header VTRJ binary (raw little-endian Float64Array), brotli-compressed. JSON/CSV/MessagePack/Protobuf/Arrow/Parquet at runtime all explicitly rejected.
+- **Storage formats at runtime:** Custom 40-byte-header VTRJ binary (raw little-endian Float64Array), brotli-compressed. Decompression is performed client-side by the `brotli-dec-wasm` polyfill (Story 1.16; originally planned to use `DecompressionStream('br')` but that JS API never standardized brotli — see ADR 0004 § Decompression Strategy). JSON/CSV/MessagePack/Protobuf/Arrow/Parquet at runtime all explicitly rejected.
 - **Numerical methods:** Cubic Hermite over position+velocity for trajectories; SLERP for quaternions (Catmull-Rom rejected).
 - **Depth precision:** Reverse-Z on WebGLRenderer; logarithmic depth as GPU fallback. WebGPURenderer deferred until it supports reverse-Z.
 - **Coordinate patterns:** Single canonical heliocentric J2000 Float64 frame; per-frame `ViewFrame.getTransform(et)`; floating-origin recenter via `WorldGroup.position = -cameraWorldPos / SCALE`; smoothstep blend over ±2 days at encounter boundaries.
@@ -247,7 +247,7 @@ All scripts share a common pattern: read a per-class manifest entry (`{url, expe
 **Pre-decided (PRD/research, recorded for traceability):**
 
 - Python 3.13 + SpiceyPy 8.1.0 + scipy.CubicHermiteSpline + numpy
-- Custom VTRJ binary (40-byte header + raw little-endian Float64Array body), brotli-compressed for transport
+- Custom VTRJ binary (40-byte header + raw little-endian Float64Array body), brotli-compressed for transport; client decompression via `brotli-dec-wasm` polyfill (Story 1.16)
 - Chunking: per-decade trajectory files at daily cadence; per-encounter higher-cadence overlays (1-hour at ±30 days from CA, 1-minute at ±2 days, 10-second at ±1 hour)
 - Hash-pinned NAIF kernel manifest (SHA-256)
 - Byte-identical bake determinism (NFR-R4)
