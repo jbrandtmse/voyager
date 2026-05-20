@@ -128,7 +128,7 @@ development_status:
   2-7-v-about-page-and-v-attribution-panel: done
   2-8-v-help-overlay-modal-with-full-keyboard-shortcut-inventory: done
   2-9-heliopause-text-cards-and-instrument-shutoff-hud-integration: review
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: Attitude Reconstruction — the Differentiator
   epic-3: backlog
