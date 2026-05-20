@@ -530,6 +530,7 @@ For each epic in range:
   For each story (or batch — see Smart Parallelism) including X.0:
     Lead executes /bmad-create-story directly (pipeline gate, including Integration AC validation)
     Lead captures story file path
+    Lead records spawn_at=<UTC> and model=<id> at the moment of each Agent spawn; emits both as metadata on the corresponding *_complete entry (see Workflow Telemetry)
     Lead spawns developer → captures completion (or runs silence recovery) → shuts down → waits for approval
     Lead executes ADR-tooled AC verifications (lead-side, sequential per AC); logs adr_verifications_complete
     Lead spawns qa-test-author → captures completion → shuts down → waits for approval
@@ -616,7 +617,7 @@ The smoke is NOT a substitute for automated test tiers; it's the final check tha
 1. After `cr_complete` (with HIGH/MED resolved), determine the smoke method from the story's File List + ACs.
 2. Execute the smoke directly, capturing evidence (screenshots, stdout, response body).
 3. If the smoke fails, do NOT commit. Either (a) surface to the user for guidance, or (b) create a follow-up dev pass to fix and re-smoke. Failed smoke is a HIGH-severity finding that must clear before commit — never deferrable.
-4. On success, append a cycle-log entry: `<UTC> TAB Story <id> TAB smoke_complete TAB method=<browser|cli|api|other> result=pass evidence=<path-or-summary>`.
+4. On success, append a cycle-log entry: `<UTC> TAB Story <id> TAB smoke_complete TAB method=<browser|cli|api|other> result=pass iterations=<N> defects_caught=<N> evidence=<path-or-summary> model=<lead-model>`. The `iterations` value is 1 for a smoke that passed on the first run; bump for each follow-up dev pass triggered by smoke failure. The `defects_caught` value is the count of bugs the smoke surfaced that the prior automated tiers passed — this is the load-bearing telemetry for the "test pyramid is necessary but not sufficient" lesson.
 5. Proceed to commit.
 
 Single-threaded across a parallel batch — smoke each story in story order.
@@ -860,23 +861,77 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 
 - Fields separated by a single literal TAB character (`\t`), not runs of spaces.
 - The **metadata** field is whitespace-separated `key=value` pairs. Values are comma-separated lists when multi-valued; values must NOT contain spaces or tabs (percent-encode if needed). Keys are lowercase snake_case.
-- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete`; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed`), `committed`.
+- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete`; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed`), `committed`, `epic_summary` (optional, once per epic after the last committed entry — see Workflow Telemetry).
+
+**Standardized telemetry metadata (record on every `*_complete` entry):**
+
+- `spawn_at=<UTC>` — when the lead invoked `Agent` for this stage (omit on lead-driven stages like `smoke_complete` where there's no spawn). Duration = entry timestamp minus `spawn_at`.
+- `model=<id>` — which model the agent ran. Examples: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`. For lead-driven stages, record the lead's model.
+- `cycle_iteration=N` — defaults to 1; increment when the lead re-spawns this stage after a downstream stage rejected the work (e.g., smoke failed and a follow-up dev pass was needed).
+
+**Stage-specific telemetry metadata (record when the data is available):**
+
+- `dev_complete`: `loc_added=N loc_removed=N files=N clarifications=N nfr_tripwires=N adr_violations_surfaced=N` — story complexity (LOC) + mid-flight signal counts.
+- `qa_complete`: `tests_added=N first_run_failures=N clarifications=N` — `first_run_failures` is bugs the new tests caught against existing code (defects the dev shipped that the new tests immediately surfaced).
+- `cr_complete`: `resolved=N deferred=N dismissed=N high=N med=N low=N clarifications=N` — `high/med/low` is the severity distribution of all findings (resolved + deferred + dismissed).
+- `smoke_complete`: `method=<browser|cli|api|other> result=pass|fail iterations=N defects_caught=N evidence=<path>` — `defects_caught` is the count of bugs only the runtime exercise surfaced (lesson-8 catches).
+- `committed`: `sha=<short-hash> submodules=<paths-or-empty>` — already standard.
+
+**Cost telemetry (record when available — often only the lead can see it):**
+
+- `input_tokens=N output_tokens=N cost_usd=X.XX` on any `*_complete` entry where the lead can extract the figures from the spawning channel. Many environments don't expose this; if not available, omit and the rollup falls back to wall-clock as the cost proxy.
 
 **Example** (TABs shown as `→` for visibility; actual file contains literal tabs):
 
 ```
-2026-05-18T14:23:11Z→Story 1.5→story_created→path=_bmad-output/implementation-artifacts/story-1.5.md
-2026-05-18T14:24:02Z→Story 1.5→dev_complete→files=src/render/render-engine.ts,src/types/branded.ts
-2026-05-18T14:25:00Z→Story 1.5→adr_verifications_complete→tool=chrome_devtools_mcp ac=ac5 result=pass
-2026-05-18T14:29:47Z→Story 1.5→qa_complete→tests=tests/render/render-engine.test.ts
-2026-05-18T14:33:18Z→Story 1.5→cr_complete→resolved=2 deferred=0
-2026-05-18T14:34:00Z→Story 1.5→smoke_complete→method=browser result=pass evidence=path/to/screens/
+2026-05-18T14:23:11Z→Story 1.5→story_created→path=_bmad-output/implementation-artifacts/story-1.5.md spec_tokens=4820
+2026-05-18T14:24:02Z→Story 1.5→dev_complete→spawn_at=2026-05-18T14:23:30Z model=claude-opus-4-7 files=src/render/render-engine.ts,src/types/branded.ts loc_added=412 loc_removed=18 clarifications=1 nfr_tripwires=0 cycle_iteration=1
+2026-05-18T14:25:00Z→Story 1.5→adr_verifications_complete→tool=chrome_devtools_mcp ac=ac5 result=pass model=claude-opus-4-7
+2026-05-18T14:29:47Z→Story 1.5→qa_complete→spawn_at=2026-05-18T14:25:30Z model=claude-sonnet-4-6 tests=tests/render/render-engine.test.ts tests_added=14 first_run_failures=2 clarifications=0
+2026-05-18T14:33:18Z→Story 1.5→cr_complete→spawn_at=2026-05-18T14:30:15Z model=claude-opus-4-7 resolved=2 deferred=0 dismissed=0 high=1 med=1 low=0 clarifications=0
+2026-05-18T14:34:00Z→Story 1.5→smoke_complete→method=browser result=pass iterations=1 defects_caught=0 evidence=path/to/screens/ model=claude-opus-4-7
 2026-05-18T14:34:30Z→Story 1.5→committed→sha=abc1234 submodules=
 ```
+
+Reading the example: dev ran on Opus (32s spawn-to-complete, 412 LOC, 1 clarification, 0 NFR tripwires); QA ran on Sonnet (~4m, 14 tests added, 2 dev-side defects caught at first run); cr ran on Opus (~3m, 2 findings resolved — 1 HIGH 1 MED); smoke clean. Across an epic this gives you per-stage duration by model, bug-catch rates by stage, and aggregate cost-vs-quality signal.
 
 **Parsing rule:** split each line on TAB into exactly 4 fields; split the metadata field on whitespace into key=value tokens; split each value on `,` for lists. Unambiguous regardless of how many key=value pairs or list items.
 
 On restart, scan the cycle log for the highest-stage entry per story to compute the resume point.
+
+## Workflow Telemetry
+
+The cycle log is the project's primary telemetry surface. The standardized metadata (Cycle Log Format § "Standardized telemetry metadata") plus the stage-specific keys make per-stage cost, quality, and model attribution computable without instrumenting anything beyond the existing lead-side writes.
+
+**What the metadata enables:**
+
+- **Per-stage duration by model.** `entry.timestamp − entry.spawn_at` grouped by `entry.model` tells you how long Opus dev-stages take vs Sonnet dev-stages, etc.
+- **Bug rate by upstream model.** `cr_complete.high + cr_complete.med` per story, grouped by `dev_complete.model`, tells you how many real defects the dev stage shipped — higher counts = lower-quality dev work — per model.
+- **Rework rate by model.** Count of `cycle_iteration > 1` entries grouped by model. Strong models should re-cycle less.
+- **Test-pyramid leak rate.** `smoke_complete.defects_caught > 0` events — these are bugs that passed unit + integration + cr but failed in the runtime. Aggregated per model, this is the "stronger model catches more class-of-bug at review time" signal.
+- **NFR-tripwire surfacing rate.** `dev_complete.nfr_tripwires` grouped by model — stronger models should catch more spec-level contradictions before silently working around them.
+
+**`epic_summary` entry (one per epic, optional).**
+
+After the last `committed` entry in an epic, the lead may write an aggregate summary:
+
+```
+<UTC> TAB Epic <N> TAB epic_summary TAB stories=N wall_clock_hours=X.X total_high=N total_med=N total_low=N total_smoke_defects=N rework_events=N opus_stage_count=N sonnet_stage_count=N haiku_stage_count=N input_tokens_total=N output_tokens_total=N cost_usd=X.XX
+```
+
+The summary is derivable from the per-stage entries above, so it's a convenience artifact, not a source of truth. A rollup script (which the project should add at `scripts/cycle-log-stats.<lang>` or equivalent — outside this workflow's scope) can compute `epic_summary` retroactively from any subset of cycle logs.
+
+**Cross-project comparability.**
+
+The cycle log format is stable and project-agnostic. Across multiple projects using `/epic-cycle`, the same parser produces apples-to-apples comparisons: dev wall-clock by model, bug rate by model, cost per committed story by model. This is the data shape that lets a team justify (or refute) the use of stronger models.
+
+**What's deliberately NOT instrumented at the workflow level:**
+
+- Individual agent prompt token counts (those are skill-level / harness-level concerns).
+- Internal skill performance (the skill's own time-to-first-step, etc.).
+- Test-coverage deltas per story (computable from git diffs by a separate tool).
+
+These can be added later via dedicated tooling without disturbing the cycle-log schema.
 
 ## Anti-Patterns (Do NOT Use)
 
@@ -948,7 +1003,14 @@ After writing all files, run these checks:
    ```
    Expected: all four `.toml` files match. If any do not, the silence-pattern fix isn't in place; re-check Part 1. (Note: `on_complete` is the correct field — NOT `activation_steps_append`, which runs at setup time, and NOT `persistent_facts` alone, which is informational only.)
 
-4. **The slash command contains every section:** open `.claude/commands/epic-cycle.md` and confirm presence of: Pre-flight Runtime Check, Task Sequence, Spawn-on-Demand Coordination (with subsections Team Lifecycle, Task-in-Prompt Pattern, Pipeline Flow, Smart Parallelism, Per-Story Smoke, Retrospective Review & Story X.0 Creation, Sprint Planning Per Epic, Retrospective Per Epic, Lead Creates Story Files, Context Handoff Between Stages, ADR-Aware Execution, Shutdown-Before-Respawn Sequencing, Agent Silence Recovery, Agent Prompt Requirements), When to Pause, Handling Clarifications, Submodule Commit Order, Completion Logging, Anti-Patterns, Lessons Learned.
+4. **The slash command contains every section:** open `.claude/commands/epic-cycle.md` and confirm presence of: Pre-flight Runtime Check, Task Sequence, Spawn-on-Demand Coordination (with subsections Team Lifecycle, Task-in-Prompt Pattern, Pipeline Flow, Smart Parallelism, Per-Story Smoke, Retrospective Review & Story X.0 Creation, Sprint Planning Per Epic, Retrospective Per Epic, Lead Creates Story Files, Context Handoff Between Stages, ADR-Aware Execution, Shutdown-Before-Respawn Sequencing, Agent Silence Recovery, Agent Prompt Requirements), When to Pause, Handling Clarifications, Submodule Commit Order, Completion Logging, **Workflow Telemetry**, Anti-Patterns, Lessons Learned.
+
+5. **Telemetry metadata is documented:**
+   ```
+   grep -c "spawn_at" .claude/commands/epic-cycle.md
+   grep -c "model=" .claude/commands/epic-cycle.md
+   ```
+   Both must return ≥ 3 matches — confirms the cycle-log format documents the standardized telemetry keys.
 
 ## Part 4: After construction
 
