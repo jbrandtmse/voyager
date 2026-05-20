@@ -5,6 +5,9 @@ _bmad/custom/config.user.toml
 # Web (TypeScript / Vite) build artifacts
 web/node_modules/
 web/dist/
+# Vite dep-optimization cache (regenerated on every `npm run dev`).
+# The default web/.gitignore from create-vite predates this location move.
+web/.vite/
 
 # Bake (Python / uv) build artifacts
 bake/.venv/
