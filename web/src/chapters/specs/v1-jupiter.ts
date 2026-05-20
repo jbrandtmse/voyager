@@ -18,6 +18,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 30 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 30 * SECONDS_PER_DAY,
   spacecraft: 'v1',
+  ogDescription:
+    'Voyager 1 sweeps past Jupiter on 5 March 1979, riding the giant planet for a gravitational kick toward Saturn.',
 };
 
 export default spec;

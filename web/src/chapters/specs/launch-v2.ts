@@ -22,6 +22,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 7 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 7 * SECONDS_PER_DAY,
   spacecraft: 'v2',
+  ogDescription:
+    'Voyager 2 launches from Cape Canaveral on 20 August 1977, the first of the twin probes to leave Earth.',
 };
 
 export default spec;

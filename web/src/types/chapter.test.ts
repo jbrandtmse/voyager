@@ -16,6 +16,7 @@ describe('chapter types (Story 2.1 AC6)', () => {
       windowStartEt: -657621600 - 86_400 * 30,
       windowEndEt: -657621600 + 86_400 * 30,
       spacecraft: 'v1',
+      ogDescription: 'Voyager 1 sweeps past Jupiter.',
     };
 
     expect(spec.slug).toBe('v1-jupiter');
@@ -48,6 +49,7 @@ describe('chapter types (Story 2.1 AC6)', () => {
       windowStartEt: -1,
       windowEndEt: 1,
       spacecraft: 'v1',
+      ogDescription: 'Voyager 1 launches.',
     };
     const event: ChapterTransitionEvent = {
       chapter: spec,
@@ -72,12 +74,14 @@ describe('chapter types (Story 2.1 AC6)', () => {
       windowStartEt: -1,
       windowEndEt: 1,
       spacecraft: 'v2',
+      ogDescription: 'Voyager 2 reaches Neptune.',
     };
     const keys = Object.keys(spec).sort();
     expect(keys).toEqual([
       'anchorEt',
       'markerLabel',
       'name',
+      'ogDescription',
       'slug',
       'spacecraft',
       'windowEndEt',

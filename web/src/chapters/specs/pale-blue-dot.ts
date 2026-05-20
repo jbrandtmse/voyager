@@ -32,6 +32,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + SECONDS_PER_DAY,
   spacecraft: 'v1',
+  ogDescription:
+    'Voyager 1 turns to capture Earth from beyond Neptune on 14 February 1990 — the Pale Blue Dot.',
 };
 
 export default spec;

@@ -20,6 +20,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 90 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 90 * SECONDS_PER_DAY,
   spacecraft: 'v2',
+  ogDescription:
+    'Voyager 2 crosses the heliopause on 5 November 2018, joining its twin in the interstellar medium.',
 };
 
 export default spec;

@@ -17,6 +17,7 @@ const makeFixture = (): readonly ChapterSpec[] => {
       windowStartEt: 90,
       windowEndEt: 110,
       spacecraft: 'v1',
+      ogDescription: 'Alpha fixture chapter.',
     },
     {
       slug: 'beta',
@@ -26,6 +27,7 @@ const makeFixture = (): readonly ChapterSpec[] => {
       windowStartEt: 190,
       windowEndEt: 210,
       spacecraft: 'v2',
+      ogDescription: 'Beta fixture chapter.',
     },
     {
       slug: 'gamma',
@@ -35,6 +37,7 @@ const makeFixture = (): readonly ChapterSpec[] => {
       windowStartEt: 290,
       windowEndEt: 310,
       spacecraft: 'both',
+      ogDescription: 'Gamma fixture chapter.',
     },
   ]) as readonly ChapterSpec[];
 };

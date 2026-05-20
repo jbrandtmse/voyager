@@ -61,6 +61,13 @@ export interface ChapterSpec {
   readonly windowEndEt: number;
   /** Spacecraft the chapter centers on. */
   readonly spacecraft: Spacecraft;
+  /**
+   * One-sentence chapter summary used as the `og:description` /
+   * `twitter:description` meta tag value on the per-chapter HTML shell
+   * (Story 2.6 AC2). Plain text — no HTML entities, no quote characters
+   * that would break attribute serialisation.
+   */
+  readonly ogDescription: string;
 }
 
 /**

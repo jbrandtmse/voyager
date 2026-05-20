@@ -20,6 +20,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 30 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 30 * SECONDS_PER_DAY,
   spacecraft: 'v2',
+  ogDescription:
+    'Voyager 2 passes Saturn on 26 August 1981, then continues toward the Grand Tour endpoints Uranus and Neptune.',
 };
 
 export default spec;

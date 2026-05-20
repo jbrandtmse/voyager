@@ -21,6 +21,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 30 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 30 * SECONDS_PER_DAY,
   spacecraft: 'v2',
+  ogDescription:
+    'Voyager 2 reaches Neptune on 25 August 1989, the last planetary encounter of either probe, before bending south past Triton.',
 };
 
 export default spec;

@@ -22,6 +22,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 90 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 90 * SECONDS_PER_DAY,
   spacecraft: 'v1',
+  ogDescription:
+    'Voyager 1 crosses the heliopause on 25 August 2012, becoming the first human-made object to enter interstellar space.',
 };
 
 export default spec;

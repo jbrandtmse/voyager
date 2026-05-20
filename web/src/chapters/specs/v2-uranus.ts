@@ -19,6 +19,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 30 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 30 * SECONDS_PER_DAY,
   spacecraft: 'v2',
+  ogDescription:
+    'Voyager 2 becomes the only spacecraft ever to fly past Uranus on 24 January 1986.',
 };
 
 export default spec;

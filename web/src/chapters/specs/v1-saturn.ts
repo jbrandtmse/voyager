@@ -20,6 +20,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 30 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 30 * SECONDS_PER_DAY,
   spacecraft: 'v1',
+  ogDescription:
+    'Voyager 1 closes on Saturn on 12 November 1980, bending past Titan to leave the ecliptic for interstellar space.',
 };
 
 export default spec;

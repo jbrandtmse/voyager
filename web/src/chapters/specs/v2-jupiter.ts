@@ -18,6 +18,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 30 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 30 * SECONDS_PER_DAY,
   spacecraft: 'v2',
+  ogDescription:
+    'Voyager 2 reaches Jupiter on 9 July 1979, four months behind its sibling, lining up the Grand Tour through the outer planets.',
 };
 
 export default spec;

@@ -21,6 +21,8 @@ const spec: ChapterSpec = {
   windowStartEt: ANCHOR_ET - 7 * SECONDS_PER_DAY,
   windowEndEt: ANCHOR_ET + 7 * SECONDS_PER_DAY,
   spacecraft: 'v1',
+  ogDescription:
+    'Voyager 1 launches from Cape Canaveral on 5 September 1977, sixteen days after its twin.',
 };
 
 export default spec;
