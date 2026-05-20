@@ -1,15 +1,26 @@
 // VTRJ chunk loader with LRU cache and observable loading flag (Story 1.6 AC2).
 //
-// Fetches a brotli-compressed VTRJ file, decompresses it via the browser's
-// `DecompressionStream('br')`, verifies the SHA-256 against the manifest, and
-// parses the 40-byte header + Float64 sample body. Cached chunks are stored in
-// an insertion-order Map-backed LRU; cache hits are synchronous (Promise that
-// resolves on the same microtask).
+// Fetches a brotli-compressed VTRJ file. Vite (dev) and Cloudflare Pages (prod)
+// both auto-apply `Content-Encoding: br` to `.bin.br` responses, so the
+// browser's HTTP layer transparently brotli-decompresses before
+// `fetch().arrayBuffer()` returns. No client-side decompression code is
+// needed in the chunk loader.
 //
-// The decoder/decompressor and fetch implementation are injectable so vitest
-// tests under Node (which lacks `DecompressionStream('br')` in v22) can
-// substitute Node's `zlib.brotliDecompressSync`. Production uses the browser
-// API: see `defaultDecompressBrotli` below.
+// The chunk loader verifies the received (decompressed) bytes against the
+// manifest's `decompressedSha256` field (Story 1.16), then parses the
+// 40-byte VTRJ header + Float64 sample body. Cached chunks are stored in
+// an insertion-order Map-backed LRU; cache hits are synchronous (Promise
+// that resolves on the same microtask).
+//
+// Story 1.16 background: the original design assumed client-side brotli
+// decompression via `DecompressionStream('br')`. That API was never
+// standardized by the Compression Streams spec; no production browser
+// supports it. After discovery (see epic-1-retro-2026-05-19.md § 3a), we
+// pivoted to HTTP-level brotli (which Vite + Cloudflare already do
+// automatically). The chunk loader receives decompressed bytes directly.
+// The existing SHA-on-compressed integrity hash is preserved in the
+// manifest for the bake's NFR-R4 determinism gate; the new
+// `decompressedSha256` is what the runtime can actually verify.
 //
 // Architecture references:
 //   - line 308 (chunk-loader entry in service graph)
@@ -64,18 +75,6 @@ export class VtrjFormatError extends Error {
 }
 
 // === Injectable defaults ===========================================
-
-export type DecompressFn = (compressed: ArrayBuffer) => Promise<ArrayBuffer>;
-
-const defaultDecompressBrotli: DecompressFn = async (compressed) => {
-  // Browser path: streams brotli decode via the standards-track API.
-  // DecompressionStream is available in Chrome 80+, Firefox 113+, Safari 16.4+;
-  // the 'br' format is Chrome 120+, Firefox 126+, Safari 17.5+ per Story 1.6
-  // Dev Notes. Pre-2024 browsers hit the fallback page (Story 1.8).
-  const ds = new DecompressionStream('br' as CompressionFormat);
-  const stream = new Response(compressed).body!.pipeThrough(ds);
-  return await new Response(stream).arrayBuffer();
-};
 
 const defaultSha256Hex = async (buffer: ArrayBuffer): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', buffer);
@@ -196,7 +195,6 @@ class LruCache<V> {
 export interface ChunkLoaderOptions {
   capacity?: number;
   fetchImpl?: typeof fetch;
-  decompress?: DecompressFn;
   sha256Hex?: (buffer: ArrayBuffer) => Promise<string>;
 }
 
@@ -205,13 +203,11 @@ export class ChunkLoader {
   private readonly inflight = new Map<string, Promise<LoadedChunk>>();
   private readonly subscribers = new Set<(loading: boolean) => void>();
   private readonly fetchImpl: typeof fetch;
-  private readonly decompress: DecompressFn;
   private readonly sha256Hex: (buffer: ArrayBuffer) => Promise<string>;
 
   constructor(options: ChunkLoaderOptions = {}) {
     this.cache = new LruCache(options.capacity ?? DEFAULT_LRU_CAPACITY);
     this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
-    this.decompress = options.decompress ?? defaultDecompressBrotli;
     this.sha256Hex = options.sha256Hex ?? defaultSha256Hex;
   }
 
@@ -269,11 +265,20 @@ export class ChunkLoader {
         `Chunk fetch failed: ${file.url} returned HTTP ${response.status} ${response.statusText}`,
       );
     }
-    const compressed = await response.arrayBuffer();
-    const decompressed = await this.decompress(compressed);
-    const computedSha = await this.sha256Hex(compressed);
-    if (computedSha !== file.sha256) {
-      throw new ChunkIntegrityError(file.url, file.sha256, computedSha);
+    // The browser HTTP layer has already brotli-decompressed because Vite /
+    // Cloudflare serve `.bin.br` with `Content-Encoding: br` (Story 1.16).
+    // `response.arrayBuffer()` returns the decompressed VTRJ bytes directly.
+    const decompressed = await response.arrayBuffer();
+    // Verify against `decompressedSha256` if the manifest provides it
+    // (Story 1.16 added it). Manifests baked before 1.16 lack this field —
+    // we skip the integrity check in that case rather than block on an
+    // un-verifiable hash. The bake's own NFR-R4 determinism gate covers
+    // build-side correctness; the gap is dev-only and small.
+    if (file.decompressedSha256 !== undefined) {
+      const computedSha = await this.sha256Hex(decompressed);
+      if (computedSha !== file.decompressedSha256) {
+        throw new ChunkIntegrityError(file.url, file.decompressedSha256, computedSha);
+      }
     }
     const header = parseVtrjHeader(decompressed);
     const samples = sliceSamples(decompressed, header);

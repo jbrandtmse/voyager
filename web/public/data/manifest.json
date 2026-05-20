@@ -6,6 +6,7 @@
       "files": [
         {
           "cadenceSec": 60.01296184775017,
+          "decompressedSha256": "c07354b0ce2b6d5ecd29106a640318d0b304d89c9dc7852046990d71ddc47361",
           "kind": "trajectory",
           "sha256": "d766e3ebcb8232f4f470d9d6d3c738106c5aa535f5a4971f525cd7449efe0ca8",
           "sizeBytes": 132171,
@@ -17,6 +18,7 @@
         },
         {
           "cadenceSec": 5202.559465646278,
+          "decompressedSha256": "0f7039cdc1548d75535497c257d35fd2fd2ad1ee7032134986aa7c07ea1c9c51",
           "kind": "trajectory",
           "sha256": "bc1274d7eae926f19405f26c0638b62bbec1935461d718ae9207f7669ebe573e",
           "sizeBytes": 339689,
@@ -28,6 +30,7 @@
         },
         {
           "cadenceSec": 1051.0399050120905,
+          "decompressedSha256": "36d636d785980908fa2176ddf91c509a5c6d5d1e3bc96378e8a362651e913b1c",
           "kind": "trajectory",
           "sha256": "527630000fed571d95011ec21d9b4d84a3d10f65b88664a9a0040511dd649d1d",
           "sizeBytes": 265017,
@@ -39,6 +42,7 @@
         },
         {
           "cadenceSec": 5601.570725906786,
+          "decompressedSha256": "8bf3092c8177fcd08250a242021fc2c6a8a1ccfd143e9538c416461ba1e86102",
           "kind": "trajectory",
           "sha256": "83a25cb6a32bd4512debad6fe402cd7fb7444884c7518a104e5e97b10526b35e",
           "sizeBytes": 282305,
@@ -50,6 +54,7 @@
         },
         {
           "cadenceSec": 793.8805936568242,
+          "decompressedSha256": "49f61f78a487785a6ffdcdd7b07a8db69a103402f2971ae1640b6c75f3c02331",
           "kind": "trajectory",
           "sha256": "a400659868cd9435d5aad3a3c989d08d74b9faa49adfbad06fb3299e087688d1",
           "sizeBytes": 268514,
@@ -61,6 +66,7 @@
         },
         {
           "cadenceSec": 19377.792987350927,
+          "decompressedSha256": "8f17fa9d92d24f8eb618a3166a8b3b547bcad19f28253968506cc163b7a8306f",
           "kind": "trajectory",
           "sha256": "7c66d3bf939466916fa4d45c81a8c1644df53ca3310d4bb238dd788fa9e4af4f",
           "sizeBytes": 330817,
@@ -72,6 +78,7 @@
         },
         {
           "cadenceSec": 86400.0,
+          "decompressedSha256": "31333def51370768a77ce2fa89e0d5804c7bc91333fd3772b8675ffc73e1133d",
           "kind": "trajectory",
           "sha256": "f307dd76df6f6e2c0ab72c6c41a5570d0ded54588208e908e0af9e68c7649467",
           "sizeBytes": 541230,
@@ -89,6 +96,7 @@
       "files": [
         {
           "cadenceSec": 60.00948448515734,
+          "decompressedSha256": "8a8d8f63223f46aa387b78cbfbd93490d8bc9d66158ae2c95ac8dc1edd6c73c1",
           "kind": "trajectory",
           "sha256": "ef93866c602dd9b5aac73ee09267e3a30bd86cb9bc24e40a6d99beacdd84baae",
           "sizeBytes": 131170,
@@ -100,6 +108,7 @@
         },
         {
           "cadenceSec": 6522.464030617455,
+          "decompressedSha256": "1d789e9efb95e0b468a90f2b32c62f4da7c56729a8e6555a5f1e3c6829a13ddb",
           "kind": "trajectory",
           "sha256": "524f290b5f75b18b34bb9fa43a7064600af6cfff2e95c4e113861fa8dfc5cf5a",
           "sizeBytes": 344359,
@@ -111,6 +120,7 @@
         },
         {
           "cadenceSec": 1419.1734435276303,
+          "decompressedSha256": "8f09f1937bc2e33c2940dce11cf2ab991a3740e7e3fe1d073d2f778634b81c5c",
           "kind": "trajectory",
           "sha256": "f3fd0ce05531572ad39e283a822a4c5eea8615fdd6d620170e4d0cb75a2f9d0a",
           "sizeBytes": 322773,
@@ -122,6 +132,7 @@
         },
         {
           "cadenceSec": 6940.227496606152,
+          "decompressedSha256": "75779d7770cd85ab0cdf43e093f3cd6bdaf98885b4bd596f34474d73b5e8601f",
           "kind": "trajectory",
           "sha256": "5bd3dfd3563749a56efa9f522de6b0ee9eee45c913fe7249225129bca8819065",
           "sizeBytes": 284219,
@@ -133,6 +144,7 @@
         },
         {
           "cadenceSec": 1110.381795671361,
+          "decompressedSha256": "d713603211d2f24ea6825941f2814057897d458fbe5c8540f4ce1850617eec2c",
           "kind": "trajectory",
           "sha256": "32bbbed1591ee46b1bfc43e9140ec5ad26b8a539e43f2a08b0209c53bfab91b5",
           "sizeBytes": 316657,
@@ -144,6 +156,7 @@
         },
         {
           "cadenceSec": 16239.215358012996,
+          "decompressedSha256": "f0404c0bd7e165a32e6c987e5bc4e1994adfd54d87bdcd548d684a19e1d056ae",
           "kind": "trajectory",
           "sha256": "9c3cf40ff1df97fe5d4b71471efb726831858241a772f19dd7db96073d604ec8",
           "sizeBytes": 330837,
@@ -155,6 +168,7 @@
         },
         {
           "cadenceSec": 427.1730884506251,
+          "decompressedSha256": "a5e71d5f6b33fcf4d0f5cc08e77498da1b6bbe1e8a22fed95852c54b87598062",
           "kind": "trajectory",
           "sha256": "49119dee98e2c41d9ba76f183820993808ac6476927d47c541de3a0997d26fa7",
           "sizeBytes": 248101,
@@ -166,6 +180,7 @@
         },
         {
           "cadenceSec": 13346.601588275254,
+          "decompressedSha256": "459dea9a4d66ca7e8e3856fd1c7bcc13bb68f1437754f4152fc5f78c602cea9c",
           "kind": "trajectory",
           "sha256": "d859aafe2f329c69fca4892c682757c72e8c43b531974ef6a25ff8ecefa8b94b",
           "sizeBytes": 273335,
@@ -177,6 +192,7 @@
         },
         {
           "cadenceSec": 478.99990500032436,
+          "decompressedSha256": "3e3b68fa4d58ceeb6e3170bd6747097901e941693bed98a7aeef181f543ac250",
           "kind": "trajectory",
           "sha256": "93c35a536b87fbe24f2a80207468d7154cff1de6a149b8961adebbc128531aa6",
           "sizeBytes": 247061,
@@ -188,6 +204,7 @@
         },
         {
           "cadenceSec": 148.99683366224053,
+          "decompressedSha256": "2447d44cbc9cfe2a6597a8daaae71281b9d46e899e289fa569fa7464471dca9a",
           "kind": "trajectory",
           "sha256": "81047cf95bbdf14aa285c0596ef1ba65b86a983da357dee1882bcd92e8a7379c",
           "sizeBytes": 225609,
@@ -199,6 +216,7 @@
         },
         {
           "cadenceSec": 86400.0,
+          "decompressedSha256": "0b35f789ab91dbae8c4972b3c7854429ff97da6612849c4c1c5e10cde74704e2",
           "kind": "trajectory",
           "sha256": "003bc8439fb2d28dcfbd7ab8e3aeed823a1cb7c7ef8a699dfabd4b116adc0d5d",
           "sizeBytes": 501911,
@@ -216,6 +234,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "12d4388dd9f52b206a2e24b2d41c0f7f09c60bffc877ff210e18ff01597bd080",
           "kind": "trajectory",
           "sha256": "159ea303d939b60cd5bf9948080dc8fc61a58a248b4402ed70b9e920a462e9d5",
           "sizeBytes": 783938,
@@ -233,6 +252,7 @@
       "files": [
         {
           "cadenceSec": 14400.000171019587,
+          "decompressedSha256": "250ab0c1c3e97226a77e163343d660964df96b9a846f87bf05277ef4720e4605",
           "kind": "trajectory",
           "sha256": "4f70ab628dc515083d5e2879f511f99abf45f8a6ee4f4ac2eefb5824ff4e8056",
           "sizeBytes": 4639464,
@@ -250,6 +270,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "042b4ab69ae58fd03d8069f1ba8c1c0e14f0be2ffc06ba1c67c1676b4812922e",
           "kind": "trajectory",
           "sha256": "26a437cf08990cbd427e15da0d5630e728729258aca689a02079e2f3771684cd",
           "sizeBytes": 825456,
@@ -267,6 +288,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "3fb691d8adc5293950cc9c16b4e7e5507ef196b4a6773b33499c4e48f59599ca",
           "kind": "trajectory",
           "sha256": "61fa7f4a201bf1fd44a9b7fde84b4e5b422f18d2c273d6c4611f31dda5faabf1",
           "sizeBytes": 776750,
@@ -284,6 +306,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "435a6c4459358e9291b817373ac06ccc38879c929a34171636b1661f037afeef",
           "kind": "trajectory",
           "sha256": "125d71064ac5e50d11e1162b2890a6a5e161f101ed41031c0deb3cb99599ce5e",
           "sizeBytes": 783057,
@@ -301,6 +324,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "118f7492293646db39fb940a78bbeca573bbbe9a194f8123e60ac3777a784817",
           "kind": "trajectory",
           "sha256": "8a0c4e3069517a6d86e12b8834055eca621abf575a4b3f5f2d8d71c2cdd3bd57",
           "sizeBytes": 774854,
@@ -318,6 +342,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "a7a8f3cfc107244078f5dda51b7119904e936f487aac66add3da613a24b4b04f",
           "kind": "trajectory",
           "sha256": "2a4b61835380e71c2f44cd586535afb7cf8fead4f4ae12ee56e259165695b722",
           "sizeBytes": 761915,
@@ -335,6 +360,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "4e854ea421a0a3e8859c4a599222de898a78b11311a263bb0ab1cf3509da67ee",
           "kind": "trajectory",
           "sha256": "9fc67df8bd4a14428189d4cd5b406f80ae9f197d292432ffbbdd55339f54f66f",
           "sizeBytes": 742065,
@@ -352,6 +378,7 @@
       "files": [
         {
           "cadenceSec": 86400.00102611752,
+          "decompressedSha256": "d3246be623bab5150b3a7267b1b5e00865480efe4b26e4ffaac77241ca8baa49",
           "kind": "trajectory",
           "sha256": "446ce8233ab8be88eb9e53ac4c5546452509a54a0b73b2dbafb5463fbaa25a0b",
           "sizeBytes": 727567,
@@ -369,6 +396,7 @@
       "files": [
         {
           "cadenceSec": 21600.00025652938,
+          "decompressedSha256": "b3d218d455591830f763a04921ba66b02866ecabd689cc6f37f8744368c6c151",
           "kind": "trajectory",
           "sha256": "5fc9d8365ec523a45a5fe3606a677576fc68416ef3e5b707b983e88bc1435dac",
           "sizeBytes": 3177163,

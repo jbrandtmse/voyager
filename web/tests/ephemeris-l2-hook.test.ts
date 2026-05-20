@@ -15,9 +15,9 @@
 // (fresh checkout without a bake run).
 
 import { describe, it, expect } from 'vitest';
-import { brotliDecompressSync } from 'node:zlib';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
+import { brotliDecompressSync } from 'node:zlib';
 import { ManifestLoader, __resetCacheForTests } from '../src/services/manifest-loader';
 import { ChunkLoader } from '../src/services/chunk-loader';
 import { EphemerisService } from '../src/services/ephemeris-service';
@@ -73,7 +73,15 @@ const nodeFetchShim: typeof fetch = async (input: RequestInfo | URL) => {
     } as unknown as Response;
   }
   const buf = readFileSync(blobPath);
-  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  // Story 1.16 — In production, Vite + Cloudflare serve .bin.br with
+  // Content-Encoding: br; the browser HTTP layer auto-decompresses before
+  // the chunk-loader sees bytes. Node has no such auto-decompression, so
+  // this test shim must do it explicitly to simulate the browser behavior.
+  let bytes: Buffer = buf;
+  if (url.endsWith('.bin.br')) {
+    bytes = brotliDecompressSync(buf);
+  }
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   return {
     ok: true,
     status: 200,
@@ -83,12 +91,7 @@ const nodeFetchShim: typeof fetch = async (input: RequestInfo | URL) => {
 };
 
 // Node v22 lacks DecompressionStream('br'); use zlib synchronously.
-const nodeBrotliDecompress = async (compressed: ArrayBuffer): Promise<ArrayBuffer> => {
-  const out = brotliDecompressSync(Buffer.from(compressed));
-  const ab = new ArrayBuffer(out.byteLength);
-  new Uint8Array(ab).set(out);
-  return ab;
-};
+// (Story 1.16 removed nodeBrotliDecompress — chunk-loader no longer decompresses)
 
 const describeOrSkip = fixturesAvailable ? describe : describe.skip;
 
@@ -118,7 +121,6 @@ describeOrSkip('Story 1.6 AC4 — L2 hook (web-side interpolator vs SpiceyPy ref
       });
       const chunkLoader = new ChunkLoader({
         fetchImpl: nodeFetchShim,
-        decompress: nodeBrotliDecompress,
       });
       const svc = new EphemerisService(manifest, chunkLoader);
 

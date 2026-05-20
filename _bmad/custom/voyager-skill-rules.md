@@ -61,10 +61,10 @@ Planning artifacts are the source of truth. When dev or QA discovers an interpre
 
 **Why:** Epic 1 surfaced two NFR tripwires (NFR-P6: "ClockManager mutations ≤ 100µs P99" — unmeasurable on browser wall-clock; NFR-M4: "cycle log human-readable" — conflated with lint-clean). Both were worked around with comments and deferred-work entries. A future contributor reading the PRD has no signal that those NFRs are "as-written" vs. "as-implemented-with-comment." Amending in place keeps planning honest.
 
-## Rule 6 — Chrome DevTools MCP is the canonical browser-smoke driver
+## Rule 6 — Chrome DevTools MCP is the canonical browser-smoke driver (amended Story 1.16)
 
-When automating a browser smoke (per Rule 3) under Chrome DevTools MCP, agents must be aware of the Chrome-for-Testing 148 brotli gap: `new DecompressionStream('br')` throws. Story 1.8's boot-time capability probe redirects MCP-driven sessions to `/unsupported.html?reason=brotli`. The canonical workaround is to inject an `initScript` that stubs the brotli decompression stream to fall back to gzip (acceptable for smoke-test traffic).
+When automating a browser smoke (per Rule 3) under Chrome DevTools MCP, no special initScript or shim is needed. Story 1.16 (2026-05-20) replaced the chunk-loader's reliance on `DecompressionStream('br')` (which no production browser supports) with a wasm brotli polyfill, and removed the brotli check from Story 1.8's boot-time capability probe. Chrome-for-Testing 148 — which still lacks `DecompressionStream('br')` — now loads Voyager normally.
 
-This is tracked in `deferred-work.md` under the "Story 1.8 LOW" entry and will be resolved structurally in Story 2.0. Until then, the `initScript` shim is the documented standard.
+**Historical context (do not re-introduce):** prior to Story 1.16, MCP-driven sessions required an `initScript` that stubbed `new DecompressionStream('br')` to fall back to gzip. Post-Story-1.16 smoke evidence (e.g., `1-16-smoke-evidence/`) is taken without this shim. Evidence captured before Story 1.16 (`1-5-ac5-precision-smoke-screens/`, `1-15-smoke-evidence/`) retains references to the shim for historical accuracy.
 
-**Why:** Without this workaround, every MCP-driven verification of a post-probe surface fails before reaching the app code.
+**Why this rule exists today:** to record that the shim is gone — a future contributor seeing the shim referenced in older code review notes or git history should NOT re-introduce it. The right path is to confirm `brotli-dec-wasm` is configured in `chunk-loader.ts` and that the boot probe does not check brotli (see ADR 0004 § Decompression Strategy + ADR 0010 amendment).

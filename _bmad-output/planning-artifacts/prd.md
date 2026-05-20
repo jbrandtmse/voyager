@@ -572,8 +572,7 @@ Chapter IDs are human-readable and stable: `launch-v1`, `launch-v2`, `v1-jupiter
 
 - WebGL2 (`getContext('webgl2')` must return non-null)
 - `EXT_color_buffer_float` and depth-buffer support sufficient for reverse-Z (fallback to logarithmic depth if reverse-Z is unstable on a given GPU)
-- WebAssembly (universal in 2026)
-- Brotli decoding (universal in 2026; transparent via the browser's HTTP layer)
+- WebAssembly (universal in 2026) — also gates the chunk loader's brotli decompression via a wasm polyfill (`brotli-dec-wasm`), per Story 1.16. *Amended 2026-05-20: previously this list included "Brotli decoding" as a separate capability; that was wrong — brotli was never standardized into the JS Compression Streams API (`DecompressionStream('br')` throws in all production browsers). Story 1.16 switched to a wasm polyfill which works wherever WebAssembly works. See `_bmad-output/implementation-artifacts/epic-1-retro-2026-05-19.md` § 3a.*
 - `requestAnimationFrame` (universal)
 - `pushState` / History API (universal)
 - ResizeObserver (universal in 2026)
@@ -960,7 +959,7 @@ NFRs define the quality attributes the system must satisfy. They are testable, m
 - **NFR-C1.** Browser support (Tier 1, fully polished): latest two stable versions of Chrome, Firefox, and Safari on desktop. Edge inherits from Chrome.
 - **NFR-C2.** Browser support (Tier 2, functional but not polished): latest two stable versions of Chrome and Safari on tablet (iPadOS, ChromeOS).
 - **NFR-C3.** Browser support (Tier 3, best-effort): latest two stable versions of mobile Chrome and Safari on phone.
-- **NFR-C4.** Required platform capabilities (boot-time feature-detected, with fallback page if missing): WebGL2, WebAssembly, Brotli decoding, `requestAnimationFrame`, History API, ResizeObserver.
+- **NFR-C4.** Required platform capabilities (boot-time feature-detected, with fallback page if missing): WebGL2, WebAssembly (also gates the chunk loader's wasm brotli polyfill — see Story 1.16), `requestAnimationFrame`, History API, ResizeObserver. *Amended 2026-05-20 per Story 1.16: original wording listed "Brotli decoding" as a separately-probed capability assuming `DecompressionStream('br')` would land in browsers; it never did. Brotli decompression is now provided by `brotli-dec-wasm` and is therefore covered by the WebAssembly check.*
 - **NFR-C5.** GPU capability fallback: if reverse-Z depth is unstable on the visitor's GPU (detected at boot), the artifact falls back to logarithmic depth buffer transparently. No user-visible action required.
 - **NFR-C6.** Texture-tier fallback: if device GPU memory is insufficient for 8k planet textures (detected at boot), the artifact falls back to 4k textures and does not lazy-upgrade. No user-visible action required.
 - **NFR-C7.** Older / unsupported browsers: the artifact does not render a partial or degraded simulation; it renders a single-frame fallback page explaining the browser requirement. Documented in FR57.

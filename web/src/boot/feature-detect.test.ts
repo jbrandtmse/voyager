@@ -11,12 +11,12 @@ import {
 } from './feature-detect';
 
 // Build a stub `window` shape with selectively present capabilities. The
-// probe reads three keys via `typeof window.X`; setting each to undefined
-// or the right primitive type lets us isolate behavior per AC.
+// probe reads two keys via `typeof window.X` after Story 1.16 (the brotli
+// check was removed because no browser actually supports
+// DecompressionStream('br') and the chunk loader now uses a wasm polyfill).
 const makeWindow = (caps: {
   webgl2?: boolean;
   wasm?: boolean;
-  brotli?: 'ok' | 'throws' | 'missing';
 }): Record<string, unknown> => {
   const w: Record<string, unknown> = {};
   if (caps.webgl2) {
@@ -28,67 +28,56 @@ const makeWindow = (caps: {
   if (caps.wasm) {
     w['WebAssembly'] = { /* truthy object — typeof === 'object' */ };
   }
-  if (caps.brotli === 'ok') {
-    w['DecompressionStream'] = function DecompressionStream(_format: string) {
-      // Constructor that accepts any format — represents a browser with
-      // full br support.
-    };
-  } else if (caps.brotli === 'throws') {
-    w['DecompressionStream'] = function DecompressionStream(format: string) {
-      if (format === 'br') throw new TypeError(`unsupported format: ${format}`);
-    };
-  }
-  // 'missing' → no key at all
   return w;
 };
 
-describe('Story 1.8 AC1 — feature-detect probe', () => {
-  it('detects all three capabilities when present', () => {
-    const win = makeWindow({ webgl2: true, wasm: true, brotli: 'ok' });
-    expect(probeFeatures(win)).toEqual({ webgl2: true, wasm: true, brotli: true });
+describe('Story 1.8 AC1 — feature-detect probe (amended Story 1.16: brotli check removed)', () => {
+  it('detects both capabilities when present', () => {
+    const win = makeWindow({ webgl2: true, wasm: true });
+    expect(probeFeatures(win)).toEqual({ webgl2: true, wasm: true });
   });
 
   it('flags missing WebGL2', () => {
-    const win = makeWindow({ webgl2: false, wasm: true, brotli: 'ok' });
+    const win = makeWindow({ webgl2: false, wasm: true });
     const r = probeFeatures(win);
     expect(r.webgl2).toBe(false);
     expect(firstFailure(r)).toBe('webgl2');
   });
 
   it('flags missing WebAssembly when WebGL2 present', () => {
-    const win = makeWindow({ webgl2: true, wasm: false, brotli: 'ok' });
+    const win = makeWindow({ webgl2: true, wasm: false });
     const r = probeFeatures(win);
     expect(r.wasm).toBe(false);
     expect(firstFailure(r)).toBe('wasm');
   });
 
-  it('flags missing DecompressionStream as brotli failure', () => {
-    const win = makeWindow({ webgl2: true, wasm: true, brotli: 'missing' });
-    const r = probeFeatures(win);
-    expect(r.brotli).toBe(false);
-    expect(firstFailure(r)).toBe('brotli');
-  });
-
-  it('flags DecompressionStream that throws on `br` as brotli failure', () => {
-    const win = makeWindow({ webgl2: true, wasm: true, brotli: 'throws' });
-    const r = probeFeatures(win);
-    expect(r.brotli).toBe(false);
-    expect(firstFailure(r)).toBe('brotli');
-  });
-
-  it('returns null first-failure when all three pass', () => {
-    const win = makeWindow({ webgl2: true, wasm: true, brotli: 'ok' });
+  it('returns null first-failure when both pass', () => {
+    const win = makeWindow({ webgl2: true, wasm: true });
     expect(firstFailure(probeFeatures(win))).toBeNull();
   });
 
-  it('probe order is webgl2 → wasm → brotli; first miss wins', () => {
-    // All three missing simultaneously — should report 'webgl2' as the
+  it('probe order is webgl2 → wasm; first miss wins', () => {
+    // Both missing simultaneously — should report 'webgl2' as the
     // first failure per the canonical order.
-    const win = makeWindow({ webgl2: false, wasm: false, brotli: 'missing' });
+    const win = makeWindow({ webgl2: false, wasm: false });
     expect(firstFailure(probeFeatures(win))).toBe('webgl2');
-    // Now grant webgl2 but not wasm/brotli — wasm should win.
-    const win2 = makeWindow({ webgl2: true, wasm: false, brotli: 'missing' });
+    // Now grant webgl2 but not wasm — wasm should win.
+    const win2 = makeWindow({ webgl2: true, wasm: false });
     expect(firstFailure(probeFeatures(win2))).toBe('wasm');
+  });
+
+  it('does NOT check DecompressionStream / brotli (Story 1.16 architectural change)', () => {
+    // Even if we explicitly inject a throwing DecompressionStream, the
+    // probe ignores it. The wasm polyfill handles brotli decompression
+    // separately, gated on WebAssembly support which is the second probe.
+    const win = makeWindow({ webgl2: true, wasm: true });
+    win['DecompressionStream'] = function DecompressionStream(format: string) {
+      throw new TypeError(`unsupported format: ${format}`);
+    };
+    const r = probeFeatures(win);
+    expect(firstFailure(r)).toBeNull();
+    // Result shape no longer carries `brotli`.
+    expect('brotli' in r).toBe(false);
   });
 });
 
@@ -97,14 +86,19 @@ describe('Story 1.8 AC1 — probe source + inline build', () => {
     expect(getProbeScript()).toBe(PROBE_BODY);
   });
 
-  it('probe source probes the three capabilities in order', () => {
+  it('probe source probes the two capabilities in order (post Story 1.16)', () => {
     const body = PROBE_BODY;
     const webgl2Index = body.indexOf('WebGL2RenderingContext');
     const wasmIndex = body.indexOf('WebAssembly');
-    const brotliIndex = body.indexOf("DecompressionStream('br')");
     expect(webgl2Index).toBeGreaterThanOrEqual(0);
     expect(wasmIndex).toBeGreaterThan(webgl2Index);
-    expect(brotliIndex).toBeGreaterThan(wasmIndex);
+  });
+
+  it('probe source does NOT reference DecompressionStream (Story 1.16)', () => {
+    // Regression guard — if a future change re-introduces a brotli probe,
+    // this assertion catches it.
+    expect(PROBE_BODY).not.toContain('DecompressionStream');
+    expect(PROBE_BODY).not.toContain("'br'");
   });
 
   it('probe source redirects to /unsupported.html with the reason', () => {
@@ -131,7 +125,6 @@ describe('Story 1.8 AC1 — probe source + inline build', () => {
     // Identifiers still readable (not mangled)
     expect(out).toContain('WebGL2RenderingContext');
     expect(out).toContain('WebAssembly');
-    expect(out).toContain('DecompressionStream');
   });
 });
 

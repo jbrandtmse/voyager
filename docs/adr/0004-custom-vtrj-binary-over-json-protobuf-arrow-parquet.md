@@ -44,6 +44,19 @@ Data (numSamples × componentsPerSample × 8 bytes):
 - **Same layout serves attitude streams** with `componentsPerSample = 4` (quaternion qw,qx,qy,qz) — single loader; single header parser.
 - **Brotli compression** at build time, served as immutable static assets with `Cache-Control: public, max-age=31536000, immutable` (per ADR 0017's content-hash discipline).
 
+### Decompression Strategy (amended 2026-05-20 per Story 1.16)
+
+The original design assumed client-side brotli decompression via the JS `DecompressionStream('br')` API. Empirical discovery during Epic 1 retrospective execution (2026-05-19): no production browser supports the brotli format in the Compression Streams API. The spec only standardized `gzip`, `deflate`, `deflate-raw`. `new DecompressionStream('br')` throws in Chrome 148 stable, Firefox stable, and Safari stable.
+
+**Current decompression path** (post Story 1.16):
+
+- Client uses the [`brotli-dec-wasm`](https://github.com/ustclug-dev/brotli-dec-wasm) polyfill (~200 KB wasm module, dynamically imported on first decompress).
+- The wasm module is lazy-loaded so jsdom/node test environments (where its top-level `fetch()` for the .wasm asset fails) don't pay the cost unless a test exercises the decompression path.
+- Manifest SHA-256 is still computed on the **compressed** bytes (Story 1.3's bake-time hash discipline is preserved); the chunk-loader verifies the fetched compressed bytes before invoking the decoder.
+- Alternative paths considered and rejected: (a) HTTP-level `Content-Encoding: br` (rejected — would require re-baking 200 MB of LFS kernels because the SHA would now apply to decompressed bytes, breaking the integrity-check contract); (b) shipping `.bin` files uncompressed (rejected — defeats the whole reason for compression).
+
+See `_bmad-output/implementation-artifacts/epic-1-retro-2026-05-19.md` § 3a and Story 1.16 (`1-16-brotli-decompression-architectural-fix.md`) for the full discovery and decision context.
+
 ## Consequences
 
 **Positive:**

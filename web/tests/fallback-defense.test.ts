@@ -53,10 +53,12 @@ const distHasUnsupported = existsSync(distUnsupported);
 
 // Mirror feature-detect.test.ts's stub builder so we can drive probeFeatures
 // with cap-specific shapes without polluting the global window.
+// Story 1.16 removed the brotli probe; only webgl2 + wasm are probed now.
+// (The fallback page still renders a brotli copy variant as defensive dead
+// code if a stray `?reason=brotli` URL is hit, but the probe never emits it.)
 const makeWin = (caps: {
   webgl2?: boolean;
   wasm?: boolean;
-  brotli?: 'ok' | 'throws' | 'missing';
 }): Record<string, unknown> => {
   const w: Record<string, unknown> = {};
   if (caps.webgl2) {
@@ -67,41 +69,38 @@ const makeWin = (caps: {
   if (caps.wasm) {
     w['WebAssembly'] = {};
   }
-  if (caps.brotli === 'ok') {
-    w['DecompressionStream'] = function DecompressionStream(_format: string) {
-      /* accepts all formats */
-    };
-  } else if (caps.brotli === 'throws') {
-    w['DecompressionStream'] = function DecompressionStream(format: string) {
-      if (format === 'br') throw new TypeError(`unsupported format: ${format}`);
-    };
-  }
   return w;
 };
 
 // -----------------------------------------------------------------------
 // 1. Probe order is deterministic — first failure wins per the canonical
-//    sequence webgl2 -> wasm -> brotli.
+//    sequence webgl2 -> wasm (post-Story-1.16; previously included brotli).
 // -----------------------------------------------------------------------
-describe('Story 1.8 defense — probe order is deterministic', () => {
-  it('reports webgl2 when ALL three capabilities are missing', () => {
-    const win = makeWin({ webgl2: false, wasm: false, brotli: 'missing' });
+describe('Story 1.8 defense — probe order is deterministic (amended Story 1.16)', () => {
+  it('reports webgl2 when both capabilities are missing', () => {
+    const win = makeWin({ webgl2: false, wasm: false });
     expect(firstFailure(probeFeatures(win))).toBe('webgl2');
   });
 
   it('reports wasm when only webgl2 is present', () => {
-    const win = makeWin({ webgl2: true, wasm: false, brotli: 'missing' });
+    const win = makeWin({ webgl2: true, wasm: false });
     expect(firstFailure(probeFeatures(win))).toBe('wasm');
   });
 
-  it('reports brotli when webgl2+wasm are present but DecompressionStream is missing', () => {
-    const win = makeWin({ webgl2: true, wasm: true, brotli: 'missing' });
-    expect(firstFailure(probeFeatures(win))).toBe('brotli');
+  it('returns null when both capabilities are present (brotli no longer probed)', () => {
+    const win = makeWin({ webgl2: true, wasm: true });
+    expect(firstFailure(probeFeatures(win))).toBeNull();
   });
 
-  it('reports brotli when DecompressionStream throws on "br"', () => {
-    const win = makeWin({ webgl2: true, wasm: true, brotli: 'throws' });
-    expect(firstFailure(probeFeatures(win))).toBe('brotli');
+  it('ignores DecompressionStream entirely (Story 1.16 architectural change)', () => {
+    const win = makeWin({ webgl2: true, wasm: true });
+    // Even a DecompressionStream that throws on every format must not cause
+    // the probe to fail — brotli decompression now happens via wasm polyfill
+    // in the chunk loader, gated only on WebAssembly support.
+    win['DecompressionStream'] = function DecompressionStream(format: string) {
+      throw new TypeError(`unsupported format: ${format}`);
+    };
+    expect(firstFailure(probeFeatures(win))).toBeNull();
   });
 });
 

@@ -44,6 +44,8 @@ last_updated: 2026-05-19
 # 1.15 set to in-progress on 2026-05-19 (dev-1-15 / epic-cycle-2026-05-18)
 # 1.15 set to review on 2026-05-19 (dev-1-15 / epic-cycle-2026-05-18) — T1–T7 implemented; T8 deferred to lead smoke gate
 # 1.15 set to done on 2026-05-20 — lead-driven QA (vitest 1283 pass, pytest 256 pass), code review (APPROVE 1 LOW), Chrome DevTools MCP smoke (AC1/AC3/AC4 confirmed; AC2 unit-test-confirmed; AC5/AC6 file-confirmed)
+# 1.16 added on 2026-05-20 — brotli architectural fix to unblock real-browser access (Decision adopted during Story 1.15 smoke); ready-for-dev. Epic 1 closes only after 1.16 ships.
+# 1.16 set to done on 2026-05-20 — pivoted from wasm polyfill to HTTP-level brotli + decompressedSha256 mid-execution after discovering Vite already serves Content-Encoding: br; real-browser smoke passes with no shim. EPIC 1 COMPLETE.
 # 1.5 set to done on 2026-05-18 after code review (cr-1-5 / epic-cycle-2026-05-18)
 # 1.8 set to in-progress on 2026-05-18 (dev-1-8 / epic-cycle-2026-05-18)
 # 1.8 set to review on 2026-05-18 (dev-1-8 / epic-cycle-2026-05-18)
@@ -68,7 +70,7 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Foundation & First Vertical Slice (Cruise Viewer)
-  epic-1: in-progress
+  epic-1: done
   1-1-initialize-monorepo-with-web-and-bake-halves: done
   1-2-author-phase-0-adr-catalogue-25-entries: done
   1-3-acquire-and-hash-pin-naif-and-pds-kernels: done
@@ -84,6 +86,7 @@ development_status:
   1-13-celestial-bodies-sun-eight-planets-and-one-moon: done
   1-14-baseline-ci-and-static-cdn-deploy: done
   1-15-manual-verification-defect-cleanup: done
+  1-16-brotli-decompression-architectural-fix: done
   epic-1-retrospective: done
 
   # Epic 2: Mission Spine — Chapter Navigation, Deep-Linking and Embed

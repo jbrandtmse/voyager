@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { brotliCompressSync, brotliDecompressSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import {
   ChunkLoader,
@@ -56,13 +55,13 @@ const buildVtrj = (params: {
   return buf;
 };
 
-const brotliCompressArrayBuffer = (input: ArrayBuffer): ArrayBuffer => {
-  const compressed = brotliCompressSync(Buffer.from(input));
-  // Copy into a clean ArrayBuffer so the loader can't see Node Buffer internals.
-  const out = new ArrayBuffer(compressed.byteLength);
-  new Uint8Array(out).set(compressed);
-  return out;
-};
+// Story 1.16 — Vite + Cloudflare auto-apply Content-Encoding: br to .bin.br
+// files; the browser HTTP layer transparently decompresses before the chunk
+// loader sees bytes. The chunk loader therefore expects already-decompressed
+// VTRJ bytes from `fetch().arrayBuffer()`. In tests we simulate that by
+// passing the raw VTRJ bytes directly (this helper is now an identity
+// transform; the brotli-compress / brotli-decompress round-trip is gone).
+const passthrough = (input: ArrayBuffer): ArrayBuffer => input;
 
 const sha256Hex = (input: ArrayBuffer): string => {
   const h = createHash('sha256');
@@ -70,13 +69,8 @@ const sha256Hex = (input: ArrayBuffer): string => {
   return h.digest('hex');
 };
 
-// Node-zlib decompressor for vitest (Node v22 lacks DecompressionStream('br')).
-const nodeBrotliDecompress = async (compressed: ArrayBuffer): Promise<ArrayBuffer> => {
-  const out = brotliDecompressSync(Buffer.from(compressed));
-  const ab = new ArrayBuffer(out.byteLength);
-  new Uint8Array(ab).set(out);
-  return ab;
-};
+// (Story 1.16 removed nodeBrotliDecompress — the chunk loader no longer
+// performs client-side decompression; the browser HTTP layer handles it.)
 
 const mockFetchOk = (compressed: ArrayBuffer): typeof fetch => {
   return vi.fn(async () => {
@@ -163,11 +157,12 @@ describe('ChunkLoader.load — happy path', () => {
       cadenceSeconds: 60.0,
       samples,
     });
-    compressed = brotliCompressArrayBuffer(decompressed);
+    compressed = passthrough(decompressed);
     sha = sha256Hex(compressed);
     file = {
       url: 'data/seg.bin.br',
       sha256: sha,
+      decompressedSha256: sha,
       sizeBytes: compressed.byteLength,
       timeRangeEt: [100.0, 220.0],
       cadenceSec: 60.0,
@@ -179,7 +174,6 @@ describe('ChunkLoader.load — happy path', () => {
     const fetchImpl = mockFetchOk(compressed);
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
     const chunk = await loader.load(file);
     expect(chunk.header.bodyId).toBe(-31);
@@ -193,7 +187,6 @@ describe('ChunkLoader.load — happy path', () => {
     const fetchImpl = mockFetchOk(compressed);
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
     const a = await loader.load(file);
     const b = await loader.load(file);
@@ -205,7 +198,6 @@ describe('ChunkLoader.load — happy path', () => {
     const fetchImpl = mockFetchOk(compressed);
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
     const [a, b] = await Promise.all([loader.load(file), loader.load(file)]);
     expect(a).toBe(b);
@@ -227,7 +219,7 @@ describe('ChunkLoader.load — error paths', () => {
       cadenceSeconds: 60,
       samples: new Float64Array([1, 2, 3, 0.1, 0.2, 0.3]),
     });
-    compressed = brotliCompressArrayBuffer(decompressed);
+    compressed = passthrough(decompressed);
     sha = sha256Hex(compressed);
   });
 
@@ -235,6 +227,9 @@ describe('ChunkLoader.load — error paths', () => {
     const file: ManifestFile = {
       url: 'data/bad.bin.br',
       sha256: 'f'.repeat(64), // not the actual sha
+      // Runtime checks decompressedSha256 (Story 1.16); set a value that
+      // doesn't match the actual decompressed bytes.
+      decompressedSha256: 'f'.repeat(64),
       sizeBytes: compressed.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -243,7 +238,6 @@ describe('ChunkLoader.load — error paths', () => {
     const fetchImpl = mockFetchOk(compressed);
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
     await expect(loader.load(file)).rejects.toBeInstanceOf(ChunkIntegrityError);
   });
@@ -257,11 +251,12 @@ describe('ChunkLoader.load — error paths', () => {
       cadenceSeconds: 60,
       magic: 'BAD!',
     });
-    const brokenCompressed = brotliCompressArrayBuffer(broken);
+    const brokenCompressed = passthrough(broken);
     const brokenSha = sha256Hex(brokenCompressed);
     const file: ManifestFile = {
       url: 'data/bad-magic.bin.br',
       sha256: brokenSha,
+      decompressedSha256: brokenSha,
       sizeBytes: brokenCompressed.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -270,7 +265,6 @@ describe('ChunkLoader.load — error paths', () => {
     const fetchImpl = mockFetchOk(brokenCompressed);
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
     await expect(loader.load(file)).rejects.toBeInstanceOf(VtrjFormatError);
   });
@@ -284,10 +278,11 @@ describe('ChunkLoader.load — error paths', () => {
       cadenceSeconds: 60,
       version: 99,
     });
-    const c = brotliCompressArrayBuffer(broken);
+    const c = passthrough(broken);
     const file: ManifestFile = {
       url: 'data/bad-ver.bin.br',
       sha256: sha256Hex(c),
+      decompressedSha256: sha256Hex(c),
       sizeBytes: c.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -295,7 +290,6 @@ describe('ChunkLoader.load — error paths', () => {
     };
     const loader = new ChunkLoader({
       fetchImpl: mockFetchOk(c),
-      decompress: nodeBrotliDecompress,
     });
     await expect(loader.load(file)).rejects.toThrow(/version/);
   });
@@ -304,6 +298,7 @@ describe('ChunkLoader.load — error paths', () => {
     const file: ManifestFile = {
       url: 'data/missing.bin.br',
       sha256: sha,
+      decompressedSha256: sha,
       sizeBytes: compressed.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -320,7 +315,6 @@ describe('ChunkLoader.load — error paths', () => {
     ) as unknown as typeof fetch;
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
     await expect(loader.load(file)).rejects.toThrow(/404/);
   });
@@ -344,12 +338,13 @@ describe('ChunkLoader — LRU eviction', () => {
         cadenceSeconds: 60,
         samples: new Float64Array([i, 0, 0, 0, 0, 0]),
       });
-      const c = brotliCompressArrayBuffer(dec);
+      const c = passthrough(dec);
       const url = `data/c${i}.bin.br`;
       blobs.set(url, c);
       files.push({
         url,
         sha256: sha256Hex(c),
+        decompressedSha256: sha256Hex(c),
         sizeBytes: c.byteLength,
         timeRangeEt: [i * 1000, i * 1000 + 60],
         cadenceSec: 60,
@@ -378,7 +373,6 @@ describe('ChunkLoader — LRU eviction', () => {
 
     const loader = new ChunkLoader({
       fetchImpl,
-      decompress: nodeBrotliDecompress,
     });
 
     for (const f of files) {
@@ -401,10 +395,11 @@ describe('ChunkLoader — subscribe / loading observable', () => {
       cadenceSeconds: 60,
       samples: new Float64Array([1, 2, 3, 0, 0, 0]),
     });
-    const c = brotliCompressArrayBuffer(dec);
+    const c = passthrough(dec);
     const file: ManifestFile = {
       url: 'data/sub.bin.br',
       sha256: sha256Hex(c),
+      decompressedSha256: sha256Hex(c),
       sizeBytes: c.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -413,7 +408,6 @@ describe('ChunkLoader — subscribe / loading observable', () => {
     const events: boolean[] = [];
     const loader = new ChunkLoader({
       fetchImpl: mockFetchOk(c),
-      decompress: nodeBrotliDecompress,
     });
     const unsub = loader.subscribe((v) => events.push(v));
     expect(loader.loading).toBe(false);
@@ -431,10 +425,11 @@ describe('ChunkLoader — subscribe / loading observable', () => {
       cadenceSeconds: 60,
       samples: new Float64Array([1, 2, 3, 0, 0, 0]),
     });
-    const c2 = brotliCompressArrayBuffer(dec2);
+    const c2 = passthrough(dec2);
     const file2: ManifestFile = {
       url: 'data/sub2.bin.br',
       sha256: sha256Hex(c2),
+      decompressedSha256: sha256Hex(c2),
       sizeBytes: c2.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -442,7 +437,6 @@ describe('ChunkLoader — subscribe / loading observable', () => {
     };
     const loader2 = new ChunkLoader({
       fetchImpl: mockFetchOk(c2),
-      decompress: nodeBrotliDecompress,
     });
     const events2: boolean[] = [];
     const unsub2 = loader2.subscribe((v) => events2.push(v));

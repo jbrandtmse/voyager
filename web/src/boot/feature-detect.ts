@@ -12,12 +12,18 @@
 // The two share a single canonical implementation (PROBE_BODY) so a
 // drift between the runtime and the test-mode probe is impossible.
 
-export type ProbeFailure = 'webgl2' | 'wasm' | 'brotli' | null;
+// Story 1.16 — removed 'brotli' from the failure-reason set. Brotli was
+// never standardized into the JS Compression Streams API; no production
+// browser supports `DecompressionStream('br')`. The chunk loader now uses
+// a wasm brotli decoder (`brotli-dec-wasm`) which works in every browser
+// that passes the WebAssembly check. The probe therefore only needs to
+// detect WebGL2 + WebAssembly. The `unsupported.html?reason=brotli` branch
+// remains as defensive dead code; it is unreachable from the live probe.
+export type ProbeFailure = 'webgl2' | 'wasm' | null;
 
 export interface ProbeResult {
   webgl2: boolean;
   wasm: boolean;
-  brotli: boolean;
 }
 
 /**
@@ -27,10 +33,15 @@ export interface ProbeResult {
  * to negotiate — the plugin wraps this string in `(function(){...})();`
  * and wraps THAT in `<script>...</script>`.
  *
- * Probe order: WebGL2 → WebAssembly → brotli (`DecompressionStream('br')`).
- * First failure wins; the URL `reason` reflects the first missing piece.
- * On full success we dynamic-import the main entry so the bundle never
- * loads on an unsupported browser.
+ * Probe order: WebGL2 → WebAssembly. First failure wins; the URL `reason`
+ * reflects the first missing piece. On full success we dynamic-import the
+ * main entry so the bundle never loads on an unsupported browser.
+ *
+ * Story 1.16 removed the brotli check: brotli is now decompressed by the
+ * `brotli-dec-wasm` polyfill rather than the (non-existent) `DecompressionStream('br')`
+ * JS API, so brotli capability is no longer a boot prerequisite. The
+ * `unsupported.html?reason=brotli` branch remains in the fallback page
+ * as defensive dead code in case a future browser ships without WebAssembly.
  *
  * The `__MAIN_ENTRY__` placeholder is replaced at build time with the
  * Vite-resolved hashed asset URL for `/src/main.ts` (so the import survives
@@ -40,7 +51,6 @@ export interface ProbeResult {
 export const PROBE_BODY = `var r=null;
 if(typeof window.WebGL2RenderingContext!=='function')r='webgl2';
 else if(typeof window.WebAssembly!=='object')r='wasm';
-else{try{new DecompressionStream('br');}catch(e){r='brotli';}}
 if(r){window.location.replace('/unsupported.html?reason='+r);}
 else{import('__MAIN_ENTRY__');}`;
 
@@ -95,31 +105,16 @@ export const probeFeatures = (win: Window | Record<string, unknown> = window): P
   const w = win as Record<string, unknown>;
   const webgl2 = typeof w['WebGL2RenderingContext'] === 'function';
   const wasm = typeof w['WebAssembly'] === 'object';
-  let brotli = false;
-  if (typeof w['DecompressionStream'] === 'function') {
-    try {
-      // The constructor itself is what fails on browsers that ship
-      // DecompressionStream but don't support the 'br' format. We don't
-      // need to actually decode anything — the constructor throws on
-      // unsupported formats per the Compression Streams spec.
-      const Ctor = w['DecompressionStream'] as new (format: string) => unknown;
-      new Ctor('br');
-      brotli = true;
-    } catch {
-      brotli = false;
-    }
-  }
-  return { webgl2, wasm, brotli };
+  return { webgl2, wasm };
 };
 
 /**
  * Determine the first failing capability in probe-order. Returns null if
- * all three pass. The inline-probe source must implement equivalent
- * ordering — `firstFailure(probeFeatures())` is the test-side mirror.
+ * both pass. The inline-probe source must implement equivalent ordering
+ * — `firstFailure(probeFeatures())` is the test-side mirror.
  */
 export const firstFailure = (result: ProbeResult): ProbeFailure => {
   if (!result.webgl2) return 'webgl2';
   if (!result.wasm) return 'wasm';
-  if (!result.brotli) return 'brotli';
   return null;
 };

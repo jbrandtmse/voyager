@@ -6,7 +6,6 @@
 // loose URL matching, LRU recency-tracking errors, fetch coalescing, etc.
 
 import { describe, it, expect, vi } from 'vitest';
-import { brotliCompressSync, brotliDecompressSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -71,12 +70,7 @@ const buildVtrj = (params: {
   return buf;
 };
 
-const brotliCompressArrayBuffer = (input: ArrayBuffer): ArrayBuffer => {
-  const compressed = brotliCompressSync(Buffer.from(input));
-  const out = new ArrayBuffer(compressed.byteLength);
-  new Uint8Array(out).set(compressed);
-  return out;
-};
+const passthrough = (input: ArrayBuffer): ArrayBuffer => input;
 
 const sha256Hex = (input: ArrayBuffer): string => {
   const h = createHash('sha256');
@@ -84,12 +78,7 @@ const sha256Hex = (input: ArrayBuffer): string => {
   return h.digest('hex');
 };
 
-const nodeBrotliDecompress = async (compressed: ArrayBuffer): Promise<ArrayBuffer> => {
-  const out = brotliDecompressSync(Buffer.from(compressed));
-  const ab = new ArrayBuffer(out.byteLength);
-  new Uint8Array(ab).set(out);
-  return ab;
-};
+// (Story 1.16 removed nodeBrotliDecompress — chunk-loader no longer decompresses)
 
 const mockFetchOk = (compressed: ArrayBuffer): typeof fetch =>
   vi.fn(async () => ({
@@ -144,6 +133,7 @@ const buildValidManifestJson = (): Record<string, unknown> => ({
         {
           url: 'data/v1.bin.br',
           sha256: 'a'.repeat(64),
+          decompressedSha256: 'a'.repeat(64),
           sizeBytes: 100,
           timeRangeEt: [0, 60],
           cadenceSec: 60,
@@ -236,7 +226,7 @@ describe('ChunkLoader rejects byte-truncated payloads (defense)', () => {
       cadenceSeconds: 60,
       samples: new Float64Array(66).map((_, i) => i + 1),
     });
-    const fullCompressed = brotliCompressArrayBuffer(dec);
+    const fullCompressed = passthrough(dec);
     // Truncate enough bytes that the brotli stream is unrecoverable. Brotli
     // tail-truncation reliably fails Node's brotliDecompressSync.
     const truncBytes = Math.max(8, Math.floor(fullCompressed.byteLength / 3));
@@ -244,6 +234,7 @@ describe('ChunkLoader rejects byte-truncated payloads (defense)', () => {
     const file: ManifestFile = {
       url: 'data/truncated.bin.br',
       sha256: sha256Hex(truncated),
+      decompressedSha256: sha256Hex(truncated),
       sizeBytes: truncated.byteLength,
       timeRangeEt: [0, 600],
       cadenceSec: 60,
@@ -251,7 +242,6 @@ describe('ChunkLoader rejects byte-truncated payloads (defense)', () => {
     };
     const loader = new ChunkLoader({
       fetchImpl: mockFetchOk(truncated),
-      decompress: nodeBrotliDecompress,
     });
     // Must throw; must NOT silently resolve to an empty chunk.
     await expect(loader.load(file)).rejects.toBeInstanceOf(Error);
@@ -287,6 +277,7 @@ describe('EphemerisService never extrapolates outside segment range (defense)', 
             {
               url: 'data/seg.bin.br',
               sha256: 'a'.repeat(64),
+              decompressedSha256: 'a'.repeat(64),
               sizeBytes: 100,
               timeRangeEt: [etStart, etEnd],
               cadenceSec: cadence,
@@ -355,6 +346,7 @@ describe('Hermite interpolator is monotonic on linear data (defense)', () => {
             {
               url: 'data/lin.bin.br',
               sha256: 'a'.repeat(64),
+              decompressedSha256: 'a'.repeat(64),
               sizeBytes: 100,
               timeRangeEt: [etStart, etStart + (sampleCount - 1) * cadence],
               cadenceSec: cadence,
@@ -435,6 +427,7 @@ describe('Hermite reproduces sample values exactly at sample boundaries (defense
             {
               url: 'data/exact.bin.br',
               sha256: 'a'.repeat(64),
+              decompressedSha256: 'a'.repeat(64),
               sizeBytes: 100,
               timeRangeEt: [etStart, etStart + (sampleCount - 1) * cadence],
               cadenceSec: cadence,
@@ -488,12 +481,13 @@ describe('LRU eviction respects recency, not insertion order (defense)', () => {
         cadenceSeconds: 60,
         samples: new Float64Array([i, 0, 0, 0, 0, 0]),
       });
-      const c = brotliCompressArrayBuffer(dec);
+      const c = passthrough(dec);
       const url = `data/lru-${i}.bin.br`;
       blobs.set(url, c);
       files.push({
         url,
         sha256: sha256Hex(c),
+        decompressedSha256: sha256Hex(c),
         sizeBytes: c.byteLength,
         timeRangeEt: [i * 1000, i * 1000 + 60],
         cadenceSec: 60,
@@ -507,7 +501,7 @@ describe('LRU eviction respects recency, not insertion order (defense)', () => {
       }
       return { ok: true, status: 200, statusText: 'OK', arrayBuffer: async () => data } as unknown as Response;
     }) as unknown as typeof fetch;
-    const loader = new ChunkLoader({ fetchImpl, decompress: nodeBrotliDecompress });
+    const loader = new ChunkLoader({ fetchImpl });
 
     // Load chunks 0..11 (fills cache to capacity 12).
     for (let i = 0; i < 12; i++) {
@@ -544,10 +538,11 @@ describe('ChunkLoader coalesces concurrent in-flight requests (defense)', () => 
       cadenceSeconds: 60,
       samples: new Float64Array([1, 2, 3, 0, 0, 0]),
     });
-    const c = brotliCompressArrayBuffer(dec);
+    const c = passthrough(dec);
     const file: ManifestFile = {
       url: 'data/coalesce.bin.br',
       sha256: sha256Hex(c),
+      decompressedSha256: sha256Hex(c),
       sizeBytes: c.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -562,7 +557,7 @@ describe('ChunkLoader coalesces concurrent in-flight requests (defense)', () => 
           resolveResp = res;
         }),
     ) as unknown as typeof fetch;
-    const loader = new ChunkLoader({ fetchImpl, decompress: nodeBrotliDecompress });
+    const loader = new ChunkLoader({ fetchImpl });
     const calls = [
       loader.load(file),
       loader.load(file),
@@ -664,10 +659,11 @@ describe('ChunkLoader.subscribe contract (defense)', () => {
       cadenceSeconds: 60,
       samples: new Float64Array([1, 2, 3, 0, 0, 0]),
     });
-    const c = brotliCompressArrayBuffer(dec);
+    const c = passthrough(dec);
     const file: ManifestFile = {
       url: 'data/sub-order.bin.br',
       sha256: sha256Hex(c),
+      decompressedSha256: sha256Hex(c),
       sizeBytes: c.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -675,7 +671,6 @@ describe('ChunkLoader.subscribe contract (defense)', () => {
     };
     const loader = new ChunkLoader({
       fetchImpl: mockFetchOk(c),
-      decompress: nodeBrotliDecompress,
     });
     const log: Array<{ sub: string; value: boolean }> = [];
     const unsubA = loader.subscribe((v) => log.push({ sub: 'A', value: v }));
@@ -700,10 +695,11 @@ describe('ChunkLoader.subscribe contract (defense)', () => {
       cadenceSeconds: 60,
       samples: new Float64Array([4, 5, 6, 0, 0, 0]),
     });
-    const c2 = brotliCompressArrayBuffer(dec2);
+    const c2 = passthrough(dec2);
     const file2: ManifestFile = {
       url: 'data/sub-order-2.bin.br',
       sha256: sha256Hex(c2),
+      decompressedSha256: sha256Hex(c2),
       sizeBytes: c2.byteLength,
       timeRangeEt: [0, 60],
       cadenceSec: 60,
@@ -713,7 +709,6 @@ describe('ChunkLoader.subscribe contract (defense)', () => {
     // use a loader with a fresh fetchImpl that serves c2.
     const loader2 = new ChunkLoader({
       fetchImpl: mockFetchOk(c2),
-      decompress: nodeBrotliDecompress,
     });
     const log2: string[] = [];
     const ua = loader2.subscribe(() => log2.push('A'));
@@ -752,6 +747,7 @@ describe('EphemerisService.getStateAt is referentially transparent (defense)', (
             {
               url: 'data/det.bin.br',
               sha256: 'a'.repeat(64),
+              decompressedSha256: 'a'.repeat(64),
               sizeBytes: 100,
               timeRangeEt: [100, 300],
               cadenceSec: 50,

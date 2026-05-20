@@ -47,6 +47,14 @@ Both tools are committed as first-class. CI never invokes Chrome-DevTools MCP. A
 - Chrome-DevTools MCP is invoked via the Claude Code session's `mcp__chrome-devtools-mcp__*` tool surface — no project-side install or config.
 - CI pipeline (ADR 0017) never references Chrome-DevTools MCP.
 
+## Amendment 2026-05-20 (Story 1.16) — Brotli `initScript` shim no longer needed
+
+During Stories 1.5–1.15, agent-time MCP sessions required an `initScript` brotli shim because the Chrome for Testing 148 bundled with `mcp__chrome-devtools-mcp__*` (and every other current stable Chrome) lacks `DecompressionStream('br')` support. The shim was documented as the canonical bypass in `_bmad/custom/voyager-skill-rules.md` Rule 6 and `_bmad-output/implementation-artifacts/deferred-work.md`.
+
+Story 1.16 removed the dependency on `DecompressionStream('br')` at the application layer by switching the chunk loader to a wasm brotli polyfill (`brotli-dec-wasm`). The boot probe no longer checks for brotli; brotli decompression now happens in JS via the wasm module, gated only on WebAssembly support (which is universal).
+
+**Implication for agent-time MCP work going forward:** no `initScript` argument is required when navigating to `localhost:5173/` or any deployed Voyager URL. The shim has been removed from `voyager-skill-rules.md`. Existing post-hoc smoke evidence in `1-5-ac5-precision-smoke-screens/` and `1-15-smoke-evidence/` retains historical references to the shim; new evidence (e.g., `1-16-smoke-evidence/`) is taken without it.
+
 ## Alternatives Considered
 
 - **Playwright only.** Rejected for agent-time: the round-trip of writing a spec file, running headless Chromium, and parsing output is too slow for interactive precision spikes and visual iteration. Also, agent-time uses Lighthouse audits and live DevTools panes that Playwright doesn't expose cleanly.

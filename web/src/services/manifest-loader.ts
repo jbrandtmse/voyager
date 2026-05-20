@@ -17,7 +17,18 @@ import { z, type ZodError } from 'zod';
 
 const FileSchema = z.object({
   url: z.string(),
+  // sha256 of the file as it exists on disk (brotli-compressed). Story 1.3's
+  // bake-side hash discipline + bake determinism gate (NFR-R4) compute
+  // against this value. The runtime client cannot verify it because Vite /
+  // Cloudflare serve the file with `Content-Encoding: br`, so the browser
+  // transparently decompresses before delivering bytes to JS.
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  // sha256 of the decompressed VTRJ body. Story 1.16 adds this so the
+  // runtime chunk-loader can verify integrity of the bytes it actually
+  // receives from `fetch` (which are post-HTTP-decompression). Optional
+  // during the rollout so old manifests still parse; required once every
+  // emitting bake produces it.
+  decompressedSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   sizeBytes: z.number().int().positive(),
   timeRangeEt: z.tuple([z.number(), z.number()]),
   cadenceSec: z.number().positive(),
