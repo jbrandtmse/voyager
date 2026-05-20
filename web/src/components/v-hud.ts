@@ -9,6 +9,7 @@ import './v-hud-instruments';
 import type { VHudDate } from './v-hud-date';
 import type { VHudDistance } from './v-hud-distance';
 import type { VHudSpeed } from './v-hud-speed';
+import type { VHudInstruments } from './v-hud-instruments';
 import type { ClockManager } from '../services/clock-manager';
 import type { EphemerisService } from '../services/ephemeris-service';
 
@@ -151,6 +152,13 @@ export class VHud extends BaseElement {
     return this.shadowRoot?.querySelector<VHudSpeed>('v-hud-speed') ?? null;
   }
 
+  get hudInstruments(): VHudInstruments | null {
+    return (
+      this.shadowRoot?.querySelector<VHudInstruments>('v-hud-instruments') ??
+      null
+    );
+  }
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     // Propagate wiring down to children after Lit has rendered them.
@@ -163,6 +171,12 @@ export class VHud extends BaseElement {
     }
     const sp = this.hudSpeed;
     if (sp !== null) sp.clockManager = this.clockManager;
+    // Story 2.9 — `<v-hud-instruments>` needs the clock so its seed render
+    // can compute the initial shut-off state without waiting for the first
+    // onFrame tick. After the seed, per-frame `tick()` from the host below
+    // keeps the strikethrough state in sync.
+    const inst = this.hudInstruments;
+    if (inst !== null) inst.clockManager = this.clockManager;
   }
 
   /**
@@ -173,6 +187,8 @@ export class VHud extends BaseElement {
   tick(et: number): void {
     this.hudDate?.tick(et);
     this.hudDistance?.tick(et);
+    // Story 2.9 — instrument-shutoff strikethrough state is driven by ET.
+    this.hudInstruments?.tick(et);
   }
 
   override render(): TemplateResult {

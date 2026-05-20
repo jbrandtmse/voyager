@@ -10,6 +10,10 @@ import './styles/breakpoints.css';
 // surface because the homepage footer ("Attributions" link) uses its
 // `.v-app-footer` rules.
 import './styles/about.css';
+// Story 2.9 — editorial side-panel typography for `<v-chapter-copy>` (Light
+// DOM, so tokens cascade directly). Loaded unconditionally because the
+// component is part of the simulation surface, not chrome.
+import './styles/chapter-copy.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
@@ -276,6 +280,12 @@ const bootstrap = (): void => {
       // present non-embed) + AC2/AC6 (?/A no-ops in embed) via this
       // handle plus the document-level keydown shortcut path.
       helpOverlay: firstPaintHandle.helpOverlay,
+      // Story 2.9 — chapter-copy panel is editorial content (mounted in
+      // both default and embed modes). Null only when no director was
+      // wired (defensive — the simulation surface always wires one).
+      // Lead MCP smoke uses this to assert AC1 on cold-load of
+      // /c/v1-heliopause + /c/v2-heliopause.
+      chapterCopy: firstPaintHandle.chapterCopy,
       urlRouter,
       urlSync,
       // Story 2.5 — expose the boot-time embed flag so the lead-driven

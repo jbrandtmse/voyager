@@ -1,0 +1,50 @@
+/* Story 2.9 — `<v-chapter-copy>` editorial side-panel.
+   Light-DOM Lit element so tokens cascade directly (mirrors the pattern from
+   Story 2.7's about.css). Right-anchored, ~32ch wide column over the canvas,
+   serif body type with fade-in/out governed by --v-duration-base
+   (prefers-reduced-motion collapses the token to 0ms via global.css). */
+
+v-chapter-copy {
+  position: fixed;
+  top: 50%;
+  right: var(--v-edge-margin);
+  transform: translateY(-50%);
+  width: min(36ch, 40vw);
+  z-index: var(--v-z-overlay);
+  pointer-events: none; /* editorial copy — not interactive */
+  font-family: var(--v-font-serif);
+  font-size: var(--v-font-size-chapter-copy);
+  line-height: 1.55;
+  color: var(--v-color-fg);
+}
+
+/* The article itself carries the visibility state. data-active="true" fades
+   in; data-active="false" fades out. The empty-article case stays in the DOM
+   so the transition has a stable node to animate. */
+v-chapter-copy .v-chapter-copy {
+  opacity: 0;
+  transition: opacity var(--v-duration-base) var(--v-ease-out);
+  text-shadow: 0 0 8px rgba(10, 14, 20, 0.8);
+}
+
+v-chapter-copy .v-chapter-copy[data-active='true'] {
+  opacity: 1;
+}
+
+v-chapter-copy .v-chapter-copy-lede {
+  font-family: var(--v-font-sans);
+  font-size: var(--v-font-size-chapter-title);
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--v-space-4) 0;
+  color: var(--v-color-fg);
+}
+
+v-chapter-copy .v-chapter-copy-paragraph {
+  margin: 0 0 var(--v-space-4) 0;
+}
+
+v-chapter-copy .v-chapter-copy-paragraph:last-child {
+  margin-bottom: 0;
+}

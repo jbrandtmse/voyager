@@ -21,12 +21,14 @@ import '../components/v-speed-multiplier';
 import '../components/v-hud';
 import '../components/v-chapter-index';
 import '../components/v-help-overlay';
+import '../components/v-chapter-copy';
 import type { VTimelineScrubber } from '../components/v-timeline-scrubber';
 import type { VPlayButton } from '../components/v-play-button';
 import type { VSpeedMultiplier } from '../components/v-speed-multiplier';
 import type { VHud } from '../components/v-hud';
 import type { VChapterIndex } from '../components/v-chapter-index';
 import type { VHelpOverlay } from '../components/v-help-overlay';
+import type { VChapterCopy } from '../components/v-chapter-copy';
 import type { RenderEngine } from '../render/render-engine';
 import type { EphemerisService } from '../services/ephemeris-service';
 import type { ChapterDirector } from '../services/chapter-director';
@@ -141,6 +143,13 @@ export interface FirstPaintHandle {
    * become no-ops via the no-listener-attached pattern).
    */
   helpOverlay: VHelpOverlay | null;
+  /**
+   * Story 2.9 — right-side text-card panel for V1H / V2H heliopause
+   * chapters. Always mounted (NOT chrome — editorial copy is part of the
+   * embed view's content per the Story 2.5 chrome-vs-content split).
+   * `null` only when `chapterDirector` is not wired (i.e. test mounts).
+   */
+  chapterCopy: VChapterCopy | null;
   clockManager: ClockManager;
   urlSync: URLSync;
   /** Detach the global keyboard handlers and stop subscriptions. */
@@ -253,6 +262,19 @@ export const startFirstPaint = (
     host.appendChild(helpOverlay);
   }
 
+  // Story 2.9 — right-side text-card panel for V1H / V2H heliopause
+  // chapters. The panel is editorial content (not chrome) so it mounts
+  // even in embed mode — institutional embeds still benefit from the
+  // chapter prose appearing when the simulation crosses a heliopause
+  // window. It is only mounted when a ChapterDirector is wired so the
+  // legacy Story 1.9-only test mounts (no director) still pass.
+  let chapterCopy: VChapterCopy | null = null;
+  if (options.chapterDirector !== undefined) {
+    chapterCopy = document.createElement('v-chapter-copy') as VChapterCopy;
+    chapterCopy.chapterDirector = options.chapterDirector;
+    host.appendChild(chapterCopy);
+  }
+
   // Per-frame visible-DOM mutation lives outside Lit reactivity
   // (architecture line 424). When a RenderEngine is wired, hook each frame.
   let detachFrame: (() => void) | null = null;
@@ -301,6 +323,7 @@ export const startFirstPaint = (
     hud,
     chapterIndex,
     helpOverlay,
+    chapterCopy,
     clockManager,
     urlSync,
     dispose,
