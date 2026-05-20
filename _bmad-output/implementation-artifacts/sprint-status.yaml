@@ -41,6 +41,9 @@
 
 generated: 2026-05-18
 last_updated: 2026-05-20
+# 2-8 set to done on 2026-05-20 (cr-2-8 / epic-cycle-2026-05-20) — code review APPROVE (0 HIGH, 0 MEDIUM, 2 LOW deferred to deferred-work.md). ADR-0013 (Lit no decorators), ADR-0025 (WAI-ARIA Dialog Modal + focus-trap + semantic <kbd> + Esc closes/stopPropagation), ADR-0026 (zero `any`) compliance verified. Story 2.3 pattern fidelity confirmed: listbox keydown stopPropagation for Esc, focus-trap microtask race guard (cr-2-3 fix), reduced-motion via central --v-duration-base token. cr-2-7's window.location.assign('/about') no-pushState navigation correctly mirrored for A shortcut. Embed-mode no-op via skip-mount (mirrors Story 2.5). --v-color-bg-elevated token correctly routed through tokens.css (Story 1.7 defense). Overlay coexistence with chapter-index pinned as design-intent by qa-2-8 (both can be open simultaneously). Scrim @click handler present in source (happy-dom limitation acknowledged; covered by Integration AC8 MCP smoke). Web vitest 1893 pass, typecheck clean, lint baseline (5 pre-existing warnings) preserved. Integration AC8 lead-executed Chrome DevTools MCP smoke remains the binding browser-evidence gate (Rule 7); code-side prerequisites in place.
+# 2-8 set to in-progress on 2026-05-20 (dev-2-8 / epic-cycle-2026-05-20)
+# 2-8 set to review on 2026-05-20 (dev-2-8 / epic-cycle-2026-05-20) — T1–T6 implemented; new `<v-help-overlay>` Lit Shadow-DOM modal component (480px centered dialog, 4 H2 sections with kbd-rendered shortcuts) + `?` and `A` document-level keyboard shortcuts (no-op in embed mode via no-listener-attached pattern, mirroring Story 2.5); first-paint conditional mount + dispose handle exposes `helpOverlay` on `FirstPaintHandle` and `__voyagerDebug.helpOverlay` (null in embed mode); new `--v-color-bg-elevated` design token added for near-bg modal fill (Story 1.7 defense compliance); reduced-motion via central `--v-duration-base` token (no per-component override, mirroring Story 2.3). web vitest 1847 pass (+43 from 1804 baseline); typecheck clean; lint baseline preserved (5 pre-existing warnings, 0 new). focus-trap 8.2.1 reused from Story 2.3 (no new dep). AC1–AC6 covered by 41 new unit tests; Integration AC8 = lead-executed Chrome DevTools MCP smoke (DEV debug surface `window.__voyagerDebug.helpOverlay` published).
 # 2-1 set to in-progress on 2026-05-20 (dev-2-1 / epic-cycle-2026-05-20)
 # 2-1 set to review on 2026-05-20 (dev-2-1 / epic-cycle-2026-05-20) — T1–T6 implemented; 17 new files + main.ts wire-up; 1321 web vitest pass (+36 from 1285 baseline); typecheck + lint clean (5 pre-existing warnings). FSM transient-state semantics resolved cleanly (entering/exiting are transition events, never resting). Integration AC8 DEV debug surface (`window.__voyagerDebug.chapterDirector`) ready for lead-driven Chrome DevTools MCP smoke. ViewframeService leg forward-deferred to Story 4.1 per story file.
 # 2-1 set to done on 2026-05-20 (epic-cycle-2026-05-20) — QA added 3 cross-cutting test files (42 new tests, vitest 1363 pass); code review APPROVE_WITH_CHANGES_RESOLVED (1 HIGH ADR-0001 slug violation resolved at slug-source — launch chapters renamed to `launch-v1`/`launch-v2`, encounter slugs retained per ADR; epics.md amended for Story 2.1 + 2.4; 3 LOWs deferred). Lead Chrome DevTools MCP smoke PASS: 4 ET probes verified ChapterDirector ↔ ClockManager wire-up (boot launch-v2 / V1 Jupiter / between-chapter null / V2 Neptune). Evidence: _bmad-output/implementation-artifacts/2-1-smoke-evidence/.
@@ -120,8 +123,8 @@ development_status:
   2-4-per-chapter-url-slug-scheme-and-pushstate-navigation: done
   2-5-embed-true-chrome-less-mode: done
   2-6-pre-rendered-open-graph-cards-per-chapter: done
-  2-7-v-about-page-and-v-attribution-panel: review
-  2-8-v-help-overlay-modal-with-full-keyboard-shortcut-inventory: backlog
+  2-7-v-about-page-and-v-attribution-panel: done
+  2-8-v-help-overlay-modal-with-full-keyboard-shortcut-inventory: done
   2-9-heliopause-text-cards-and-instrument-shutoff-hud-integration: backlog
   epic-2-retrospective: optional
 

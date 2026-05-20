@@ -271,6 +271,11 @@ const bootstrap = (): void => {
       // The MCP smoke must tolerate the missing key by checking embedMode
       // directly when verifying AC2.
       chapterIndex: firstPaintHandle.chapterIndex,
+      // Story 2.8 — same null-in-embed-mode contract for the help
+      // overlay. Lead Chrome DevTools MCP smoke checks AC1 (icon
+      // present non-embed) + AC2/AC6 (?/A no-ops in embed) via this
+      // handle plus the document-level keydown shortcut path.
+      helpOverlay: firstPaintHandle.helpOverlay,
       urlRouter,
       urlSync,
       // Story 2.5 — expose the boot-time embed flag so the lead-driven

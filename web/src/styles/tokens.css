@@ -7,6 +7,10 @@
   /* ---------- Colors — deep-space palette ---------- */
   /* Background / foreground (WCAG 2.2 AA contrast verified, UX spec §930-936). */
   --v-color-bg: #0a0e14;
+  /* Elevated near-bg fill — modals / popovers that need to sit slightly
+     above --v-color-bg under the overlay scrim. One step lighter than
+     bg so the dialog edge reads as raised against the scrim. */
+  --v-color-bg-elevated: #0f1419;
   --v-color-fg: #e8eaed;
   --v-color-fg-muted: #9aa0a6;
   --v-color-fg-quiet: #5f6368;

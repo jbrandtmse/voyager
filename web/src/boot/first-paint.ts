@@ -20,11 +20,13 @@ import '../components/v-play-button';
 import '../components/v-speed-multiplier';
 import '../components/v-hud';
 import '../components/v-chapter-index';
+import '../components/v-help-overlay';
 import type { VTimelineScrubber } from '../components/v-timeline-scrubber';
 import type { VPlayButton } from '../components/v-play-button';
 import type { VSpeedMultiplier } from '../components/v-speed-multiplier';
 import type { VHud } from '../components/v-hud';
 import type { VChapterIndex } from '../components/v-chapter-index';
+import type { VHelpOverlay } from '../components/v-help-overlay';
 import type { RenderEngine } from '../render/render-engine';
 import type { EphemerisService } from '../services/ephemeris-service';
 import type { ChapterDirector } from '../services/chapter-director';
@@ -133,6 +135,12 @@ export interface FirstPaintHandle {
    * must null-check before exposing it.
    */
   chapterIndex: VChapterIndex | null;
+  /**
+   * Story 2.8 — `null` when `embedEnabled === true` (the help overlay
+   * is chrome and is not mounted in embed mode, so `?` + `A` shortcuts
+   * become no-ops via the no-listener-attached pattern).
+   */
+  helpOverlay: VHelpOverlay | null;
   clockManager: ClockManager;
   urlSync: URLSync;
   /** Detach the global keyboard handlers and stop subscriptions. */
@@ -231,6 +239,20 @@ export const startFirstPaint = (
     host.appendChild(chapterIndex);
   }
 
+  // Story 2.8 — help overlay (top-right `?` toggle, modal with the
+  // full keyboard shortcut inventory). Same conditional-mount pattern
+  // as the chapter-index above: in embed mode the element is NOT
+  // appended to the DOM, so the document-level `?` and `A` keyboard
+  // shortcuts the component registers in connectedCallback are
+  // automatically no-ops (no listener attached — mirrors Story 2.5's
+  // M / 1–9 contract).
+  let helpOverlay: VHelpOverlay | null = null;
+  if (options.embedEnabled !== true) {
+    helpOverlay = document.createElement('v-help-overlay') as VHelpOverlay;
+    helpOverlay.style.visibility = 'hidden';
+    host.appendChild(helpOverlay);
+  }
+
   // Per-frame visible-DOM mutation lives outside Lit reactivity
   // (architecture line 424). When a RenderEngine is wired, hook each frame.
   let detachFrame: (() => void) | null = null;
@@ -251,6 +273,10 @@ export const startFirstPaint = (
     // Story 2.5 — chapterIndex is null in embed mode (not appended).
     if (chapterIndex !== null) {
       chapterIndex.style.visibility = '';
+    }
+    // Story 2.8 — helpOverlay is null in embed mode (not appended).
+    if (helpOverlay !== null) {
+      helpOverlay.style.visibility = '';
     }
   };
   titleCard.addEventListener('voyager:title-card-complete', onComplete, { once: true });
@@ -274,6 +300,7 @@ export const startFirstPaint = (
     speedMultiplier,
     hud,
     chapterIndex,
+    helpOverlay,
     clockManager,
     urlSync,
     dispose,
