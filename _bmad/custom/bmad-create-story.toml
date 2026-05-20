@@ -1,11 +1,43 @@
-# Voyager project override for bmad-create-story.
-# Loads voyager-skill-rules.md so the skill enforces:
-#   - Rule 1: Integration ACs for every service-introducing story
-#   - Rule 2: Consumed-by / Consumes linkage between producer and consumer stories
-# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+# Project override for bmad-create-story.
+# Loads voyager-skill-rules.md as persistent facts (informational) AND
+# attaches an on_complete hook that fires at the workflow's terminal stage
+# to enforce Rule 1 (Integration ACs), Rule 2 (Consumed-by linkage), and
+# Rule 4 (structured-completion handshake when subagent-invoked).
+# See _bmad/custom/voyager-skill-rules.md for the rule set.
+#
+# Why on_complete (and NOT activation_steps_append):
+# activation_steps_append runs AFTER greet but BEFORE the workflow's main
+# work begins — wrong stage for completion behavior. on_complete fires when
+# the workflow reaches its terminal stage, after the main output has been
+# delivered — the correct stage for the structured-completion handshake.
+# Verify by reading the base customize.toml for bmad-create-story; the
+# comment above on_complete will name the specific completion step.
 
 [workflow]
 
 persistent_facts = [
   "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+]
+
+# on_complete accepts a string scalar OR an array of instructions executed
+# in order. Override wins (replaces the base empty string).
+on_complete = [
+  """
+  Verify Rule 1 (Integration ACs) and Rule 2 (Consumed-by linkage) compliance
+  before declaring the story done. If a service-introducing story lacks an
+  Integration AC, edit the story file to add one — or, if no consumer exists
+  yet, add an explicit "## Integration ACs" section stating "No consumers in
+  this story; the first consumer will be Story X.Y." Silence is not acceptable
+  per Rule 1.
+  """,
+  """
+  If invoked as a subagent under /epic-cycle (the calling context will include
+  the literal phrase "Single-Task Agent (Task-in-Prompt Mode)" in the spawn
+  prompt), follow Rule 4: send EXACTLY ONE STATUS: completed envelope to the
+  team lead in the format specified in the rules file, then STOP. Do not call
+  TaskList. Do not look for more work. Approve any shutdown request immediately.
+
+  If invoked directly by the user (no Task-in-Prompt Mode marker), emit a normal
+  human-facing completion summary instead.
+  """,
 ]

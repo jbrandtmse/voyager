@@ -1,21 +1,22 @@
-# Voyager project override for bmad-qa-generate-e2e-tests.
-# Loads voyager-skill-rules.md so the skill enforces:
-#   - Rule 3: Browser-smoke evidence requirement for web/src/ stories (drives MCP test generation)
-#   - Rule 4: Structured completion handshake when run as a subagent under /epic-cycle
-#   - Rule 6: Chrome DevTools MCP brotli workaround for post-probe surfaces
-# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+# Project override for bmad-qa-generate-e2e-tests.
+# Loads voyager-skill-rules.md as persistent facts (informational) AND
+# attaches an on_complete hook that fires at the workflow's terminal stage
+# for the test-discoverability check and the structured-completion handshake.
+# See _bmad/custom/voyager-skill-rules.md for the rule set.
 #
-# Story 2.0 AC2 adds the "Chrome DevTools MCP smoke" stage requirement via
-# persistent_facts so the skill's Step 5 summary emits an MCP smoke section
-# whenever the story's Files-to-Modify list includes any `web/src/**` path.
+# The persistent_facts array also carries the Voyager-specific Chrome DevTools
+# MCP smoke-stage policy (Story 2.0 AC2) so the skill's test-summary output
+# emits an MCP smoke section whenever the story touches web/src/. This encodes
+# Rule 3 (per-story smoke evidence) + Rule 8 (Chrome DevTools MCP is the
+# canonical browser-smoke driver post-Story-1.16, no shim needed).
 
 [workflow]
 
 persistent_facts = [
   "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
-  """Voyager test-tier policy — Chrome DevTools MCP smoke stage (Story 2.0 AC2, encoding Rule 3 + Rule 6 from voyager-skill-rules.md):
+  """Voyager test-tier policy — Chrome DevTools MCP smoke stage (Story 2.0 AC2, encoding Rule 3 + Rule 8 from voyager-skill-rules.md):
 
-When generating tests for a story whose Files-to-Modify (or equivalent file-touch list) includes any path under `web/src/`, the test-summary output MUST include a dedicated "Chrome DevTools MCP smoke" stage IN ADDITION to the standard Vitest unit / integration / Playwright sections. The MCP smoke stage is the per-story exit criterion for browser-smoke evidence (voyager-skill-rules.md Rule 3) and the canonical browser-smoke driver is Chrome DevTools MCP (Rule 6 — no initScript/shim needed post-Story-1.16).
+When generating tests for a story whose Files-to-Modify (or equivalent file-touch list) includes any path under `web/src/`, the test-summary output MUST include a dedicated "Chrome DevTools MCP smoke" stage IN ADDITION to the standard Vitest unit / integration / Playwright sections. The MCP smoke stage is the per-story exit criterion for browser-smoke evidence (voyager-skill-rules.md Rule 3) and the canonical browser-smoke driver is Chrome DevTools MCP (Rule 8 — no initScript/shim needed post-Story-1.16).
 
 The MCP smoke stage must propose at minimum the following MCP tool calls and asserted observations:
   1. `mcp__chrome-devtools-mcp__navigate_page` — open the dev server URL exercising the story's feature (note any required query params, e.g. `?dev=precision`, `?embed=1`, `?chapter=…`).
@@ -29,4 +30,40 @@ For each AC the MCP smoke covers, name the AC explicitly (e.g. "MCP smoke covers
 Skip rules:
   - If the story's Files-to-Modify list is bake-only (`bake/**`) with no `web/src/` paths, the MCP stage is correctly skipped (this matches the Pure bake-side exemption in voyager-skill-rules.md Rule 3). Note the exemption explicitly in the summary so reviewers know it was considered.
   - For visual stories (precision-smoke / encounter visuals), the MCP stage may reference existing fixture directories — e.g. `_bmad-output/implementation-artifacts/1-5-ac5-precision-smoke-screens/` or `_bmad-output/implementation-artifacts/1-16-smoke-evidence/` — as canonical examples of the screenshot evidence shape (post-Story-1.16 fixtures do not contain the brotli initScript shim).""",
+]
+
+# on_complete accepts a string scalar OR an array of instructions executed
+# in order. Override wins (replaces the base empty string).
+on_complete = [
+  """
+  Verify the test files you generated are actually discoverable by the project's
+  default test suite:
+
+  - Confirm the new test files follow the project's test-file naming convention
+    (whatever extensions, prefixes, or directory placements the project uses).
+  - Confirm they are NOT excluded by an ignore file (e.g., .testignore,
+    .gitignore patterns the runner respects).
+  - Confirm they are NOT tagged or marked in a way that excludes them from the
+    default run (e.g., slow / integration / @skip markers that the default suite
+    explicitly opts out of).
+
+  The purpose of QA is *new tests that run* — not new tests that exist on disk
+  but are silently skipped. If any new test file would be skipped by default,
+  either re-tag it, move it, or surface the issue to the lead.
+  """,
+  """
+  If invoked as a subagent under /epic-cycle (the calling context will include
+  the literal phrase "Single-Task Agent (Task-in-Prompt Mode)" in the spawn
+  prompt), follow Rule 4: send EXACTLY ONE STATUS: completed envelope to the
+  team lead in the format specified in the rules file, then STOP.
+
+  Populate TESTS_ADDED with the full paths of every test file you created
+  (relative to repo root). Populate DECISIONS with one-line summaries of any
+  non-obvious test-design choices. Populate ISSUES_ENCOUNTERED with anything
+  you had to surface (e.g., a story without enough AC detail to test, a
+  testability gap in the dev work, a discoverability issue you fixed).
+
+  If invoked directly by the user (no Task-in-Prompt Mode marker), emit a normal
+  human-facing completion summary instead.
+  """,
 ]

@@ -9,6 +9,9 @@
 # 2026-05-19: Epic 1 reopened (epic-1: done → in-progress) per Epic 1 retrospective Decision C.
 # Story 1.15 (manual-verification defect cleanup) added as backlog → ready-for-dev to address
 # four HIGH defects + NFR-P6/NFR-M4 planning-artifact amendments. See epic-1-retro-2026-05-19.md.
+#
+# 2026-05-20: 2-9 set to done (commit 6fffaf8, EPIC 2 COMPLETE per epic-2-retro-2026-05-20.md).
+# Earlier line marking it 'review' was stale (review→done transition not recorded).
 
 # STATUS DEFINITIONS:
 # ==================
@@ -127,7 +130,7 @@ development_status:
   2-6-pre-rendered-open-graph-cards-per-chapter: done
   2-7-v-about-page-and-v-attribution-panel: done
   2-8-v-help-overlay-modal-with-full-keyboard-shortcut-inventory: done
-  2-9-heliopause-text-cards-and-instrument-shutoff-hud-integration: review
+  2-9-heliopause-text-cards-and-instrument-shutoff-hud-integration: done
   epic-2-retrospective: done
 
   # Epic 3: Attitude Reconstruction — the Differentiator
