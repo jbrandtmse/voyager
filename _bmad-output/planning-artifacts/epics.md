@@ -927,7 +927,7 @@ So that the Pale Blue Dot module (Epic 5) and encounter modules (Epic 4) plug in
 
 **Given** the chapter spec format,
 **When** I inspect `web/src/chapters/specs/`,
-**Then** 10 standard chapter specs exist as TypeScript modules (`v1-launch.ts`, `v2-launch.ts`, `v1-jupiter.ts`, `v2-jupiter.ts`, `v1-saturn.ts`, `v2-saturn.ts`, `v2-uranus.ts`, `v2-neptune.ts`, `v1-heliopause.ts`, `v2-heliopause.ts`),
+**Then** 10 standard chapter specs exist as TypeScript modules (`launch-v1.ts`, `launch-v2.ts`, `v1-jupiter.ts`, `v2-jupiter.ts`, `v1-saturn.ts`, `v2-saturn.ts`, `v2-uranus.ts`, `v2-neptune.ts`, `v1-heliopause.ts`, `v2-heliopause.ts`),
 **And** each spec exports an object with fields `slug` (URL slug), `name` (editorial name), `markerLabel` (2–4 char), `anchorEt` (ISO-8601 → ET conversion), `windowStartEt`, `windowEndEt`, `spacecraft` (`v1`|`v2`|`both`),
 **And** anchor timestamps match the encounter dates documented in PRD §Encounter coverage and `MISSION_FACTS.md` (V1 Jupiter 1979-03-05 12:05, V1 Saturn 1980-11-12 23:46, V2 Neptune 1989-08-25, V1 heliopause 2012-08-25, V2 heliopause 2018-11-05, etc.).
 
@@ -1047,7 +1047,7 @@ So that the artifact becomes a communication vector and curators can build kiosk
 **Given** the URL scheme contract,
 **When** the router boots,
 **Then** the app recognizes two route shapes: `/` (homepage at mission start unless `?t=` overrides) and `/c/<chapter-slug>` (chapter route),
-**And** the chapter slugs are exactly: `v1-launch`, `v2-launch`, `v1-jupiter`, `v2-jupiter`, `v1-saturn`, `v2-saturn`, `v2-uranus`, `v2-neptune`, `pale-blue-dot`, `v1-heliopause`, `v2-heliopause`,
+**And** the chapter slugs are exactly: `launch-v1`, `launch-v2`, `v1-jupiter`, `v2-jupiter`, `v1-saturn`, `v2-saturn`, `v2-uranus`, `v2-neptune`, `pale-blue-dot`, `v1-heliopause`, `v2-heliopause` (per ADR-0001 frozen URL contract),
 **And** unknown slugs render a 404-equivalent (redirect to `/` with a console warning; per NFR-S7 strict typed parameters, malformed input is rejected silently in user-facing behavior).
 
 **Given** a user opens `voyager.app/c/v2-neptune?t=1989-08-25T09:23:00Z` from a cold cache,

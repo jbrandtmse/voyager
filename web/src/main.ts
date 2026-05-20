@@ -9,6 +9,8 @@ import './styles/breakpoints.css';
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
 import { ClockManager } from './services/clock-manager';
+import { ChapterDirector } from './services/chapter-director';
+import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
 import {
   isPrecisionSmokeMode,
@@ -82,6 +84,26 @@ const bootstrap = (): void => {
   });
   engine.init(canvas);
   engine.start();
+
+  // Story 2.1 — ChapterDirector FSM. Constructed with the frozen
+  // ALL_CHAPTERS registry and driven by the same per-frame ET that
+  // every other onFrame consumer reads. The director itself does NOT
+  // hold a ClockManager reference (it's pure data); the wire-up is
+  // entirely the onFrame callback below, which is the established
+  // Story 1.15 pattern for ET fan-out.
+  const chapterDirector = new ChapterDirector(ALL_CHAPTERS);
+  engine.onFrame((et: number) => {
+    chapterDirector.update(et);
+  });
+
+  // Integration AC8 (Story 2.1) — DEV-only debug surface so the lead's
+  // Chrome DevTools MCP smoke can read `window.__voyagerDebug.chapterDirector`
+  // and assert on the active chapter at a scrubbed ET. Stripped from
+  // production builds by Vite's `import.meta.env.DEV` constant folding.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+    w.__voyagerDebug = { ...(w.__voyagerDebug ?? {}), chapterDirector };
+  }
 
   // Story 1.13 AC5 — FPS readout dev-mode (?perf=fps). Attached to the
   // engine immediately so the very first ticks are recorded. The overlay
