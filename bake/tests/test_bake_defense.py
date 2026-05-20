@@ -364,6 +364,13 @@ REQUIRED_RECIPES = {
     "test-web",
     "copy-bake-to-web",
     "generate-l2-fixtures",
+    # Story 3.0 AC3 — pre-Epic-3 hygiene: `ck-inventory` is load-bearing for
+    # Story 3.1 (CK kernel bake pipeline regenerates docs/kernels/ckbrief-inventory.md
+    # as part of the pre-bake workflow); `fk-inventory` is the sibling for
+    # kernels/frame-ids.md. Locking both into the recipe contract prevents a
+    # future refactor from silently dropping them.
+    "ck-inventory",
+    "fk-inventory",
 }
 
 

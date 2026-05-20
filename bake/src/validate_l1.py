@@ -76,12 +76,20 @@ class SegmentError:
 
 
 def _furnish_kernels(repo: Path) -> None:
-    """Re-furnish the same kernel set the bake used."""
+    """Re-furnish the kernel set the L1 validator needs.
+
+    Story 3.0 AC2: `ck` kernels are NOT furnished. The L1 validator queries
+    `spkgeo` for trajectory consistency; `ck` (attitude) kernels are unused
+    by that path and re-furnishing them on every run costs ~tens of MB for no
+    benefit. This narrowing matches `bake_trajectories.py`'s
+    `kinds=("lsk", "pck", "fk", "sclk", "spk")` selection at line 217. Story
+    3.7's L2 JS-vs-SPICE attitude validator owns the `ck` furnish path.
+    """
     import spiceypy as spice
 
     manifest_path = repo / "kernels" / "kernels-manifest.json"
     _, entries = load_kernel_manifest(manifest_path)
-    priority = {"lsk": 0, "pck": 1, "fk": 2, "sclk": 3, "spk": 4, "ck": 5}
+    priority = {"lsk": 0, "pck": 1, "fk": 2, "sclk": 3, "spk": 4}
     needed = [k for k in entries if k.kind in priority]
     needed.sort(key=lambda k: (priority[k.kind], k.file))
     for k in needed:

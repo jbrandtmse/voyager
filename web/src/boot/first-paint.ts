@@ -310,6 +310,22 @@ export const startFirstPaint = (
       detachFrame();
       detachFrame = null;
     }
+    // Story 3.0 AC6 — remove all mounted elements from the host DOM so a
+    // caller invoking dispose() then re-running startFirstPaint() does not
+    // leave stale elements accumulating. titleCard is removed by the
+    // onComplete listener after the dissolve, so guard with isConnected.
+    // chapterIndex / helpOverlay are null in embed mode (not appended);
+    // chapterCopy is null when no ChapterDirector is wired (test mounts).
+    if (titleCard.isConnected) {
+      titleCard.remove();
+    }
+    scrubber.remove();
+    playButton.remove();
+    speedMultiplier.remove();
+    hud.remove();
+    chapterIndex?.remove();
+    helpOverlay?.remove();
+    chapterCopy?.remove();
     if (ownsClock) {
       clockManager.dispose();
     }

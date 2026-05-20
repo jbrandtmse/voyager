@@ -54,15 +54,22 @@ V2_STRUCTURES = [
 ]
 
 # Encounter windows (UTC) per architecture / research notes.
-ENCOUNTERS: list[tuple[str, str, str, int]] = [
-    # (label, start_utc, end_utc, struct_id_to_check)
-    ("V1 Jupiter encounter (1979-03 closest approach 03-05)", "1979-02-15T00:00:00", "1979-04-15T00:00:00", V1_SCAN_PLATFORM),
-    ("V1 Saturn encounter (1980-11 closest approach 11-12)", "1980-10-15T00:00:00", "1980-12-15T00:00:00", V1_SCAN_PLATFORM),
-    ("V1 Pale Blue Dot (1990-02-14 family portrait)", "1990-02-13T00:00:00", "1990-02-15T00:00:00", V1_SCAN_PLATFORM),
-    ("V2 Jupiter encounter (1979-07 closest approach 07-09)", "1979-06-15T00:00:00", "1979-08-15T00:00:00", V2_SCAN_PLATFORM),
-    ("V2 Saturn encounter (1981-08 closest approach 08-25)", "1981-07-15T00:00:00", "1981-09-15T00:00:00", V2_SCAN_PLATFORM),
-    ("V2 Uranus encounter (1986-01 closest approach 01-24)", "1985-12-15T00:00:00", "1986-02-15T00:00:00", V2_SCAN_PLATFORM),
-    ("V2 Neptune encounter (1989-08 closest approach 08-25)", "1989-07-15T00:00:00", "1989-09-15T00:00:00", V2_SCAN_PLATFORM),
+#
+# Story 3.0 AC1 — `bus_id` is an explicit field (the SPICE CK structure ID for
+# the spacecraft bus, V1_BUS=-31000 or V2_BUS=-32000). It replaces the prior
+# substring/startswith match on the encounter label. The positional ordering
+# of pre-existing fields (label, start_utc, end_utc, scan_id) is preserved so
+# any downstream tuple-unpacking continues to work; `bus_id` is appended as
+# the fifth positional element.
+ENCOUNTERS: list[tuple[str, str, str, int, int]] = [
+    # (label, start_utc, end_utc, scan_id, bus_id)
+    ("V1 Jupiter encounter (1979-03 closest approach 03-05)", "1979-02-15T00:00:00", "1979-04-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS),
+    ("V1 Saturn encounter (1980-11 closest approach 11-12)", "1980-10-15T00:00:00", "1980-12-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS),
+    ("V1 Pale Blue Dot (1990-02-14 family portrait)", "1990-02-13T00:00:00", "1990-02-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS),
+    ("V2 Jupiter encounter (1979-07 closest approach 07-09)", "1979-06-15T00:00:00", "1979-08-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
+    ("V2 Saturn encounter (1981-08 closest approach 08-25)", "1981-07-15T00:00:00", "1981-09-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
+    ("V2 Uranus encounter (1986-01 closest approach 01-24)", "1985-12-15T00:00:00", "1986-02-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
+    ("V2 Neptune encounter (1989-08 closest approach 08-25)", "1989-07-15T00:00:00", "1989-09-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
 ]
 
 MAX_INTERVALS = 100000  # SPICE cell size for ckcov
@@ -215,12 +222,9 @@ def build_inventory(root: Path) -> str:
 
     pbd_scan_status = "**NO** — synthesis required"
     pbd_bus_status = "**NO**"
-    for label, t_start_utc, t_end_utc, scan_id in ENCOUNTERS:
+    for label, t_start_utc, t_end_utc, scan_id, bus_id in ENCOUNTERS:
         t_start_et = spice.utc2et(t_start_utc)
         t_end_et = spice.utc2et(t_end_utc)
-
-        # Determine appropriate bus ID by inspecting the label
-        bus_id = V1_BUS if " V1 " in f" {label} " or label.startswith("V1") else V2_BUS
 
         bus_covering: list[str] = []
         scan_covering: list[str] = []

@@ -121,3 +121,16 @@ When automating a browser smoke (per Rule 3) under Chrome DevTools MCP, no speci
 **Historical context (do not re-introduce):** prior to Story 1.16, MCP-driven sessions required an `initScript` that stubbed `new DecompressionStream('br')` to fall back to gzip. Post-Story-1.16 smoke evidence (e.g., `1-16-smoke-evidence/`) is taken without this shim. Evidence captured before Story 1.16 (`1-5-ac5-precision-smoke-screens/`, `1-15-smoke-evidence/`) retains references to the shim for historical accuracy.
 
 **Why this rule exists today:** to record that the shim is gone — a future contributor seeing the shim referenced in older code review notes or git history should NOT re-introduce it. The right path is to confirm `brotli-dec-wasm` is configured in `chunk-loader.ts` and that the boot probe does not check brotli (see ADR 0004 § Decompression Strategy + ADR 0010 amendment).
+
+## Rule 9 — ADR-0025 APG primitives are extracted (Story 3.0 AC4 path (a), 2026-05-20)
+
+The Slider and Listbox primitives committed by ADR-0025 are now landed at `web/src/primitives/slider-keyboard.ts` and `web/src/primitives/listbox-keyboard.ts`. Story 3.0 AC4 closed the ADR-0025 baseline drift by choosing path (a) — extract — over path (b) — amend the ADR. Both `<v-timeline-scrubber>` and `<v-chapter-index>` now delegate their APG keyboard contracts to these primitives via `createSliderKeyboardHandler({...})` and `createListboxKeyboardHandler({...})` handler factories.
+
+**Obligations on future stories that introduce APG-keyboard-handling components:**
+
+- A new slider component (e.g. `<v-speed-multiplier>` per ADR-0025 line 30) MUST consume `createSliderKeyboardHandler` — no inline Home/End/Arrows logic in component code.
+- A new listbox component MUST consume `createListboxKeyboardHandler`.
+- A new dialog component (e.g. `<v-help-overlay>` already uses focus-trap inline; an extraction of `primitives/dialog.ts` is a Story 6.4 candidate per the deferred-work `[2.8 / LOW]` entry).
+- Code review treats inline re-implementation of an extracted APG contract as a HIGH finding per Rule 6.
+
+**Why this rule exists today:** ADR-0025's "Obligations on downstream stories" clause — "Components compose primitives via mixin or delegation — no APG keyboard logic embedded directly in component code" — was silently violated by Stories 2.2 and 2.3 (both shipped inline implementations). Story 3.0 path (a) honoured the ADR as-written rather than amending the clause to permit inline-until-second-consumer. Future drift is prevented by this rule plus the primitives' presence in the dependency graph.

@@ -8,6 +8,7 @@ import {
 } from '../constants/mission';
 import { isoFromEt, formatForHud } from '../math/et-conversions';
 import { attachPointerHandlers } from '../primitives/pointer-events';
+import { createSliderKeyboardHandler } from '../primitives/slider-keyboard';
 import { URLSync } from '../services/url-sync';
 import type { ClockManager, ClockState } from '../services/clock-manager';
 import type { ChapterDirector } from '../services/chapter-director';
@@ -489,31 +490,24 @@ export class VTimelineScrubber extends BaseElement {
     }
   }
 
-  private onKeyDown = (e: KeyboardEvent): void => {
-    let delta = 0;
-    let absolute: number | null = null;
-    switch (e.key) {
-      case 'ArrowLeft':
-        delta = e.shiftKey ? -TEN_DAYS_SECONDS : -ONE_DAY_SECONDS;
-        break;
-      case 'ArrowRight':
-        delta = e.shiftKey ? TEN_DAYS_SECONDS : ONE_DAY_SECONDS;
-        break;
-      case 'Home':
-        absolute = MISSION_START_ET;
-        break;
-      case 'End':
-        absolute = MISSION_END_ET;
-        break;
-      default:
-        return;
-    }
-    e.preventDefault();
-    this.startScrub();
-    const next = absolute !== null ? absolute : this.simEt + delta;
-    this.applyEt(next, 'keyboard');
-    this.scheduleResume();
-  };
+  /**
+   * APG Slider keyboard contract — delegated to `primitives/slider-keyboard.ts`
+   * per ADR-0025 (Story 3.0 AC4 path (a)). The primitive handles the
+   * Home/End/Arrows/Shift+Arrows pattern; this component supplies the
+   * Voyager-specific value source (simEt), step sizes (1 day / 10 days),
+   * mission window bounds, and the scrub-state side-effects (startScrub /
+   * applyEt / scheduleResume).
+   */
+  private onKeyDown = createSliderKeyboardHandler({
+    getValue: () => this.simEt,
+    valueMin: MISSION_START_ET,
+    valueMax: MISSION_END_ET,
+    stepSmall: ONE_DAY_SECONDS,
+    stepLarge: TEN_DAYS_SECONDS,
+    onStart: () => this.startScrub(),
+    onChange: (next: number) => this.applyEt(next, 'keyboard'),
+    onEnd: () => this.scheduleResume(),
+  });
 
   private trackEl(): HTMLElement | null {
     return this.shadowRoot?.querySelector<HTMLElement>('.track') ?? null;

@@ -4,6 +4,7 @@ import { createFocusTrap, type FocusTrap } from 'focus-trap';
 import { BaseElement } from './base-element';
 import { ALL_CHAPTERS } from '../chapters/registry';
 import { isoFromEt } from '../math/et-conversions';
+import { createListboxKeyboardHandler } from '../primitives/listbox-keyboard';
 import type { ClockManager } from '../services/clock-manager';
 import type { ChapterDirector } from '../services/chapter-director';
 import type { ChapterSpec } from '../types/chapter';
@@ -452,47 +453,22 @@ export class VChapterIndex extends BaseElement {
     this.togglePanel();
   };
 
-  private onListboxKeyDown = (e: KeyboardEvent): void => {
-    // Keys we own inside the open panel. Calling stopPropagation() prevents
-    // the bubbled keydown from also reaching document-level shortcut
-    // handlers — without this the APG-required Space-to-activate would
-    // ALSO toggle play via boot/keyboard-shortcuts.ts (real browser
-    // KeyboardEvents are composed:true, so they cross the open shadow
-    // root). Same defence for M / digits if a user happens to be focused
-    // inside the panel.
-    const handled =
-      e.key === 'ArrowDown' ||
-      e.key === 'ArrowUp' ||
-      e.key === 'Home' ||
-      e.key === 'End' ||
-      e.key === 'Enter' ||
-      e.key === ' ' ||
-      e.key === 'Escape';
-    if (!handled) return;
-    e.preventDefault();
-    e.stopPropagation();
-    switch (e.key) {
-      case 'ArrowDown':
-        this.moveFocus(this.focusedIndex + 1);
-        break;
-      case 'ArrowUp':
-        this.moveFocus(this.focusedIndex - 1);
-        break;
-      case 'Home':
-        this.moveFocus(0);
-        break;
-      case 'End':
-        this.moveFocus(ALL_CHAPTERS.length - 1);
-        break;
-      case 'Enter':
-      case ' ':
-        this.activateChapterAtIndex(this.focusedIndex);
-        break;
-      case 'Escape':
-        this.closePanel({ restoreFocus: true });
-        break;
-    }
-  };
+  /**
+   * APG Listbox keyboard contract — delegated to
+   * `primitives/listbox-keyboard.ts` per ADR-0025 (Story 3.0 AC4 path (a)).
+   * The primitive owns the Home/End/Arrows/Enter/Space/Escape contract +
+   * the preventDefault/stopPropagation defence against the global Space-
+   * toggle-play listener; this component supplies the option count
+   * (`ALL_CHAPTERS.length`), the focused-index source, and the move-focus /
+   * activate / close side-effects.
+   */
+  private onListboxKeyDown = createListboxKeyboardHandler({
+    getOptionCount: () => ALL_CHAPTERS.length,
+    getFocusedIndex: () => this.focusedIndex,
+    onMoveFocus: (index: number) => this.moveFocus(index),
+    onActivate: () => this.activateChapterAtIndex(this.focusedIndex),
+    onClose: () => this.closePanel({ restoreFocus: true }),
+  });
 
   private moveFocus(nextIndex: number): void {
     const len = ALL_CHAPTERS.length;

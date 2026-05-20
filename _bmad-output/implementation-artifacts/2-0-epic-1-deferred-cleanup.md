@@ -74,9 +74,14 @@ The full pre-locked triage table lives in `_bmad-output/implementation-artifacts
 
 ### AC7 — `bake/src/vtrj_writer.py:read_vtrj` validates `body_id` (Story 1.4 deferred LOW)
 
-- **GIVEN** `write_vtrj` validates `body_id ∈ {-31, -32}` on write but `read_vtrj` does not on read
+> **Amended by Story 3.0 (2026-05-20) — AC5 wording reconciliation.** The original AC7 wording referenced the literal set `{-31, -32}`, but the implementation has used the symbol `ALLOWED_BODY_IDS` since Story 1.13 widened the canonical set to cover Sun (10), planet barycenters (1..8), and the Moon (301). The wording below is the as-implemented form; the original literal-set form is preserved here in this amendment block so future contributors see the lineage. The implementation in `vtrj_writer.py:read_vtrj` was already correct and was NOT changed by Story 3.0.
+>
+> Original wording: `body_id ∉ {-31, -32}`
+> Amended wording: `body_id ∉ ALLOWED_BODY_IDS (the canonical set per ADR-0004 + Story 1.13 extension covering Sun, planet barycenters, and Moon)`
+
+- **GIVEN** `write_vtrj` validates `body_id ∈ ALLOWED_BODY_IDS` on write but `read_vtrj` does not on read
 - **WHEN** Story 2.0 hardens the symmetry
-- **THEN** `read_vtrj` raises `ValueError` for any `body_id ∉ {-31, -32}` after parsing it from the header, between the magic/version checks and the body parse
+- **THEN** `read_vtrj` raises `ValueError` for any `body_id ∉ ALLOWED_BODY_IDS (the canonical set per ADR-0004 + Story 1.13 extension covering Sun, planet barycenters, and Moon)` after parsing it from the header, between the magic/version checks and the body parse
 - **AND** a new defense test in `bake/tests/` constructs a deliberately-corrupt VTRJ with body_id = 0 (or any out-of-set value) and asserts `read_vtrj` raises
 - **AND** `cd bake && uv run pytest -q` passes including the new test
 
