@@ -286,6 +286,7 @@ describe('Story 2.4 AC1 — URLSync.parseInitialPath() route recognition', () =>
     const { win } = makeWin('', '/');
     const sync = new URLSync(win);
     const r = sync.parseInitialPath();
+    expect(r.kind).toBe('home');
     expect(r.chapter).toBeNull();
     expect(r.initialEt).toBe(MISSION_START_ET);
     expect(r.hadValidT).toBe(false);
@@ -397,6 +398,63 @@ describe('Story 2.4 AC1 — URLSync.parseInitialPath() route recognition', () =>
     const sync = new URLSync(win);
     const r = sync.parseInitialPath();
     expect(r.chapter!.slug).toBe('v2-neptune');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Story 2.7 AC1 — parseInitialPath() recognizes /about
+// ─────────────────────────────────────────────────────────────────────
+
+describe('Story 2.7 AC1 — URLSync.parseInitialPath() recognizes /about', () => {
+  it('returns kind="about" + chapter=null for "/about"', () => {
+    const { win } = makeWin('', '/about');
+    const sync = new URLSync(win);
+    const r = sync.parseInitialPath();
+    expect(r.kind).toBe('about');
+    expect(r.chapter).toBeNull();
+    expect(r.initialEt).toBe(MISSION_START_ET);
+    expect(r.hadValidT).toBe(false);
+  });
+
+  it('returns kind="about" for "/about/" (trailing slash)', () => {
+    const { win } = makeWin('', '/about/');
+    const sync = new URLSync(win);
+    const r = sync.parseInitialPath();
+    expect(r.kind).toBe('about');
+    expect(r.chapter).toBeNull();
+  });
+
+  it('forwards a valid ?t= through /about so address-bar timestamps survive', () => {
+    const { win } = makeWin('?t=1989-08-25T09:23:00Z', '/about');
+    const sync = new URLSync(win);
+    const r = sync.parseInitialPath();
+    expect(r.kind).toBe('about');
+    expect(r.hadValidT).toBe(true);
+    expect(Math.abs(r.initialEt - etFromIso('1989-08-25T09:23:00Z'))).toBeLessThan(0.01);
+  });
+
+  it('returns kind="home" for the homepage route', () => {
+    const { win } = makeWin('', '/');
+    const sync = new URLSync(win);
+    const r = sync.parseInitialPath();
+    expect(r.kind).toBe('home');
+  });
+
+  it('returns kind="chapter" for a known chapter slug route', () => {
+    const { win } = makeWin('', '/c/v2-neptune');
+    const sync = new URLSync(win);
+    const r = sync.parseInitialPath();
+    expect(r.kind).toBe('chapter');
+    expect(r.chapter!.slug).toBe('v2-neptune');
+  });
+
+  it('unknown slug redirect resolves to kind="home" (not "about")', () => {
+    const { win } = makeWin('', '/c/typo');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sync = new URLSync(win);
+    const r = sync.parseInitialPath();
+    expect(r.kind).toBe('home');
+    warnSpy.mockRestore();
   });
 });
 

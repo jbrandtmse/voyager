@@ -8,14 +8,17 @@ This document is the canonical reference for Voyager's URL surface. The URL is a
 
 ## Route Shapes
 
-Voyager recognizes exactly two route shapes at boot:
+Voyager recognizes exactly three route shapes at boot:
 
 | Shape | Example | Meaning |
 | --- | --- | --- |
 | `/` | `https://voyager.app/` | Homepage. Simulation initializes at `MISSION_START_ET` unless `?t=` overrides. |
 | `/c/<chapter-slug>` | `https://voyager.app/c/v2-neptune` | Chapter route. Simulation initializes at the chapter's `anchorEt` unless `?t=` overrides. |
+| `/about` | `https://voyager.app/about` | About / methodology page. Mounts `<v-about-page>` only; the simulation surface (canvas, HUD, scrubber, chapter index) is NOT mounted. The Attribution section anchors at `#attribution` for deep-linking. |
 
 Any other shape (`/anything-else`, `/c/<unknown-slug>`) silently redirects to `/` via `history.replaceState` and emits a single `console.warn`. No user-facing error UI is surfaced (per NFR-S7).
+
+Popstate navigations that cross between the `/about` surface and the simulation surface (`/`, `/c/<slug>`) trigger a full page reload, matching the cold-load mount contract for each surface. Within-surface popstate (e.g. `/c/v1-jupiter` ↔ `/c/v2-saturn`) is handled by the URLRouter without reload, per Story 2.4 AC8c.
 
 ## Canonical Chapter Slugs (frozen as of v1)
 

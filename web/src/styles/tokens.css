@@ -58,6 +58,14 @@
   /* small-viewport widths. */
   --v-size-title-card: clamp(36px, 4vw, 56px);
 
+  /* About-page typography — Story 2.7 editorial layout. The about/methodology
+     surface renders in Light DOM so the body text inherits global serif sizing;
+     the heading scale is sans-serif and steps down h1 → h2 → h3. UX-DR18. */
+  --v-size-about-heading-lg: clamp(32px, 2.4vw, 44px);
+  --v-size-about-heading: clamp(22px, 1.6vw, 28px);
+  --v-size-about-heading-sm: clamp(18px, 1.2vw, 22px);
+  --v-size-about-body: clamp(16px, 1rem + 0.15vw, 19px);
+
   /* ---------- Spacing — discrete 4-px scale ---------- */
   --v-space-1: 4px;
   --v-space-2: 8px;

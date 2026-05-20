@@ -5,6 +5,11 @@ import './styles/tokens.css';
 import './styles/fonts.css';
 import './styles/global.css';
 import './styles/breakpoints.css';
+// Story 2.7 — editorial layout for the /about route surface + homepage
+// footer link. The stylesheet stays in the chain even for the simulation
+// surface because the homepage footer ("Attributions" link) uses its
+// `.v-app-footer` rules.
+import './styles/about.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
@@ -26,7 +31,8 @@ import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
 } from './dev/ephemeris-perf';
-import { startFirstPaint } from './boot/first-paint';
+import { startFirstPaint, mountAttributionsFooter } from './boot/first-paint';
+import './components/v-about-page';
 import { SpacecraftModels } from './render/spacecraft-models';
 import { TrajectoryLines } from './render/trajectory-lines';
 import { CelestialBodies } from './render/celestial-bodies';
@@ -108,6 +114,27 @@ const bootstrap = (): void => {
   const urlSync = new URLSync({ embedEnabled: embedMode.enabled });
   const initialUrlState = urlSync.parseInitialPath();
   clockManager.scrubTo(initialUrlState.initialEt);
+
+  // Story 2.7 — `/about` route. When cold-loading the about page we mount
+  // ONLY `<v-about-page>` (no canvas, HUD, scrubber, chapter index). On
+  // popstate from / or /c/<slug> into /about (or the reverse) we trigger a
+  // full reload — the simplest correct way to flip between the two
+  // top-level surfaces without leaking simulation state. The reload is
+  // handled by a route-change listener installed below the simulation
+  // bootstrap path so the listener wiring stays close to URLRouter.
+  if (initialUrlState.kind === 'about') {
+    mountAboutSurface();
+    // Install a tiny popstate handler so back/forward across the about ↔
+    // simulation boundary force a reload (matching the cold-load contract
+    // for either surface). URLSync.installPopstateHandler is also wired
+    // here so `&embed=true` preservation and slug parsing stay consistent.
+    urlSync.installPopstateHandler((state) => {
+      if (state.kind !== 'about') {
+        window.location.reload();
+      }
+    });
+    return;
+  }
 
   const engine = new RenderEngine(capabilities, {
     forceLogDepth: params.forceLogDepth,
@@ -197,7 +224,36 @@ const bootstrap = (): void => {
     urlSync,
     clockManager,
     chapterDirector,
+    initialRouteKind: initialUrlState.kind,
   }).install();
+
+  // Story 2.7 AC4 — homepage footer "Attributions" link. Skipped in embed
+  // mode (extends the Story 2.5 chrome-skip pattern). Clicking the link
+  // pushState-navigates to /about#attribution + triggers a full reload to
+  // swap the surface (simulation → about page); navigating via popstate
+  // is handled by the URLRouter route-change listener below. The footer
+  // host is the same parent the canvas lives in so it shares the embed-
+  // mode chrome-skip discipline.
+  const footerHost = canvas.parentElement ?? document.body;
+  mountAttributionsFooter(footerHost, embedMode.enabled, (url) => {
+    // Surface flip from simulation → about. `location.assign(url)` against
+    // a cross-pathname target ('/' or '/c/<slug>' → '/about#attribution')
+    // forces a fresh document load, which is the contract the about
+    // surface boots under. We intentionally do NOT pushState first —
+    // pushing the target URL first would make `location.assign` a
+    // same-document hash navigation that never reloads, leaving the
+    // simulation surface mounted under the new URL.
+    window.location.assign(url);
+  });
+
+  // Story 2.7 — when the user navigates back/forward across the
+  // /about ↔ simulation boundary, the router emits a route-change event;
+  // we trigger a full reload to mount the appropriate surface.
+  urlRouter.onRouteChange((_from, to) => {
+    if (to === 'about') {
+      window.location.reload();
+    }
+  });
 
   // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
   // the lead's Chrome DevTools MCP smoke can read
@@ -422,6 +478,41 @@ const sizeCanvasToWindow = (canvas: HTMLCanvasElement): void => {
   canvas.style.height = '100vh';
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+};
+
+/**
+ * Story 2.7 — mount the `/about` editorial surface as the sole content of
+ * the #app root. The simulation surface (canvas + HUD + scrubber + chapter
+ * index) is intentionally NOT mounted; per AC1 the about page is its own
+ * top-level surface. The page anchors at `#attribution` via browser-native
+ * fragment scrolling once the dl in `<v-attribution-panel>` is in the DOM.
+ */
+const mountAboutSurface = (): void => {
+  const mount = document.getElementById('app') ?? document.body;
+  while (mount.firstChild) {
+    mount.removeChild(mount.firstChild);
+  }
+  // Reset the page-level styling away from the canvas-friendly
+  // overflow/100vh that the simulation surface assumes. The about page is
+  // a normal document with natural scroll behaviour.
+  document.body.style.overflow = 'auto';
+  const about = document.createElement('v-about-page');
+  mount.appendChild(about);
+  // If the URL carried a hash (e.g. /about#attribution), browser-native
+  // fragment scrolling needs the anchor to exist in the DOM by the time
+  // it tries to scroll. The Lit element renders synchronously enough for
+  // most cases, but we force a hash re-evaluation after the next tick so
+  // the deep-link from the homepage footer lands on the attribution panel
+  // even if the initial parse fired before the dl was attached.
+  if (window.location.hash !== '') {
+    const hash = window.location.hash;
+    void Promise.resolve().then(() => {
+      const target = document.querySelector(hash);
+      if (target !== null) {
+        target.scrollIntoView({ block: 'start' });
+      }
+    });
+  }
 };
 
 if (document.readyState === 'loading') {

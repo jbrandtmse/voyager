@@ -77,24 +77,36 @@ export interface ParseInitialTResult {
 
 /**
  * Result of parsing the boot-time URL path + query together. Encodes the
- * three legal initial states:
+ * four legal initial states (Story 2.4 + Story 2.7):
  *
- *   - `/` (or `/?t=<iso>`) — `chapter === null`; `initialEt` is either the
- *     parsed ?t= or `MISSION_START_ET`.
- *   - `/c/<known-slug>` (optional `?t=`) — `chapter` is the resolved
- *     `ChapterSpec`; `initialEt` is the parsed ?t= or the chapter's
- *     `anchorEt` if ?t= was missing.
- *   - `/c/<unknown-slug>` — the constructor `replaceState`-rewrites the
- *     URL to `/` and the parse falls through to the homepage branch.
- *     A `console.warn` is emitted per NFR-S7. `chapter === null`.
+ *   - `kind: 'home'`    — `/` or `/?t=<iso>`. `chapter === null`;
+ *                         `initialEt` is the parsed ?t= or `MISSION_START_ET`.
+ *   - `kind: 'chapter'` — `/c/<known-slug>` (optional `?t=`). `chapter` is
+ *                         the resolved `ChapterSpec`; `initialEt` is the
+ *                         parsed ?t= or the chapter's `anchorEt`.
+ *   - `kind: 'about'`   — `/about` (Story 2.7). No simulation surface;
+ *                         `chapter === null`; `initialEt` is still seeded
+ *                         from `parseInitialT()` so an `?t=` carried
+ *                         through to the address bar survives a refresh.
+ *   - The `/c/<unknown-slug>` redirect falls through to `kind: 'home'`
+ *     after emitting a console.warn + `replaceState('/')`.
  *
- * `tInRange` distinguishes "no ?t= given (fell back to anchor / start)"
+ * `hadValidT` distinguishes "no ?t= given (fell back to anchor / start)"
  * from "?t= given AND in range". Out-of-range ?t= values are STILL
  * accepted on chapter routes per AC2 ("the simulation STILL initializes
  * at the requested ET") — ChapterDirector recomputes activeChapter on
  * the next frame.
  */
+export type RouteKind = 'home' | 'chapter' | 'about';
+
 export interface ParseInitialPathResult {
+  /**
+   * Story 2.7 — top-level discriminator. Pre-2.7 callers can keep treating
+   * `chapter === null` as "homepage"; new consumers (URLRouter, main.ts)
+   * branch on `kind === 'about'` to mount `<v-about-page>` instead of the
+   * simulation surface.
+   */
+  kind: RouteKind;
   chapter: ChapterSpec | null;
   initialEt: number;
   /** Whether ?t= was present AND parseable as a finite ISO value. */
@@ -304,11 +316,31 @@ export class URLSync {
    * defaults; no error UI surfaces.
    */
   parseInitialPath(): ParseInitialPathResult {
-    const match = CHAPTER_PATH_PATTERN.exec(this.win.location.pathname);
+    const pathname = this.win.location.pathname;
+    // Story 2.7 — `/about` (with optional trailing slash) is a separate
+    // top-level route. No simulation surface mounts; first-paint mounts
+    // `<v-about-page>` instead. Any `?t=` is still parsed and forwarded so
+    // an embedded "back to the simulation" link from the about page could
+    // carry a timestamp through unchanged.
+    if (pathname === '/about' || pathname === '/about/') {
+      const t = this.parseInitialT();
+      return {
+        kind: 'about',
+        chapter: null,
+        initialEt: t.initialEt,
+        hadValidT: t.valid,
+      };
+    }
+    const match = CHAPTER_PATH_PATTERN.exec(pathname);
     if (match === null) {
       // Homepage / other paths — defer to ?t= for the initial ET.
       const t = this.parseInitialT();
-      return { chapter: null, initialEt: t.initialEt, hadValidT: t.valid };
+      return {
+        kind: 'home',
+        chapter: null,
+        initialEt: t.initialEt,
+        hadValidT: t.valid,
+      };
     }
     const slug = match[1] ?? '';
     const chapter = findChapterBySlug(slug);
@@ -332,24 +364,44 @@ export class URLSync {
       this.win.history.replaceState(null, '', this.appendEmbedIfMissing(baseUrl));
       this.currentPath = '/';
       const t = this.parseInitialT();
-      return { chapter: null, initialEt: t.initialEt, hadValidT: t.valid };
+      return {
+        kind: 'home',
+        chapter: null,
+        initialEt: t.initialEt,
+        hadValidT: t.valid,
+      };
     }
     // Known chapter slug. Adopt the path for future ?t= writes.
     this.currentPath = `/c/${chapter.slug}`;
     const params = new URLSearchParams(this.win.location.search);
     const rawT = params.get('t');
     if (rawT === null || rawT === '') {
-      return { chapter, initialEt: chapter.anchorEt, hadValidT: false };
+      return {
+        kind: 'chapter',
+        chapter,
+        initialEt: chapter.anchorEt,
+        hadValidT: false,
+      };
     }
     const et = etFromIso(rawT);
     if (Number.isNaN(et)) {
       // Malformed ?t= on a chapter route → fall back to anchorEt per AC2.
-      return { chapter, initialEt: chapter.anchorEt, hadValidT: false };
+      return {
+        kind: 'chapter',
+        chapter,
+        initialEt: chapter.anchorEt,
+        hadValidT: false,
+      };
     }
     // AC2 explicitly accepts out-of-window ETs on chapter routes — the
     // user requested that timestamp, ChapterDirector recomputes
     // activeChapter on the next frame.
-    return { chapter, initialEt: et, hadValidT: true };
+    return {
+      kind: 'chapter',
+      chapter,
+      initialEt: et,
+      hadValidT: true,
+    };
   }
 
   /**

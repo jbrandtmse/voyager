@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import { URLRouter } from './url-router';
 import { URLSync, type UrlSyncWindow } from './url-sync';
@@ -284,6 +284,121 @@ describe('Story 2.4 AC8c — URLRouter popstate → ClockManager.scrubTo', () =>
     expect(mock.pushCalls.length).toBe(pushBefore); // popstate writes no pushState
     // The follow-on director transition should be suppressed.
     expect(mock.replaceCalls.length).toBe(replaceBefore);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Story 2.7 — URLRouter.onRouteChange() fires on /about ↔ simulation
+// ─────────────────────────────────────────────────────────────────────
+
+describe('Story 2.7 — URLRouter.onRouteChange() popstate transitions', () => {
+  let cleanup: Array<() => void> = [];
+  afterEach(() => {
+    for (const c of cleanup) c();
+    cleanup = [];
+  });
+
+  const setupAboutRouter = (
+    pathname: string,
+    initialKind: 'home' | 'chapter' | 'about',
+  ): {
+    router: URLRouter;
+    urlSync: URLSync;
+    clock: ClockManager;
+    director: ChapterDirector;
+    mock: MockWin;
+    doc: Document;
+  } => {
+    const base = setupRouter(pathname, '');
+    base.router.dispose();
+    const router = new URLRouter({
+      urlSync: base.urlSync,
+      clockManager: base.clock,
+      chapterDirector: base.director,
+      doc: base.doc,
+      initialRouteKind: initialKind,
+    }).install();
+    return {
+      router,
+      urlSync: base.urlSync,
+      clock: base.clock,
+      director: base.director,
+      mock: base.mock,
+      doc: base.doc,
+    };
+  };
+
+  it('fires (from, to) when popstate crosses from home → about', () => {
+    const { router, mock } = setupAboutRouter('/', 'home');
+    cleanup.push(() => router.dispose());
+    const calls: Array<[string, string]> = [];
+    router.onRouteChange((f, t) => calls.push([f, t]));
+    mock.navigate('/about', '');
+    expect(calls).toEqual([['home', 'about']]);
+  });
+
+  it('fires (from, to) when popstate crosses from chapter → about', () => {
+    const { router, mock } = setupAboutRouter('/c/v1-jupiter', 'chapter');
+    cleanup.push(() => router.dispose());
+    const calls: Array<[string, string]> = [];
+    router.onRouteChange((f, t) => calls.push([f, t]));
+    mock.navigate('/about', '');
+    expect(calls).toEqual([['chapter', 'about']]);
+  });
+
+  it('fires (from, to) when popstate crosses from about → home', () => {
+    const { router, mock } = setupAboutRouter('/about', 'about');
+    cleanup.push(() => router.dispose());
+    const calls: Array<[string, string]> = [];
+    router.onRouteChange((f, t) => calls.push([f, t]));
+    mock.navigate('/', '');
+    expect(calls).toEqual([['about', 'home']]);
+  });
+
+  it('does NOT fire on chapter-to-chapter popstate (same kind)', () => {
+    const { router, mock } = setupAboutRouter('/c/v1-jupiter', 'chapter');
+    cleanup.push(() => router.dispose());
+    const calls: Array<[string, string]> = [];
+    router.onRouteChange((f, t) => calls.push([f, t]));
+    mock.navigate('/c/v2-jupiter', '');
+    expect(calls).toEqual([]);
+  });
+
+  it('does NOT fire on home-to-home popstate', () => {
+    const { router, mock } = setupAboutRouter('/', 'home');
+    cleanup.push(() => router.dispose());
+    const calls: Array<[string, string]> = [];
+    router.onRouteChange((f, t) => calls.push([f, t]));
+    mock.navigate('/', '?t=1989-08-25T09:23:00Z');
+    expect(calls).toEqual([]);
+  });
+
+  it('unsubscribe stops the listener from firing on subsequent popstate', () => {
+    const { router, mock } = setupAboutRouter('/', 'home');
+    cleanup.push(() => router.dispose());
+    const calls: Array<[string, string]> = [];
+    const unsubscribe = router.onRouteChange((f, t) => calls.push([f, t]));
+    mock.navigate('/about', '');
+    expect(calls.length).toBe(1);
+    unsubscribe();
+    mock.navigate('/', '');
+    expect(calls.length).toBe(1);
+  });
+
+  it('a throwing listener does not break subsequent listeners or scrubTo', () => {
+    const { router, mock, clock } = setupAboutRouter('/', 'home');
+    cleanup.push(() => router.dispose());
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const calls: string[] = [];
+    router.onRouteChange(() => {
+      throw new Error('boom');
+    });
+    router.onRouteChange((f, t) => calls.push(`${f}->${t}`));
+    mock.navigate('/about', '');
+    expect(calls).toEqual(['home->about']);
+    // popstate still calls scrubTo (so the about page's ?t= survives a refresh).
+    expect(clock.simTimeEt).toBeDefined();
+    errorSpy.mockRestore();
   });
 });
 

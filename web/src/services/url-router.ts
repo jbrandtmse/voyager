@@ -53,7 +53,11 @@
  * router can be torn down cleanly in tests.
  */
 
-import type { URLSync, ParseInitialPathResult } from './url-sync';
+import type {
+  URLSync,
+  ParseInitialPathResult,
+  RouteKind,
+} from './url-sync';
 import type { ClockManager } from './clock-manager';
 import type { ChapterDirector } from './chapter-director';
 import type { ChapterTransitionEvent } from '../types/chapter';
@@ -62,6 +66,16 @@ export interface ChapterJumpDetail {
   slug: string;
   anchorEt: number;
 }
+
+/**
+ * Story 2.7 — observer callback invoked when popstate transitions cross
+ * between the `/about` editorial surface and the simulation surface
+ * (`/` or `/c/<slug>`). Main.ts subscribes to drive the mount/unmount of
+ * `<v-about-page>` vs the canvas + HUD + scrubber. The callback is NOT
+ * fired for chapter-to-chapter or chapter-to-home transitions within the
+ * simulation surface — those are owned by the existing settle logic.
+ */
+export type RouteChangeListener = (from: RouteKind, to: RouteKind) => void;
 
 export interface UrlRouterOptions {
   urlSync: URLSync;
@@ -73,6 +87,14 @@ export interface UrlRouterOptions {
    * Defaults to `document`; tests inject a fake.
    */
   doc?: Document;
+  /**
+   * Story 2.7 — initial route kind at boot. Used so popstate-driven
+   * transitions can compare against the prior kind and fire
+   * `RouteChangeListener` only when the surface needs to flip
+   * (simulation ↔ about). Defaults to `'home'` for legacy boot paths
+   * that never mount `/about`.
+   */
+  initialRouteKind?: RouteKind;
 }
 
 export class URLRouter {
@@ -112,11 +134,22 @@ export class URLRouter {
    */
   private pendingWaveSettle: boolean = false;
 
+  /**
+   * Story 2.7 — the current top-level route kind tracked across popstate
+   * navigations. main.ts subscribes via `onRouteChange` to flip the
+   * mounted surface when the kind transitions between `'about'` and one
+   * of `'home'` / `'chapter'`. Direct mutation is intentionally avoided —
+   * the router owns the kind so the subscription contract stays narrow.
+   */
+  private currentRouteKind: RouteKind;
+  private routeChangeListeners: RouteChangeListener[] = [];
+
   constructor(opts: UrlRouterOptions) {
     this.urlSync = opts.urlSync;
     this.clockManager = opts.clockManager;
     this.chapterDirector = opts.chapterDirector;
     this.doc = opts.doc ?? document;
+    this.currentRouteKind = opts.initialRouteKind ?? 'home';
   }
 
   /** Wire up all three listeners. Returns `this` for fluent boot. */
@@ -232,24 +265,67 @@ export class URLRouter {
   }
 
   private handlePopstate(state: ParseInitialPathResult): void {
+    // Story 2.7 — route-change fan-out. If the popstate target's kind
+    // differs from the kind we last observed, notify route-change
+    // listeners BEFORE touching the clock. main.ts uses this to mount or
+    // unmount `<v-about-page>` vs the simulation surface. The clock
+    // scrub then runs unconditionally; it is a no-op for an about ↔
+    // about navigation and a normal scrub for any simulation transition.
+    const prevKind = this.currentRouteKind;
+    if (state.kind !== prevKind) {
+      this.currentRouteKind = state.kind;
+      this.fireRouteChange(prevKind, state.kind);
+    }
     // Apply the parsed ET. scrubTo pauses the clock as a side effect —
     // matching the cold-load deep-link contract. Director observes the
     // new ET on its next frame and fires the matching `held` transition.
     this.clockManager.scrubTo(state.initialEt);
     // The follow-on director transition would otherwise replaceState
     // ANOTHER URL on top of the user's back-target — overwriting it.
-    // Two cases to cover:
-    //   1. Chapter route popstate (state.chapter !== null) — director
+    // Three cases to cover:
+    //   1. Chapter route popstate (state.kind === 'chapter') — director
     //      will resolve the same chapter; suppress that slug.
-    //   2. Home route popstate (state.chapter === null) — director may
+    //   2. Home route popstate (state.kind === 'home') — director may
     //      resolve a DIFFERENT chapter (e.g., MISSION_START_ET falls
     //      inside launch-v2's window), or it may resolve null (cruise).
-    //      Either way we must not overwrite the `/` back-target on the
-    //      next frame, so suppress the next settle entirely.
-    // Both cases set the generic one-shot sentinel so the next settle
+    //   3. About route popstate (state.kind === 'about') — the
+    //      simulation surface is unmounted by the route-change listener
+    //      above; the director will still tick on its existing frame
+    //      loop if main.ts kept the engine alive, so we suppress
+    //      defensively to avoid writing `/c/<slug>` over `/about`.
+    // All cases set the generic one-shot sentinel so the next settle
     // is consumed and the URL the user navigated to stays intact.
     this.suppressNextDirectorWriteAny = true;
     this.suppressNextDirectorWriteForSlug = null;
+  }
+
+  /**
+   * Story 2.7 — subscribe to route-kind transitions ('home' / 'chapter'
+   * / 'about'). Returns an unsubscribe function. Listeners fire
+   * synchronously from inside `handlePopstate` before the clock is
+   * scrubbed, so main.ts can swap the mounted surface atomically with
+   * the URL change.
+   *
+   * The callback is NOT invoked for the initial cold-load (the surface
+   * mount at boot is main.ts's responsibility); it is invoked only when
+   * a popstate transition crosses route kinds.
+   */
+  onRouteChange(listener: RouteChangeListener): () => void {
+    this.routeChangeListeners.push(listener);
+    return () => {
+      const i = this.routeChangeListeners.indexOf(listener);
+      if (i >= 0) this.routeChangeListeners.splice(i, 1);
+    };
+  }
+
+  private fireRouteChange(from: RouteKind, to: RouteKind): void {
+    for (const listener of this.routeChangeListeners) {
+      try {
+        listener(from, to);
+      } catch (err) {
+        console.error('[URLRouter] route-change listener threw:', err);
+      }
+    }
   }
 
   /** Detach all listeners + subscriptions. Idempotent. */
@@ -268,5 +344,6 @@ export class URLRouter {
     }
     this.suppressNextDirectorWriteForSlug = null;
     this.suppressNextDirectorWriteAny = false;
+    this.routeChangeListeners = [];
   }
 }

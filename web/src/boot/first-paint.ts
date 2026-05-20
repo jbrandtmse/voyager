@@ -29,6 +29,47 @@ import type { RenderEngine } from '../render/render-engine';
 import type { EphemerisService } from '../services/ephemeris-service';
 import type { ChapterDirector } from '../services/chapter-director';
 
+/**
+ * Story 2.7 AC4 — mount the homepage "Attributions" footer link unless
+ * embed mode is enabled. Returns the mounted footer (or null) so callers
+ * can include it in the dispose path. The link uses a native anchor with
+ * `href="/about#attribution"` — clicking is handled by the URLRouter's
+ * existing chapter-jump / popstate machinery once we promote the click
+ * through pushState; we keep the implementation here minimal and rely on
+ * a click handler so the SPA navigation does not cause a full reload.
+ */
+export const mountAttributionsFooter = (
+  host: HTMLElement,
+  embedEnabled: boolean,
+  navigate: (url: string) => void,
+): HTMLElement | null => {
+  if (embedEnabled) return null;
+  const footer = document.createElement('footer');
+  footer.className = 'v-app-footer';
+  const link = document.createElement('a');
+  link.href = '/about#attribution';
+  link.textContent = 'Attributions';
+  link.addEventListener('click', (e: MouseEvent) => {
+    // Only intercept plain left-clicks; modifier-clicks (Ctrl/Cmd/Shift/
+    // middle-click) keep their native open-in-new-tab semantics.
+    if (
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.ctrlKey ||
+      e.metaKey ||
+      e.shiftKey ||
+      e.altKey
+    ) {
+      return;
+    }
+    e.preventDefault();
+    navigate('/about#attribution');
+  });
+  footer.appendChild(link);
+  host.appendChild(footer);
+  return footer;
+};
+
 export interface FirstPaintOptions {
   /** When provided, the HUD wires its per-frame tick into the engine. */
   renderEngine?: RenderEngine;

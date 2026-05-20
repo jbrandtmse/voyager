@@ -1,0 +1,157 @@
+/* Story 2.7 — editorial layout for the /about route surface.
+   Targets the Light-DOM `<v-about-page>` + `<v-attribution-panel>` so the
+   tokens declared in tokens.css cascade directly. Loaded by main.ts only
+   when bootstrap routes to the about page; never participates in the
+   simulation surface's critical path. */
+
+v-about-page {
+  display: block;
+  max-width: 60ch;
+  margin: 0 auto;
+  padding: var(--v-space-12) var(--v-edge-margin);
+  color: var(--v-color-fg);
+  background: var(--v-color-bg);
+  font-family: var(--v-font-serif);
+  font-size: var(--v-size-about-body);
+  line-height: 1.55;
+}
+
+v-about-page h1,
+v-about-page h2,
+v-about-page h3 {
+  font-family: var(--v-font-sans);
+  color: var(--v-color-fg);
+  line-height: 1.2;
+}
+
+v-about-page h1 {
+  font-size: var(--v-size-about-heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--v-space-12) 0;
+}
+
+v-about-page h2 {
+  font-size: var(--v-size-about-heading);
+  font-weight: 500;
+  margin: var(--v-space-12) 0 var(--v-space-4) 0;
+}
+
+v-about-page h3 {
+  font-size: var(--v-size-about-heading-sm);
+  font-weight: 500;
+  margin: var(--v-space-8) 0 var(--v-space-3) 0;
+}
+
+v-about-page p {
+  margin: 0 0 var(--v-space-4) 0;
+}
+
+v-about-page code,
+v-about-page pre {
+  font-family: var(--v-font-mono);
+  color: var(--v-color-accent);
+  font-size: 0.92em;
+}
+
+v-about-page a {
+  color: var(--v-color-accent);
+  text-decoration: underline;
+}
+
+v-about-page a:hover {
+  color: var(--v-color-fg);
+}
+
+v-about-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--v-space-4) 0 var(--v-space-6) 0;
+  font-family: var(--v-font-sans);
+  font-size: var(--v-font-size-body);
+}
+
+v-about-page caption {
+  caption-side: top;
+  text-align: left;
+  color: var(--v-color-fg-muted);
+  font-size: var(--v-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-bottom: var(--v-space-2);
+}
+
+v-about-page th,
+v-about-page td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--v-space-2) var(--v-space-3);
+  border-bottom: 1px solid var(--v-color-divider);
+}
+
+v-about-page thead th {
+  color: var(--v-color-fg-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: var(--v-font-size-caption);
+  letter-spacing: 0.08em;
+}
+
+v-about-page tbody th[scope='row'] {
+  font-weight: 500;
+}
+
+v-attribution-panel {
+  display: block;
+}
+
+v-attribution-panel dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--v-space-4) 0;
+  margin: 0;
+}
+
+v-attribution-panel dt {
+  font-family: var(--v-font-sans);
+  font-weight: 500;
+  color: var(--v-color-fg);
+  margin-top: var(--v-space-3);
+}
+
+v-attribution-panel dd {
+  margin: var(--v-space-1) 0 0 0;
+  color: var(--v-color-fg-muted);
+}
+
+v-attribution-panel a {
+  color: var(--v-color-accent);
+  text-decoration: underline;
+}
+
+/* Homepage footer with the "Attributions" link — Story 2.7 AC4. The footer
+   itself is a no-frills sans-serif bar at the bottom-left of the viewport
+   so it doesn't compete with the HUD or scrubber for attention. The link
+   inherits the global `:focus-visible` ring from global.css. */
+.v-app-footer {
+  position: fixed;
+  left: var(--v-edge-margin);
+  bottom: var(--v-space-3);
+  z-index: var(--v-z-hud);
+  font-family: var(--v-font-sans);
+  font-size: var(--v-font-size-caption);
+  color: var(--v-color-fg-muted);
+  pointer-events: auto;
+}
+
+.v-app-footer a {
+  color: var(--v-color-fg-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--v-color-divider);
+  padding-bottom: 1px;
+}
+
+.v-app-footer a:hover {
+  color: var(--v-color-fg);
+  border-bottom-color: var(--v-color-accent);
+}
