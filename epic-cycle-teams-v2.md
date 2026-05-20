@@ -408,7 +408,7 @@ on_complete = [
 
 ## Part 2: Slash command — `.claude/commands/epic-cycle.md`
 
-Write everything between the `BEGIN .claude/commands/epic-cycle.md` and `END .claude/commands/epic-cycle.md` markers below to that file path, verbatim, including the frontmatter.
+Write everything between the `BEGIN .claude/commands/epic-cycle.md` and `END .claude/commands/epic-cycle.md` markers below to that file path, verbatim, including the frontmatter. **Overwrite any existing file at that path** — the BMAD reinstall only clears `_bmad/custom/`, so an older `/epic-cycle` slash command from a previous workflow version will still be there and must be replaced. The Write tool overwrites by design; no explicit delete step is needed. **Overwrite any existing file at that path** — the BMAD reinstall only clears `_bmad/custom/`, so an older `/epic-cycle` slash command from a previous workflow version will still be there and must be replaced. The Write tool overwrites by design; no explicit delete step is needed.
 
 ```text
 === BEGIN .claude/commands/epic-cycle.md ===
@@ -950,8 +950,8 @@ After writing all files, run these checks:
 
 4. **The slash command contains every section:** open `.claude/commands/epic-cycle.md` and confirm presence of: Pre-flight Runtime Check, Task Sequence, Spawn-on-Demand Coordination (with subsections Team Lifecycle, Task-in-Prompt Pattern, Pipeline Flow, Smart Parallelism, Per-Story Smoke, Retrospective Review & Story X.0 Creation, Sprint Planning Per Epic, Retrospective Per Epic, Lead Creates Story Files, Context Handoff Between Stages, ADR-Aware Execution, Shutdown-Before-Respawn Sequencing, Agent Silence Recovery, Agent Prompt Requirements), When to Pause, Handling Clarifications, Submodule Commit Order, Completion Logging, Anti-Patterns, Lessons Learned.
 
-## Part 4: Cleanup
+## Part 4: After construction
 
-Once all four validation checks pass, the v2 design doc is no longer needed — every artifact it generates is now self-contained. Optionally delete `epic-cycle-teams-v2.md` from the project root.
+Once all four validation checks pass, the workflow is ready to use. **Keep both `epic-cycle-teams.md` (v1, if present) and `epic-cycle-teams-v2.md` (this file) in the project root** as the historical design record. They're useful as reference when retrospectives surface gaps that need workflow-level fixes, and as the canonical authoring source if you ever need to regenerate the customizations or the slash command again. The slash command and customizations under `_bmad/custom/` are self-contained at runtime, but the design docs are the authoring trail.
 
 The lead invokes `/epic-cycle <range>` in a fresh session to run the workflow against an epic.
