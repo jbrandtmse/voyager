@@ -125,6 +125,7 @@ Requires Claude Code v2.1.32 or later.
   - `### Context Handoff Between Stages (Critical)`
   - `### ADR-Aware Execution (Required)`
   - `### Shutdown-Before-Respawn Sequencing (Critical)`
+  - `### Agent Silence Recovery (Required)`
   - `### Agent Prompt Requirements`
 - `## When to Pause`
 - `## Handling Clarifications`
@@ -403,6 +404,22 @@ Retrospectives surface deferred work, process improvements, and preparation task
 
 The lead executes `/bmad-create-story` directly via the `Skill` tool — NOT via an agent. This is a deliberate pipeline gate that prevents agents from racing ahead. **Capture the story file path** from the skill output to pass to the developer agent.
 
+**Integration AC validation (lead-side, also a gate).** Before the lead spawns the dev agent for a story, the lead reads the story file's ACs and asks: does this story introduce a service, module, or component that later stories (in this or any future epic) will consume? Indicators include: a new file under `services/` or `lib/`; a new exported class / factory / module; a `## Consumed-by` field naming downstream stories; or any AC describing a public surface other stories will call against.
+
+If yes — the story is **service-introducing** — it MUST contain at least one **Integration AC** of the form: "consumer X reads from this service / module / component and produces observable effect Y." If a `## Consumed-by` field is also present, even better — it names every downstream story that will hold the consumer's mirror-side integration AC.
+
+If the story is service-introducing AND lacks an integration AC, the lead pauses for the user before spawning the dev agent:
+
+> "Story <id> introduces <service-name>. No Integration AC found in its ACs. Re-run `/bmad-create-story` to populate `## Integration ACs`, OR proceed without (with the consequence that producer-consumer wire-up defects can ship green)?"
+
+Get the user's decision. Do not proceed silently.
+
+If the story is NOT service-introducing (pure refactor, doc-only, internal cleanup, defect-fix, etc.), this gate is a one-line check that finds no work to do; the lead proceeds to spawn dev as normal.
+
+This gate exists because a prior project's Epic 1 shipped four HIGH-severity defects whose common signature was: a producer story shipped green with the service correct in isolation, and every consumer story shipped green with the consumer behavior mocked; nothing in the test pyramid exercised the wire-up between them. An integration AC on the producer ("RenderEngine reads `simTimeEt` from ClockManager and the rendered ET matches") forces both sides to be wired before either ships; the Per-Story Smoke (lead-side) verifies the wiring in the real runtime. The integration AC is the planning-time catch; the smoke is the last-mile catch. See Lesson 9.
+
+The `/bmad-create-story` skill should ideally refuse to mark a service-introducing story `ready-for-dev` without at least one integration AC (a skill-level enforcement). This workflow gate is defense-in-depth for cases where the skill check fails or the project's skill is older than the integration-AC amendment.
+
 ### Context Handoff Between Stages (Critical)
 
 Each pipeline stage produces output that downstream stages need:
@@ -454,6 +471,38 @@ Pattern:
 ```
 Lead sends shutdown_request → may receive idle notification → receives shutdown_approved → safe to spawn next agent
 ```
+
+### Agent Silence Recovery (Required)
+
+A non-trivial fraction of spawned agents — empirically ~10–12% in real workflow runs — complete their work to disk but fail to send the structured `STATUS: completed` envelope before going idle. The Task-in-Prompt Pattern documents that SendMessage delivery is unreliable; the converse is also true: completion-message delivery from an agent back to the lead is unreliable. When silence happens the lead must NOT block the pipeline waiting for a message that won't arrive. The lead recovers by reconstructing the completion data from on-disk evidence.
+
+**Detection — when to trigger silence recovery:**
+
+Trigger silence recovery when ALL of these hold:
+
+1. The spawned agent reports idle / not-running (via any team status check the lead can run), AND
+2. No completion message (`STATUS: completed` or `STATUS: clarification_needed`) has been received for this spawn, AND
+3. The lead observes via filesystem inspection (e.g., `git status --short`) that files have been written matching the story's expected file list — so the agent really did do the work, it just didn't announce it.
+
+If condition (3) does NOT hold — i.e., the agent went idle WITHOUT writing files — then this is a *different* failure mode (agent stuck, agent errored, agent didn't start). For that case the lead surfaces to the user; do NOT attempt silent-completion recovery on an agent that produced no output.
+
+**Recovery protocol (lead-side, mandatory when silence is detected):**
+
+1. **Reconstruct the file list** — `git status --short` from repo root; collect modified + new files that match the story spec's `Files to Modify` table. These are the effective `FILES_MODIFIED`.
+2. **Reconstruct the test list (for QA agent silence)** — filter the file list to test files (`*.test.ts`, `test_*.py`, etc.) plus any files matching the story's `Tests / Subtasks` paths.
+3. **Reconstruct review findings (for code-reviewer silence)** — read the story file's `Review Findings` section if the agent populated it; if not, the lead reads the diff and runs the code-review skill itself directly via the `Skill` tool (lead-driven; same pattern as `/bmad-retrospective`).
+4. **Run the verification the agent should have run** — for dev silence: `npm test` / `pytest` / project equivalent + typecheck. For QA silence: same, with focus on new test files. For cr silence: lead reads through the diff to validate no obviously broken changes.
+5. **Append the cycle-log entry with hygiene metadata** — record the stage as complete, but include a `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence` (or similar) metadata key so the silence is visible in the next retrospective.
+6. **Shutdown the silent agent normally** — `SendMessage shutdown_request` works even on an idle agent; the shutdown handshake succeeds even though the completion message never arrived. If shutdown ALSO fails after a reasonable timeout, surface to the user before spawning the next stage's agent (a hanging name would collide with the next spawn).
+
+**Do NOT do these things during silence recovery:**
+
+- Do NOT block the pipeline indefinitely waiting for a completion message that won't arrive. Move forward on file evidence.
+- Do NOT skip the verification — the lead must actually run the agent's verification step, not just trust the file list. The file list is the *input* to the verification, not a substitute for it.
+- Do NOT silently absorb the silence event — it MUST appear in the cycle log so the retrospective can quantify and address it.
+- Do NOT use silence recovery as a substitute for properly-wired agent prompts. If silence happens repeatedly across multiple spawns in the same workflow run (say, 3+ in a row), pause and inform the user — the BMAD skill prompts likely need a `STATUS: completed` reinforcement update before continuing.
+
+**Long-term fix is at the skill level, not the workflow level.** The BMAD skill prompts (`/bmad-dev-story`, `/bmad-qa-generate-e2e-tests`, `/bmad-code-review`) should terminate with explicit instructions to send the structured completion message before going idle. This subsection documents the lead's recovery for cases where the skill-level fix hasn't taken or fails anyway. It is not a permanent feature of `/epic-cycle` — it is a survivability measure for the current state of the BMAD skill ecosystem, and can be retired once skill-level reinforcement is confirmed reliable across consecutive epics.
 
 ### Agent Prompt Requirements
 
@@ -619,6 +668,8 @@ These patterns were tested and failed due to agent self-scheduling behavior:
 - **Treating ADR violations as LOW deferrable findings** — An AC implementation that violates an Accepted ADR is a **HIGH-severity** finding because it breaks a committed architectural / methodology decision. Code-reviewer spawn prompts must explicitly include this rule; otherwise reviewers tend to file ADR-violation findings as ordinary LOW deferrables and the violation silently ships
 - **Skipping the per-story smoke** — Committing a story whose code touches a user-facing surface without exercising that surface in its target runtime. The test pyramid (unit + integration + E2E) is necessary but not sufficient; every tier can pass while the deployed product is broken because the wiring between components was never end-to-end verified. The per-story smoke is non-optional even when CI is green; failed smoke means HIGH-severity, not deferrable. See Per-Story Smoke § Critical Gate
 - **Smoke executed by a spawned subagent instead of the lead** — Spawned subagents may not have reliable access to the project's runtime tooling (MCP servers, dev server, CLI environment). The smoke step is lead-side for the same reason ADR-tooled verifications and `/bmad-retrospective` are lead-side: the lead reliably has the tools the smoke needs
+- **Blocking the pipeline indefinitely on a silent agent** — When an agent's completion message doesn't arrive, the lead must NOT wait forever for it. Silent agents (~10–12% empirically) may have completed all their work to disk and simply failed to send the structured envelope. The lead reconstructs the completion data from `git status --short` + the story spec's `Files to Modify` table, runs the verification the agent should have run, and appends a cycle-log entry with `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence`. See Agent Silence Recovery § Required
+- **Service-introducing story spawned without an Integration AC** — A story that introduces a service, module, or component that downstream stories will consume MUST contain at least one Integration AC ("consumer X reads from this service and produces observable effect Y") before the lead spawns the dev agent. Without this, the producer and every consumer can ship green with the wiring between them never built — a prior Epic 1's four HIGH defects all shared this exact signature. The lead validates integration-AC presence at the `/bmad-create-story` gate and pauses for the user if absent. See Lead Creates Story Files § Integration AC validation
 
 ## Lessons Learned (Accumulated From Prior Project Runs)
 
@@ -634,3 +685,4 @@ These lessons were earned on prior projects' epic-cycle runs and are carried for
 8. **The test pyramid is necessary but not sufficient — the per-story smoke is the bridge from "tests pass" to "the product works"** — every automated tier (unit, integration, E2E, visual regression, a11y) can pass while the deployed product is broken because the wiring between independently-correct modules was never end-to-end verified. The lead must perform a per-story smoke (browser MCP for UI, CLI invocation for libraries, real `curl` for services, etc.) between code review and commit. Failed smoke is HIGH-severity, never deferrable. This lesson was earned on a project whose Epic 1 ship-readiness review found four HIGH defects (broken core feature, missing decoder configuration, ARIA mojibake, ARIA value-bound rendering) — every one passed all four automated tiers; all four were instantly obvious in a real browser. See Per-Story Smoke § Critical Gate.
 9. **Integration ACs catch the wiring gap that unit ACs miss** — when a story introduces a service, the ACs must specify not only "the service is correct in isolation" but also "consumer X reads from the service and produces observable effect Y." Without an integration AC, a producer story and its consumer stories can both ship green while the wire-up between them was never built. The story-creation skill should refuse to mark a service-introducing story `ready-for-dev` without at least one integration AC, and the code-review skill should refuse to approve such a story without evidence the integration is exercised. (Same root cause as Lesson 8; the smoke step is the last-mile catch and the integration AC is the planning-time catch.)
 10. **NFR tripwires amend planning artifacts in place** — when a dev or QA pass discovers an NFR is unmeasurable, mathematically impossible, or internally contradictory, the response is NOT to add a code comment + a `deferred-work.md` entry and continue. The PRD/architecture/epics files are amended in place to clarify the NFR's real intent; the dev/QA work then verifies against the amended NFR. Otherwise the planning artifacts and the deployed code diverge silently — a future contributor reading the PRD will not know which NFRs are "as-written" vs. "as-implemented-with-comment." This lesson was earned on a project whose NFR-P6 ("ClockManager mutations ≤ 100µs P99") was mathematically impossible on browser wall-clock and NFR-M4 ("cycle log human-readable") was conflated with lint-clean; both were worked around in comments and the deferred-work file instead of being amended at source.
+11. **Agent completion-message silence is a recurring failure mode; the lead must have a file-evidence recovery protocol** — empirically ~10–12% of agent spawns complete their work to disk but never send the `STATUS: completed` envelope before going idle. The lead must NOT block the pipeline waiting for a message that won't arrive. The lead recovers by reconstructing the completion from `git status --short` + the story spec's `Files to Modify` table, running the verification the agent should have run, and recording the silence in the cycle log via `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence`. The long-term fix is at the BMAD skill-prompt level (each skill should terminate with an explicit `STATUS: completed` instruction) but workflow-level survivability requires the recovery protocol regardless. If silence happens 3+ times consecutively in a run, pause and inform the user — the skill prompts likely need an update before continuing. See Agent Silence Recovery § Required.
