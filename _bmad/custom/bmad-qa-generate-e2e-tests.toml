@@ -1,0 +1,12 @@
+# Voyager project override for bmad-qa-generate-e2e-tests.
+# Loads voyager-skill-rules.md so the skill enforces:
+#   - Rule 3: Browser-smoke evidence requirement for web/src/ stories (drives MCP test generation)
+#   - Rule 4: Structured completion handshake when run as a subagent under /epic-cycle
+#   - Rule 6: Chrome DevTools MCP brotli workaround for post-probe surfaces
+# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+]

@@ -899,6 +899,17 @@ So that every merge to main results in a live, immutable, rollback-able deployme
 
 Every chapter is reachable by index, marker click, keyboard `1`–`9`, or deep-link URL; recipients land paused at the exact second; OG cards render correctly in messaging apps; curators can append `?embed=true` to any URL for chrome-less kiosk display; About / Methodology / Attribution pages explain the methodology and credit data sources; the two heliopause crossings appear as text cards.
 
+### Epic 2 — Risks and Mitigations (carried from Epic 1 retrospective, 2026-05-19)
+
+These risks were surfaced and accepted as planning input during the Epic 1 retrospective. Mitigations are non-negotiable inputs to each story spec.
+
+- **R1 — Chapter FSM coupling with ClockManager and ViewframeService.** Epic 2 layers a state machine on top of the time and camera systems built in Epic 1. Three-way coupling is high-risk: any change to any single subsystem may break the FSM in a non-obvious way. **Mitigation:** Story 2.1 (ChapterDirector FSM) must have an explicit Integration AC (per `_bmad/custom/voyager-skill-rules.md` Rule 1) verifying the FSM ↔ ClockManager ↔ ViewframeService three-way wire-up via Chrome DevTools MCP, in a real browser, against the dev server. Mocks at the boundary are not acceptable. The per-story smoke gate covers the final wire-up validation.
+- **R2 — URL state synchronization complexity.** Story 2.4 introduces per-chapter URL slugs + pushState. Interaction with the Story 1.10 URL throttle (250ms history.replaceState) creates edge cases for deep-link arrival, chapter-mid-cycle (URL updates while user is scrubbing), and browser back/forward (history-driven chapter transitions). **Mitigation:** Story 2.4 must include explicit ACs for all three edge cases: (a) cold-load deep-link to mid-chapter timestamp resolves correctly, (b) mid-cycle URL update does not desync ClockManager state, (c) back/forward correctly fires chapter transitions through the FSM. Each AC verified by Chrome DevTools MCP smoke.
+- **R3 — Embed mode chrome-less rendering must not break accessibility.** Story 2.5 (`?embed=true`) hides HUD selectively. Easy to ship "looks right but ARIA broken" — exactly the class of bug Epic 1's manual verification surfaced (aria-valuemin/max="0", aria-valuetext mojibake). **Mitigation:** Story 2.5 must include an a11y AC asserting that keyboard shortcuts and ARIA attributes remain intact when HUD is hidden; verified by an axe-core run AND a Chrome DevTools MCP keyboard-driven smoke (tab through the chrome-less view and assert focus order + ARIA exposure).
+- **R4 — Pre-rendered OG cards drift from runtime chapter data.** Story 2.6 generates static OG images at build time, but those rely on chapter data that lives in the runtime FSM. If FSM and OG generator drift, social previews go wrong silently. **Mitigation:** Story 2.6 must include a build/runtime parity assertion: OG generator and FSM read chapter definitions from the same source file (no copy-paste). A unit test must enforce that the OG generator's chapter list equals the FSM's chapter list at build time.
+
+These mitigations are NOT optional. The story authors for 2.1, 2.4, 2.5, and 2.6 must include the listed ACs verbatim or document why they are not applicable in the story spec's "Risk Mitigation Audit" subsection.
+
 ### Story 2.1: ChapterDirector FSM and 11 Declarative Chapter Specs
 
 As the project maintainer,

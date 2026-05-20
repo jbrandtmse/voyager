@@ -1,0 +1,12 @@
+# Voyager project override for bmad-code-review.
+# Loads voyager-skill-rules.md so the skill enforces:
+#   - Rule 3: Manual browser smoke is a per-story exit criterion (web/src/ stories)
+#   - Rule 4: Structured completion handshake when run as a subagent under /epic-cycle
+#   - Rule 5: NFR tripwire amends planning artifacts in place
+# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+]

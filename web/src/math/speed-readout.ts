@@ -2,28 +2,41 @@
  * `formatSpeedReadout(rate)` — produce the visible speed-multiplier label
  * for `<v-speed-multiplier>` (Story 1.10 AC4).
  *
- * Output: `"{N}× — {duration/sec}"` where the duration term picks the
- * largest sensible unit so 1 second of wall-clock at the given rate reads
- * as a human-scale interval.
+ * Output: `"{N}× — {duration/sec}"` where the duration term picks
+ * the largest sensible unit so 1 second of wall-clock at the given rate
+ * reads as a human-scale interval. The multiplication sign (U+00D7) and
+ * em-dash (U+2014) are emitted via `\uXXXX` escapes in the source rather
+ * than as raw UTF-8 bytes — see Story 1.15 AC4 below.
  *
  * ## Unit ladder
  *
- *   rate  →  sim-time advanced per 1 wall-sec  →  formatted duration
+ *   rate  ->  sim-time advanced per 1 wall-sec  ->  formatted duration
  *   ----   ---------------------------------     ------------------
  *      1   1 sec                                 "1 sec/sec"
- *     60   60 sec  → 1 min                       "1 min/sec"
- *   3600   3600 sec → 1 hour                     "1 hour/sec"
- *  86400   86400 sec → 1 day                     "1 day/sec"
- * 604800   604800 sec → 1 week                   "1 week/sec"
+ *     60   60 sec  -> 1 min                      "1 min/sec"
+ *   3600   3600 sec -> 1 hour                    "1 hour/sec"
+ *  86400   86400 sec -> 1 day                    "1 day/sec"
+ * 604800   604800 sec -> 1 week                  "1 week/sec"
  *
  * Between decade-decimal boundaries the rate is reported in the larger
- * unit with one decimal place (e.g. 10000× → "2.78 hours/sec",
- * 1000000× → "~11.6 days/sec"). Numbers are comma-grouped per locale.
+ * unit with one decimal place. Numbers are comma-grouped per locale.
  *
  * The function is pure and side-effect-free; it does NOT depend on the
  * current locale, only `Intl.NumberFormat('en-US')` for thousands
  * separators. This keeps the rendered readout deterministic for tests
  * and for visual regression diffing.
+ *
+ * ## Story 1.15 AC4 — UTF-8 encoding robustness
+ *
+ * The post-Epic-1 manual smoke surfaced mojibake (`1Ã â 1 sec/sec`)
+ * in the rendered `aria-valuetext`: the UTF-8 byte sequence for
+ * `×` (`0xC3 0x97`) was being decoded as Latin-1 somewhere in the
+ * Lit binding / DOM-attribute path. The mitigation is to keep these
+ * source files free of non-ASCII raw bytes: emit `×` (multiplication
+ * sign) and `—` (em-dash) via `\uXXXX` escapes so the JavaScript
+ * parser materializes them as single code-units regardless of how the
+ * source bytestream is decoded. Test files compare byte-exact against
+ * the same escape forms to keep the contract explicit.
  */
 
 const SECONDS_PER_MIN = 60;
@@ -35,9 +48,19 @@ const SECONDS_PER_MONTH = SECONDS_PER_YEAR / 12;
 
 const numberFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
+/**
+ * Multiplication sign (U+00D7) emitted via `\u` escape so the source byte
+ * sequence is pure ASCII and immune to UTF-8-vs-Latin-1 mis-decoding in
+ * the build/Lit/DOM pipeline — see the Story 1.15 AC4 note in the
+ * module-level doc-comment.
+ */
+const MULT_SIGN = '\u00d7';
+/** Em-dash (U+2014) — same UTF-8-safety rationale as `MULT_SIGN`. */
+const EM_DASH = '\u2014';
+
 /** Format the multiplier prefix as a comma-grouped integer with trailing ×. */
 const formatMultiplier = (rate: number): string => {
-  return `${numberFmt.format(Math.round(rate))}×`;
+  return `${numberFmt.format(Math.round(rate))}${MULT_SIGN}`;
 };
 
 interface UnitPick {
@@ -109,10 +132,10 @@ const formatUnit = (pick: UnitPick): string => {
  */
 export const formatSpeedReadout = (rate: number): string => {
   if (!Number.isFinite(rate) || rate <= 0) {
-    return '0× — paused';
+    return `0${MULT_SIGN} ${EM_DASH} paused`;
   }
   const mult = formatMultiplier(rate);
   // 1 wall-second of real time advances `rate` sim-seconds at the chosen rate.
   const pick = pickUnit(rate);
-  return `${mult} — ${formatUnit(pick)}`;
+  return `${mult} ${EM_DASH} ${formatUnit(pick)}`;
 };

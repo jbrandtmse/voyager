@@ -136,17 +136,30 @@ describe('Story 1.9 AC3 — ARIA Slider semantics', () => {
     el.remove();
   });
 
-  it('aria-valuemin equals isoFromEt(MISSION_START_ET)', async () => {
+  // Story 1.15 AC3 — aria-valuemin / aria-valuemax carry the numeric SPICE
+  // ET range, not ISO strings. The post-Epic-1 manual smoke surfaced a
+  // defect where these rendered as `"0"` (Lit's undefined → "0" coercion);
+  // the fix routes the bindings through `String(MISSION_START_ET)` /
+  // `String(MISSION_END_ET)` directly in the template, and the test
+  // asserts the parsed numeric value matches the constant exactly so any
+  // future regression to a placeholder / coerced "0" surfaces immediately.
+  it('aria-valuemin parses to MISSION_START_ET (numeric, not "0")', async () => {
     const { el } = await makeScrubber();
     const thumb = el.shadowRoot!.querySelector('.thumb')!;
-    expect(thumb.getAttribute('aria-valuemin')).toBe(isoFromEt(MISSION_START_ET));
+    const raw = thumb.getAttribute('aria-valuemin');
+    expect(raw).not.toBeNull();
+    expect(raw).not.toBe('0');
+    expect(parseFloat(raw!)).toBe(MISSION_START_ET);
     el.remove();
   });
 
-  it('aria-valuemax equals isoFromEt(MISSION_END_ET)', async () => {
+  it('aria-valuemax parses to MISSION_END_ET (numeric, not "0")', async () => {
     const { el } = await makeScrubber();
     const thumb = el.shadowRoot!.querySelector('.thumb')!;
-    expect(thumb.getAttribute('aria-valuemax')).toBe(isoFromEt(MISSION_END_ET));
+    const raw = thumb.getAttribute('aria-valuemax');
+    expect(raw).not.toBeNull();
+    expect(raw).not.toBe('0');
+    expect(parseFloat(raw!)).toBe(MISSION_END_ET);
     el.remove();
   });
 

@@ -319,8 +319,13 @@ export class VSpeedMultiplier extends BaseElement {
     const fracPct = `${(pos * 100).toFixed(4)}%`;
     const ariaValueNow = (Math.log10(rate)).toFixed(6);
     const baseReadout = formatSpeedReadout(rate);
+    // Story 1.15 AC4 — emit `—` (em-dash, U+2014) via `\u` escape so the
+    // composed readout string is free of raw non-ASCII bytes. The Lit
+    // template literal that wraps this string preserves the escape as a
+    // single code unit, eliminating the UTF-8↔Latin-1 mis-decoding path
+    // that produced `1Ã â 1 sec/sec` in the post-Epic-1 smoke.
     const readout = this.isAutoCapped()
-      ? `${baseReadout} —paused (loading)`
+      ? `${baseReadout} \u2014paused (loading)`
       : baseReadout;
     const ariaValueText = readout;
     return html`

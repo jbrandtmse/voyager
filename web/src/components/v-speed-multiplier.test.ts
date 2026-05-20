@@ -172,6 +172,31 @@ describe('Story 1.10 AC4 — WAI-ARIA Slider on log scale', () => {
     expect(thumb.getAttribute('aria-valuetext')).toBe('60× — 1 min/sec');
     el.remove();
   });
+
+  // Story 1.15 AC4 — UTF-8 cleanliness. The post-Epic-1 manual smoke
+  // surfaced `1Ã â 1 sec/sec` (UTF-8 bytes of `×` mis-decoded as Latin-1).
+  // We assert (a) byte-exact equality against the expected default-rate
+  // string AND (b) explicit code-point checks for the multiplication sign
+  // (U+00D7) and em-dash (U+2014). The code-point assertion guards against
+  // any future regression that re-introduces the mojibake sequence
+  // (`0xC3 0x97` interpreted as `Ã` `—` or similar).
+  it('aria-valuetext at 1× is byte-exact "1× — 1 sec/sec" (no mojibake)', async () => {
+    const clock = new ClockManager();
+    const el = await mount(clock);
+    const thumb = el.shadowRoot!.querySelector('.thumb')!;
+    const raw = thumb.getAttribute('aria-valuetext');
+    expect(raw).not.toBeNull();
+    const expected = '1× — 1 sec/sec';
+    expect(raw).toBe(expected);
+    // Code-point spot check: index 1 must be U+00D7 (×), not the Latin-1
+    // mojibake byte pair `Ã—` (`0xC3 0x97` decoded as 'Ã' + something).
+    expect(raw!.charCodeAt(1)).toBe(0x00d7);
+    // Em-dash sits at index 3 in "1× — …".
+    expect(raw!.charCodeAt(3)).toBe(0x2014);
+    // Ensure no mojibake byte values leaked through.
+    expect(raw!.includes('Ã')).toBe(false); // Ã
+    el.remove();
+  });
 });
 
 describe('Story 1.10 AC5 — keyboard', () => {

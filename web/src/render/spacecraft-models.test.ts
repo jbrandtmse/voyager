@@ -6,8 +6,11 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   SpacecraftModels,
   DEFAULT_VOYAGER_GLB_URL,
+  DRACO_DECODER_PATH,
   SPACECRAFT_RENDER_SCALE_KM,
 } from './spacecraft-models';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { worldVec3 } from '../types/branded';
 import type { WorldVec3 } from '../types/branded';
 import type { EphemerisService } from '../services/ephemeris-service';
@@ -230,6 +233,34 @@ describe('Story 1.12 — SpacecraftModels', () => {
     models.tick(0, stubEphemeris({ [-31]: null, [-32]: null }));
     expect(models.getHandle('voyager-1').group.visible).toBe(false);
     expect(models.getHandle('voyager-2').group.visible).toBe(false);
+  });
+
+  it('default GLTFLoader has a DRACOLoader configured at /draco/gltf/ (Story 1.15 AC2)', async () => {
+    // We spy on the constructors so we can prove the wire-up without
+    // running the real Draco WASM decoder (which would require an actual
+    // network/filesystem fetch). Reaching the default loader path means
+    // passing no `loader` override to `load()`.
+    const setDecoderPathSpy = vi.spyOn(DRACOLoader.prototype, 'setDecoderPath');
+    const setDRACOLoaderSpy = vi.spyOn(GLTFLoader.prototype, 'setDRACOLoader');
+    // Prevent the real GLTFLoader from issuing a network fetch; stub
+    // `load()` to a sync no-op (the fetch would 404 against happy-dom).
+    const loadSpy = vi
+      .spyOn(GLTFLoader.prototype, 'load')
+      .mockImplementation(() => undefined);
+
+    const models = new SpacecraftModels();
+    void models.load(); // no loader override → default path
+
+    expect(setDecoderPathSpy).toHaveBeenCalledWith(DRACO_DECODER_PATH);
+    expect(setDRACOLoaderSpy).toHaveBeenCalledTimes(1);
+    // The argument is the DRACOLoader instance — assert its shape.
+    expect(setDRACOLoaderSpy.mock.calls[0][0]).toBeInstanceOf(DRACOLoader);
+    // Sanity: the loader's load() was called against the default URL.
+    expect(loadSpy.mock.calls[0][0]).toBe(DEFAULT_VOYAGER_GLB_URL);
+
+    setDecoderPathSpy.mockRestore();
+    setDRACOLoaderSpy.mockRestore();
+    loadSpy.mockRestore();
   });
 
   it('load() rejects when the loader signals an error', async () => {

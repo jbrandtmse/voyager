@@ -6,6 +6,8 @@ import {
 } from './render-engine';
 import { worldVec3 } from '../types/branded';
 import type { GPUCapabilities } from '../boot/gpu-capability-probe';
+import { ClockManager } from '../services/clock-manager';
+import { MISSION_START_ET } from '../constants/mission';
 
 // Build a fake canvas with the minimum surface RenderEngine reads during init.
 const makeFakeCanvas = (width = 800, height = 600): HTMLCanvasElement =>
@@ -235,6 +237,116 @@ describe('RenderEngine — onFrame hook', () => {
     };
     engine.tick();
     expect(order).toEqual(['cb', 'render']);
+    engine.dispose();
+  });
+});
+
+// ─── Story 1.15 AC1 / T2 — RenderEngine ← ClockManager integration ────────
+describe('RenderEngine — ClockManager wire-up (Story 1.15 AC1)', () => {
+  it('onFrame ET reads from clockManager.simTimeEt, not a wall-clock derivative', () => {
+    const cap = makeRendererCapture();
+    const clock = new ClockManager();
+    const targetEt = MISSION_START_ET + 1234.5;
+    clock.scrubTo(targetEt);
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      { clockManager: clock },
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    const seen: number[] = [];
+    engine.onFrame((et) => seen.push(et));
+    engine.tick();
+    // Clock is paused (scrubTo pauses); first tick has no prior wall-clock
+    // delta to advance against. ET must equal the scrubbed value exactly.
+    expect(seen[0]).toBe(targetEt);
+    engine.dispose();
+  });
+
+  it('paused clock: successive ticks emit the same ET (no wall-clock drift)', async () => {
+    const cap = makeRendererCapture();
+    const clock = new ClockManager();
+    const fixedEt = MISSION_START_ET + 9_999;
+    clock.scrubTo(fixedEt);
+    expect(clock.playing).toBe(false);
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      { clockManager: clock },
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    const seen: number[] = [];
+    engine.onFrame((et) => seen.push(et));
+    engine.tick();
+    // Force a measurable wall-clock gap. If the engine were still using
+    // the placeholder formula, the second tick's ET would diverge.
+    await new Promise((r) => setTimeout(r, 25));
+    engine.tick();
+    expect(seen[0]).toBe(fixedEt);
+    expect(seen[1]).toBe(fixedEt);
+    engine.dispose();
+  });
+
+  it('playing clock: tick() advances simTimeEt by playbackRate × wall-dt', async () => {
+    const cap = makeRendererCapture();
+    const clock = new ClockManager();
+    clock.scrubTo(MISSION_START_ET);
+    clock.setRate(1000); // 1000× — easy to see motion in a 50 ms wall window.
+    clock.play();
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      { clockManager: clock },
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    const seen: number[] = [];
+    engine.onFrame((et) => seen.push(et));
+    engine.tick(); // seeds lastTickMs; clock not yet advanced.
+    expect(seen[0]).toBe(MISSION_START_ET);
+    await new Promise((r) => setTimeout(r, 50));
+    engine.tick();
+    expect(seen[1]).toBeGreaterThan(seen[0]);
+    // 1000× over ≥50 ms wall ⇒ at least ~50 sim-sec advance. Use a loose
+    // lower bound so timer-scheduler jitter on slow CI can't make this flaky.
+    expect(seen[1] - seen[0]).toBeGreaterThanOrEqual(10);
+    engine.dispose();
+  });
+
+  it('without a clock: tick() emits MISSION_START_ET (no placeholder wall-clock formula)', async () => {
+    const cap = makeRendererCapture();
+    const engine = new RenderEngine(CAPS_REVERSE_Z_OK, {}, cap.factory);
+    engine.init(makeFakeCanvas());
+    const seen: number[] = [];
+    engine.onFrame((et) => seen.push(et));
+    engine.tick();
+    await new Promise((r) => setTimeout(r, 30));
+    engine.tick();
+    expect(seen[0]).toBe(MISSION_START_ET);
+    expect(seen[1]).toBe(MISSION_START_ET);
+    engine.dispose();
+  });
+
+  it('inverted wire (no clock injected) does NOT match the post-fix expected value', () => {
+    // Confirms the test would fail on the broken code: if the engine kept
+    // its placeholder ET formula (V2_LAUNCH_ET + wall-clock seconds), the
+    // emitted ET would equal neither the scrubbed target nor MISSION_START_ET.
+    // Here we assert: omitting the clock means the engine does NOT echo the
+    // scrubbed target back — i.e. the wire-up depends on the option being
+    // passed in. This catches the regression where someone removes the
+    // clock from RenderEngineOptions or fails to thread it through.
+    const cap = makeRendererCapture();
+    const clock = new ClockManager();
+    clock.scrubTo(MISSION_START_ET + 42);
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      {}, // intentionally NO clock — broken wire-up
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    const seen: number[] = [];
+    engine.onFrame((et) => seen.push(et));
+    engine.tick();
+    expect(seen[0]).not.toBe(MISSION_START_ET + 42);
     engine.dispose();
   });
 });

@@ -36,6 +36,7 @@
 import { Group, Sprite, SpriteMaterial, CanvasTexture, type Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 import type { EphemerisService } from '../services/ephemeris-service';
 import { renderVec3FromWorld } from '../types/branded';
@@ -53,6 +54,20 @@ const V2_NAIF_ID = -32;
  * Override via `SpacecraftModelsOptions.modelUrl` for tests.
  */
 export const DEFAULT_VOYAGER_GLB_URL = '/models/voyager.glb';
+
+/**
+ * Story 1.15 AC2 — path to the Draco glTF-targeted WASM decoder bundle.
+ *
+ * Three.js ships its DRACO decoder under `three/examples/jsm/libs/draco/`;
+ * the `gltf/` subdir is the smaller WASM-only build recommended for use
+ * with GLTFLoader (the parent dir also includes the JS-fallback build).
+ * Files are copied into `web/public/draco/gltf/` so Vite serves them from
+ * the static root in both dev and prod. `DRACOLoader.setDecoderPath` needs
+ * a trailing slash — required by Three.js's URL concatenation logic.
+ *
+ * @see web/public/draco/gltf/ for the actual served decoder bundle.
+ */
+export const DRACO_DECODER_PATH = '/draco/gltf/';
 
 /**
  * Scale applied to the loaded GLB's local transform. The NASA GLB ships at
@@ -141,7 +156,13 @@ export class SpacecraftModels {
     if (this.loadPromise !== null) return this.loadPromise;
 
     const url = options.modelUrl ?? DEFAULT_VOYAGER_GLB_URL;
-    const loader = options.loader ?? new GLTFLoader();
+    // Story 1.15 AC2 — the NASA Voyager Probe GLB is Draco-compressed, so
+    // GLTFLoader needs a DRACOLoader attached or it fails with
+    // "no DRACOLoader instance provided". Configure the decoder path to the
+    // bundled WASM build served from /draco/gltf/. Tests inject their own
+    // loader (no Draco compression in the synthetic GLTF fixtures), so
+    // attach DRACOLoader only to the default-constructed GLTFLoader path.
+    const loader = options.loader ?? this.makeDefaultGLTFLoader();
 
     this.loadPromise = new Promise<void>((resolve, reject) => {
       loader.load(
@@ -192,6 +213,21 @@ export class SpacecraftModels {
   /** True once the GLB has finished loading (both V1 + V2 meshes populated). */
   get isLoaded(): boolean {
     return this.gltfLoaded;
+  }
+
+  /**
+   * Build a `GLTFLoader` pre-wired with a `DRACOLoader` pointed at the
+   * bundled WASM decoder under `/draco/gltf/`. Extracted so tests that
+   * want to verify the wire-up can stub it directly, and so a future
+   * caller injecting a custom GLTFLoader doesn't pay the DRACOLoader
+   * instantiation cost when it's not needed.
+   */
+  private makeDefaultGLTFLoader(): GLTFLoader {
+    const draco = new DRACOLoader();
+    draco.setDecoderPath(DRACO_DECODER_PATH);
+    const gltf = new GLTFLoader();
+    gltf.setDRACOLoader(draco);
+    return gltf;
   }
 
   getHandle(id: 'voyager-1' | 'voyager-2'): SpacecraftHandle {

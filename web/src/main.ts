@@ -8,6 +8,7 @@ import './styles/breakpoints.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
+import { ClockManager } from './services/clock-manager';
 import { RenderEngine } from './render/render-engine';
 import {
   isPrecisionSmokeMode,
@@ -67,9 +68,17 @@ const bootstrap = (): void => {
     return;
   }
 
-  // Normal app flow: empty scene. Subsequent stories populate it.
+  // Story 1.15 AC1 — construct the shared ClockManager up front so it can
+  // drive RenderEngine's per-frame ET (replacing the wall-clock placeholder)
+  // AND be wired into the scrubber / play button / speed multiplier / HUD
+  // via startFirstPaint below. RenderEngine.tick() advances the clock by
+  // the wall-clock delta between ticks; the HUD + scene-graph consumers
+  // read `clockManager.simTimeEt` from RenderEngine.onFrame callbacks.
+  const clockManager = new ClockManager();
+
   const engine = new RenderEngine(capabilities, {
     forceLogDepth: params.forceLogDepth,
+    clockManager,
   });
   engine.init(canvas);
   engine.start();
@@ -94,7 +103,7 @@ const bootstrap = (): void => {
   //      real values.
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
-    { renderEngine: engine },
+    { renderEngine: engine, clockManager },
   );
 
   // Story 1.12 — spacecraft + trajectory rendering. SpacecraftModels is

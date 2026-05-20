@@ -52,7 +52,12 @@ const clampEt = (et: number): number => {
  *
  * WAI-ARIA Slider (https://www.w3.org/WAI/ARIA/apg/patterns/slider/):
  *   - `role="slider"` on the thumb-container `<div tabindex="0">`
- *   - `aria-valuemin/max/now` as ISO-8601 UTC strings
+ *   - `aria-valuemin/max` as numeric SPICE ET values (Story 1.15 AC3 —
+ *     fixed defect where these rendered as `"0"` via Lit's undefined
+ *     coercion; the bindings now route through `String(MISSION_*_ET)`
+ *     directly so the template evaluates synchronously at first paint)
+ *   - `aria-valuenow` as an ISO-8601 UTC string (assistive-tech announces
+ *     it to the user)
  *   - `aria-valuetext` as the human-readable "YYYY-MM-DD HH:MM UT" form
  *   - `aria-label="Mission timeline"`
  *
@@ -444,8 +449,19 @@ export class VTimelineScrubber extends BaseElement {
 
   override render(): TemplateResult {
     const fracPct = `${(this.computeFraction() * 100).toFixed(4)}%`;
-    const valueMin = isoFromEt(MISSION_START_ET);
-    const valueMax = isoFromEt(MISSION_END_ET);
+    // Story 1.15 AC3 — `aria-valuemin` / `aria-valuemax` carry the numeric
+    // SPICE ET range, not ISO-8601 strings. The WAI-ARIA Slider pattern
+    // permits any string and the manual browser smoke surfaced a defect
+    // where the bound values rendered as the literal `"0"` (Lit silently
+    // coerces `undefined` to the string `"0"` on numeric attributes). We
+    // route through `String(...)` of the module-level constants so the
+    // template evaluates synchronously at first paint — no async-init or
+    // late-binding window where the values could be undefined. ISO
+    // representations of the current position and value-text remain on
+    // `aria-valuenow` / `aria-valuetext` because that's what screen
+    // readers announce to the user.
+    const valueMin = String(MISSION_START_ET);
+    const valueMax = String(MISSION_END_ET);
     const valueNow = isoFromEt(this.simEt);
     const valueText = formatForHud(this.simEt);
     return html`

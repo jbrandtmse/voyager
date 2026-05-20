@@ -31,6 +31,15 @@ export interface FirstPaintOptions {
   renderEngine?: RenderEngine;
   /** When provided, `<v-hud-distance>` reads V1/V2 positions through it. */
   ephemerisService?: EphemerisService;
+  /**
+   * Story 1.15 — caller-supplied `ClockManager`. When `main.ts` constructs
+   * the clock up-front so it can also be wired into `RenderEngine`, it
+   * passes the same instance here so the scrubber / play button / speed
+   * multiplier / HUD share the canonical clock. Omitting the option keeps
+   * the Story 1.10 behavior of constructing a fresh `ClockManager` here
+   * (used by tests).
+   */
+  clockManager?: ClockManager;
 }
 
 export interface FirstPaintHandle {
@@ -59,7 +68,11 @@ export const startFirstPaint = (
   const urlSync = new URLSync();
   const { initialEt } = urlSync.parseInitialT();
 
-  const clockManager = new ClockManager();
+  // Reuse a caller-supplied ClockManager if one was provided (Story 1.15
+  // wires the same instance into RenderEngine before `startFirstPaint`
+  // runs). Falling back to a fresh instance preserves the legacy Story
+  // 1.10 test-only call site that didn't construct a clock externally.
+  const clockManager = options.clockManager ?? new ClockManager();
   // Seed the clock to the URL-parsed ET. Uses scrubTo so the clamp + pause
   // semantics apply uniformly. ?t= always lands paused.
   clockManager.scrubTo(initialEt);
@@ -115,13 +128,16 @@ export const startFirstPaint = (
   };
   titleCard.addEventListener('voyager:title-card-complete', onComplete, { once: true });
 
+  const ownsClock = options.clockManager === undefined;
   const dispose = (): void => {
     detachKeyboard();
     if (detachFrame !== null) {
       detachFrame();
       detachFrame = null;
     }
-    clockManager.dispose();
+    if (ownsClock) {
+      clockManager.dispose();
+    }
   };
 
   return {

@@ -15,15 +15,29 @@ import {
   FAR_PLANE_KM,
 } from './constants';
 import type { GPUCapabilities } from '../boot/gpu-capability-probe';
+import { MISSION_START_ET } from '../constants/mission';
 
-// Placeholder ET counter. Story 1.10 replaces this with the real ClockManager.
-// V2 launch epoch (1977-08-20 14:29:24 UTC) ≈ J2000 ET 246369664.184 seconds.
-const V2_LAUNCH_ET_SECONDS = 246369664.184;
+// Minimum surface RenderEngine consumes from ClockManager. The concrete
+// ClockManager satisfies this shape; tests inject a stub that exposes
+// `simTimeEt` and (optionally) `tick`. Keeps the engine free of a runtime
+// import cycle through `services/clock-manager`.
+export interface ClockSource {
+  readonly simTimeEt: number;
+  tick?(realDtMs: number): void;
+}
 
 export interface RenderEngineOptions {
   // Override the probe's reverse-Z recommendation; forces logarithmic depth.
   // Sourced from ?force-log-depth=1 at the main.ts call site.
   forceLogDepth?: boolean;
+  // Story 1.15 AC1 — ClockManager dependency. When provided, `tick()`
+  // reads `simTimeEt` directly from the clock each frame and advances the
+  // clock by the real-time delta since the previous tick (so play / pause
+  // / scrub / speed multipliers all flow through the canonical clock).
+  // When omitted (legacy tests, dev harnesses), the engine emits
+  // `MISSION_START_ET` as a static value to onFrame callbacks — no
+  // wall-clock derivative.
+  clockManager?: ClockSource;
 }
 
 export type FrameCallback = (et: number) => void;
@@ -57,7 +71,8 @@ export class RenderEngine {
   private renderer: WebGLRendererLike | null = null;
   private frameCallbacks: FrameCallback[] = [];
   private cameraWorldPos: WorldVec3 = worldVec3(0, 0, 0);
-  private startTimeMs: number = 0;
+  private readonly clockManager: ClockSource | null;
+  private lastTickMs: number | null = null;
   private running = false;
 
   // Resolved depth mode, set during init().
@@ -71,6 +86,7 @@ export class RenderEngine {
     this.capabilities = capabilities;
     this.options = options;
     this.rendererFactory = rendererFactory;
+    this.clockManager = options.clockManager ?? null;
 
     this.scene = new Scene();
     this.camera = new PerspectiveCamera(
@@ -126,7 +142,7 @@ export class RenderEngine {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
 
-    this.startTimeMs = nowMs();
+    this.lastTickMs = null;
   }
 
   setCameraPosition(world: WorldVec3): void {
@@ -180,9 +196,20 @@ export class RenderEngine {
   tick(): void {
     if (!this.renderer) return;
 
-    // 1) read current ET
-    const elapsedSec = (nowMs() - this.startTimeMs) / 1000;
-    const et = V2_LAUNCH_ET_SECONDS + elapsedSec;
+    // 1) advance the wired ClockManager by the wall-clock delta since the
+    //    previous tick (so play / pause / setRate / scrubTo all flow
+    //    through the canonical clock), then read its `simTimeEt` for the
+    //    onFrame fan-out. When no clock is wired, fall back to
+    //    MISSION_START_ET so onFrame consumers still receive a finite ET.
+    const now = nowMs();
+    if (this.clockManager !== null) {
+      if (this.lastTickMs !== null && typeof this.clockManager.tick === 'function') {
+        this.clockManager.tick(now - this.lastTickMs);
+      }
+    }
+    this.lastTickMs = now;
+    const et =
+      this.clockManager !== null ? this.clockManager.simTimeEt : MISSION_START_ET;
 
     // 2) compute floating-origin offset from camera world position
     const offset = floatingOriginOffset(this.cameraWorldPos);

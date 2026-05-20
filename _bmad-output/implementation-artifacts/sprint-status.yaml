@@ -1,10 +1,14 @@
 # generated: 2026-05-18
-# last_updated: 2026-05-18
+# last_updated: 2026-05-19
 # project: Voyager
 # 1.1 set to done on 2026-05-18 after code review (cr-1-1 / epic-cycle-2026-05-18)
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: _bmad-output/implementation-artifacts
+#
+# 2026-05-19: Epic 1 reopened (epic-1: done → in-progress) per Epic 1 retrospective Decision C.
+# Story 1.15 (manual-verification defect cleanup) added as backlog → ready-for-dev to address
+# four HIGH defects + NFR-P6/NFR-M4 planning-artifact amendments. See epic-1-retro-2026-05-19.md.
 
 # STATUS DEFINITIONS:
 # ==================
@@ -36,7 +40,10 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-18
-last_updated: 2026-05-18
+last_updated: 2026-05-19
+# 1.15 set to in-progress on 2026-05-19 (dev-1-15 / epic-cycle-2026-05-18)
+# 1.15 set to review on 2026-05-19 (dev-1-15 / epic-cycle-2026-05-18) — T1–T7 implemented; T8 deferred to lead smoke gate
+# 1.15 set to done on 2026-05-20 — lead-driven QA (vitest 1283 pass, pytest 256 pass), code review (APPROVE 1 LOW), Chrome DevTools MCP smoke (AC1/AC3/AC4 confirmed; AC2 unit-test-confirmed; AC5/AC6 file-confirmed)
 # 1.5 set to done on 2026-05-18 after code review (cr-1-5 / epic-cycle-2026-05-18)
 # 1.8 set to in-progress on 2026-05-18 (dev-1-8 / epic-cycle-2026-05-18)
 # 1.8 set to review on 2026-05-18 (dev-1-8 / epic-cycle-2026-05-18)
@@ -53,6 +60,7 @@ last_updated: 2026-05-18
 # 1.12 set to review on 2026-05-18 (dev-1-12 / epic-cycle-2026-05-18)
 # 1.12 set to done on 2026-05-19 after code review (cr-1-12 / epic-cycle-2026-05-18) — HIGH fix applied in main.ts (prefetch V1+V2 chunks before TrajectoryLines construction)
 # 1.14 set to done on 2026-05-19 after code review (cr-1-14 / epic-cycle-2026-05-18) — Epic 1 COMPLETE; MED fix resolved NFR-M4 interpretation tripwire by adding entry to deferred-work.md
+# 2026-05-19: epic-1 reopened (done → in-progress), 1-15 added ready-for-dev per Epic 1 retrospective Decision C — manual-verification defects + NFR amendments
 project: Voyager
 project_key: NOKEY
 tracking_system: file-system
@@ -75,7 +83,8 @@ development_status:
   1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines: done
   1-13-celestial-bodies-sun-eight-planets-and-one-moon: done
   1-14-baseline-ci-and-static-cdn-deploy: done
-  epic-1-retrospective: optional
+  1-15-manual-verification-defect-cleanup: done
+  epic-1-retrospective: done
 
   # Epic 2: Mission Spine — Chapter Navigation, Deep-Linking and Embed
   epic-2: backlog
