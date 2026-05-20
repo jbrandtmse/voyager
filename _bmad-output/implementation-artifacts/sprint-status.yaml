@@ -40,7 +40,11 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-18
-last_updated: 2026-05-19
+last_updated: 2026-05-20
+# 2-0 set to in-progress on 2026-05-19 (dev-2-0 / epic-cycle-2026-05-19)
+# 2-0 set to review on 2026-05-19 (dev-2-0 / epic-cycle-2026-05-19) — T1–T10 implemented; web vitest 1285 pass; bake pytest 245 pass (excluding 2 pre-existing ck_inventory determinism failures unrelated to Story 2.0); typecheck + lint clean
+# 2-0 set to done on 2026-05-20 (epic-cycle-2026-05-20 resume) — QA added 2 AC8 defense tests; code review APPROVE_WITH_CHANGES_RESOLVED (0 ADR violations, 1 LOW auto-resolved, 3 LOWs deferred); lead-side Chrome DevTools MCP browser smoke PASS (console clean, AC9 setPixelRatio canvas-buffer math verified). Cycle log: _bmad-output/implementation-artifacts/cycle-log-epic-2.md. Pre-existing ck_inventory failures reclassified as CRLF normalization drift (tests pass on direct run; LOW deferred for `git add --renormalize .` cleanup).
+# Epic 2 opened on 2026-05-19 — Story 2.0 created (deferred cleanup from Epic 1 retro routing); epic-2 → in-progress
 # 1.15 set to in-progress on 2026-05-19 (dev-1-15 / epic-cycle-2026-05-18)
 # 1.15 set to review on 2026-05-19 (dev-1-15 / epic-cycle-2026-05-18) — T1–T7 implemented; T8 deferred to lead smoke gate
 # 1.15 set to done on 2026-05-20 — lead-driven QA (vitest 1283 pass, pytest 256 pass), code review (APPROVE 1 LOW), Chrome DevTools MCP smoke (AC1/AC3/AC4 confirmed; AC2 unit-test-confirmed; AC5/AC6 file-confirmed)
@@ -90,7 +94,8 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Mission Spine — Chapter Navigation, Deep-Linking and Embed
-  epic-2: backlog
+  epic-2: in-progress
+  2-0-epic-1-deferred-cleanup: done
   2-1-chapterdirector-fsm-and-11-declarative-chapter-specs: backlog
   2-2-chapter-markers-on-mission-scrubber-vertebrae: backlog
   2-3-v-chapter-index-listbox-and-chapter-jump-keyboard-shortcuts: backlog

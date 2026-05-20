@@ -296,11 +296,18 @@ def bake(
         body_records: list[BodyEntry] = []
         total_segments = 0
         for naif_id, name, slug in BODIES:
+            # Exact-prefix kernel match on basename: a hypothetical
+            # `Voyager_12.bsp` must NOT match V1's lookup. The merged Voyager
+            # SPKs are named `Voyager_1.<...>.bsp` and `Voyager_2.<...>.bsp`,
+            # so the period after the spacecraft digit is the natural
+            # boundary.
+            spacecraft_prefix = f"Voyager_{name[-1]}."
             spk_kernel = next(
                 (
                     k
                     for k in kernel_entries
-                    if k.kind == "spk" and f"Voyager_{name[-1]}" in k.target_path
+                    if k.kind == "spk"
+                    and Path(k.target_path).name.startswith(spacecraft_prefix)
                 ),
                 None,
             )

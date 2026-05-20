@@ -555,3 +555,134 @@ def test_validate_l1_thresholds_pinned_at_nfr_p9() -> None:
     assert "20" in src and "5" in src, (
         f"{VALIDATE_L1_SOURCE}: expected NFR-P9 literals 20 and 5 to be visible"
     )
+
+
+# --- 10. AC8: Voyager SPK selection uses exact-prefix basename match ------
+
+BAKE_TRAJECTORIES_SOURCE = BAKE_SRC / "bake_trajectories.py"
+
+
+def test_voyager_spk_selection_uses_exact_prefix_basename_match() -> None:
+    """Story 2.0 AC8: a hypothetical `Voyager_12.bsp` MUST NOT match V1's lookup.
+
+    Behavioral contract test of the kernel-selection expression in
+    `bake_trajectories.py`. The prior substring match (``f"Voyager_{d}" in
+    k.target_path``) would accept a `Voyager_12.bsp` for V1 (digit "1") because
+    "Voyager_1" is a prefix of "Voyager_12". The fix uses
+    `Path(k.target_path).name.startswith(f"Voyager_{d}.")` so the period
+    boundary anchors the digit.
+
+    This test reconstructs the selection predicate locally and exercises it
+    against a synthetic kernel set containing the real V1, real V2, AND a
+    hypothetical adversarial `Voyager_12.bsp`. The hypothetical entry must
+    never be selected.
+    """
+    from _kernel_io import KernelEntry  # type: ignore[import-not-found]
+
+    def _select_voyager_spk(name: str, kernels: list[KernelEntry]) -> KernelEntry | None:
+        """Mirrors the exact-prefix selection in `bake_trajectories.bake()`."""
+        spacecraft_prefix = f"Voyager_{name[-1]}."
+        return next(
+            (
+                k
+                for k in kernels
+                if k.kind == "spk"
+                and Path(k.target_path).name.startswith(spacecraft_prefix)
+            ),
+            None,
+        )
+
+    def _mk(file: str, kind: str = "spk") -> KernelEntry:
+        return KernelEntry(
+            file=file,
+            target_path=f"kernels/{file}",
+            source_url=f"https://example.invalid/{file}",
+            expected_sha256="0" * 64,
+            size_bytes=1,
+            kind=kind,
+            attribution="test fixture",
+        )
+
+    real_v1 = _mk("Voyager_1.a54206u_V0.2_merged.bsp")
+    real_v2 = _mk("Voyager_2.m05016u.merged.bsp")
+    # Adversarial hypothetical: a future "Voyager_12" kernel that would have
+    # collided with V1 under the old substring match.
+    hypothetical_v12 = _mk("Voyager_12.future_merged.bsp")
+    # Non-SPK kernel that happens to contain "Voyager_1" — must be ignored
+    # because the kind filter is part of the selection predicate.
+    lsk_decoy = _mk("Voyager_1_meta.tls", kind="lsk")
+
+    kernels = [real_v1, real_v2, hypothetical_v12, lsk_decoy]
+
+    v1_pick = _select_voyager_spk("Voyager 1", kernels)
+    v2_pick = _select_voyager_spk("Voyager 2", kernels)
+
+    assert v1_pick is real_v1, (
+        f"V1 selection regressed: expected {real_v1.file!r}, "
+        f"got {v1_pick.file if v1_pick else None!r}. "
+        f"Substring match would incorrectly accept {hypothetical_v12.file!r}."
+    )
+    assert v2_pick is real_v2, (
+        f"V2 selection regressed: expected {real_v2.file!r}, "
+        f"got {v2_pick.file if v2_pick else None!r}"
+    )
+    # The strongest assertion: the adversarial Voyager_12 entry never wins.
+    assert v1_pick is not hypothetical_v12, (
+        f"AC8 REGRESSION: V1 selected the hypothetical Voyager_12 kernel — "
+        f"substring match has crept back into bake_trajectories.py."
+    )
+    # And the LSK decoy is never picked (kind filter holds).
+    assert v1_pick is not lsk_decoy, (
+        "V1 selected a non-SPK kernel — kind='spk' filter has regressed."
+    )
+
+    # Symmetric negative: with ONLY the hypothetical Voyager_12 present, V1
+    # selection must return None (rather than falling back to Voyager_12).
+    kernels_only_v12 = [hypothetical_v12]
+    v1_pick_only_v12 = _select_voyager_spk("Voyager 1", kernels_only_v12)
+    assert v1_pick_only_v12 is None, (
+        f"V1 selection found {v1_pick_only_v12.file if v1_pick_only_v12 else None!r} "
+        f"in a kernel set containing only Voyager_12 — substring fallback regression."
+    )
+
+
+def test_bake_trajectories_source_uses_exact_prefix_match_not_substring() -> None:
+    """Story 2.0 AC8 source-level tripwire: lock the exact-prefix expression.
+
+    Catches the regression at code-change time before any bake runs. If a
+    future refactor reverts the selection to substring (`f"Voyager_{...}" in
+    k.target_path`) this test fails immediately.
+    """
+    src = BAKE_TRAJECTORIES_SOURCE.read_text(encoding="utf-8")
+    # Positive: an exact-prefix construct must be present. We accept either an
+    # inline f-string (`.name.startswith(f"Voyager_{...}.")`) OR a two-step
+    # form that binds `spacecraft_prefix = f"Voyager_{...}."` and then calls
+    # `.name.startswith(spacecraft_prefix)` — both encode the AC8 contract.
+    inline_match = re.search(
+        r"\.name\.startswith\(\s*f?[\"']Voyager_\{[^}]+\}\.[\"']\s*\)",
+        src,
+    )
+    two_step_match = re.search(
+        r"f[\"']Voyager_\{[^}]+\}\.[\"']", src
+    ) and re.search(r"\.name\.startswith\(\s*\w+\s*\)", src)
+    assert inline_match or two_step_match, (
+        f"{BAKE_TRAJECTORIES_SOURCE}: expected exact-prefix selection — either "
+        r"`Path(...).name.startswith(f\"Voyager_{...}.\")` inline, or a two-step "
+        r"`spacecraft_prefix = f\"Voyager_{...}.\"` + `.name.startswith(spacecraft_prefix)`. "
+        f"Story 2.0 AC8 contract."
+    )
+    # Negative: the legacy substring match must NOT be present.
+    assert not re.search(
+        r"f?[\"']Voyager_\{[^}]+\}[\"']\s+in\s+k\.target_path",
+        src,
+    ), (
+        f"{BAKE_TRAJECTORIES_SOURCE}: legacy substring kernel match "
+        r"`f\"Voyager_{...}\" in k.target_path` re-introduced — AC8 regression. "
+        f"This selection MUST be exact-prefix on the basename."
+    )
+    # And the kind=='spk' guard must be co-located with the prefix check
+    # (defense against accidentally widening the kind filter).
+    assert re.search(r"k\.kind\s*==\s*[\"']spk[\"']", src), (
+        f"{BAKE_TRAJECTORIES_SOURCE}: kernel selection must filter on "
+        f"`k.kind == 'spk'` — AC8 part 2 of the contract."
+    )

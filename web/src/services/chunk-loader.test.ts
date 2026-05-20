@@ -385,6 +385,83 @@ describe('ChunkLoader — LRU eviction', () => {
   });
 });
 
+// Story 2.0 AC10 — chunk-loader notify() try/catch defense.
+//
+// A throwing synchronous subscriber must NOT short-circuit notification of
+// other subscribers in the Set. Story 2.1's ChapterDirector is the first
+// real-world non-trivial subscriber, raising the risk surface.
+describe('ChunkLoader — notify() try/catch defense (Story 2.0 AC10)', () => {
+  it('one throwing subscriber does not silence the others; error is logged', async () => {
+    const dec = buildVtrj({
+      bodyId: -31,
+      etStart: 0,
+      etEnd: 60,
+      sampleCount: 1,
+      cadenceSeconds: 60,
+      samples: new Float64Array([1, 2, 3, 0, 0, 0]),
+    });
+    const c = passthrough(dec);
+    const file: ManifestFile = {
+      url: 'data/throwing-sub.bin.br',
+      sha256: sha256Hex(c),
+      decompressedSha256: sha256Hex(c),
+      sizeBytes: c.byteLength,
+      timeRangeEt: [0, 60],
+      cadenceSec: 60,
+      kind: 'trajectory',
+    };
+
+    const loader = new ChunkLoader({ fetchImpl: mockFetchOk(c) });
+
+    // Order matters: register the throwing subscriber FIRST so we test
+    // that subsequent subscribers in the Set are still notified.
+    const sentinel: string[] = [];
+    let asyncRejected = false;
+    let counter = 0;
+    loader.subscribe(() => {
+      sentinel.push('throwing-sub-called');
+      throw new Error('synthetic subscriber failure');
+    });
+    loader.subscribe(() => {
+      // Promise-rejecting subscriber — the notify loop is synchronous and
+      // unawaited, so this rejection is unhandled at the subscriber's own
+      // boundary; AC10 only requires the synchronous throw be contained.
+      Promise.reject(new Error('async failure'))
+        .catch(() => {
+          asyncRejected = true;
+        });
+      sentinel.push('promise-sub-called');
+    });
+    loader.subscribe(() => {
+      counter += 1;
+      sentinel.push('counter-sub-called');
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await loader.load(file);
+    // Allow the async-reject microtask to run.
+    await new Promise((r) => setTimeout(r, 0));
+
+    // All three subscribers were invoked for BOTH the leading-edge
+    // (loading=true) and trailing-edge (loading=false) notifications.
+    const counts: Record<string, number> = {};
+    for (const tag of sentinel) {
+      counts[tag] = (counts[tag] ?? 0) + 1;
+    }
+    expect(counts['throwing-sub-called']).toBe(2);
+    expect(counts['promise-sub-called']).toBe(2);
+    expect(counts['counter-sub-called']).toBe(2);
+    expect(counter).toBe(2);
+    expect(asyncRejected).toBe(true);
+
+    // The synchronous throw was reported via console.error — once per notify
+    // cycle, so 2 total (leading + trailing edge).
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    expect(errorSpy.mock.calls[0][0]).toMatch(/subscriber threw/);
+    errorSpy.mockRestore();
+  });
+});
+
 describe('ChunkLoader — subscribe / loading observable', () => {
   it('emits true when a load is in flight, false when it completes', async () => {
     const dec = buildVtrj({

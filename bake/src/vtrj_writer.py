@@ -50,14 +50,8 @@ BROTLI_QUALITY = 11  # max, deterministic for identical input
 #   d   : et_end f64          (8 bytes)
 #   I   : sample_count u32    (4 bytes)
 #   d   : cadence_seconds f64 (8 bytes)
-#   2s  : reserved            (2 bytes)
+#   2s  : reserved            (2 bytes — explicit b"\x00\x00")
 # Total: 4 + 2 + 4 + 8 + 8 + 4 + 8 + 2 = 40 bytes
-_HEADER_STRUCT = struct.Struct("<4sHiddIdsx")
-# Python's struct doesn't have a "2 bytes of literal zero" specifier; we use
-# "sx" (1-byte string + 1 pad byte) as a stand-in, but that only writes 2 bytes
-# total which is what AC2 wants. We'll explicitly assemble the trailing 2 bytes
-# as b"\x00\x00" instead to make the intent obvious.
-# Replace with an explicit format that matches AC2 byte-for-byte:
 _HEADER_STRUCT = struct.Struct("<4sHiddId2s")
 assert _HEADER_STRUCT.size == HEADER_SIZE, (
     f"VTRJ header struct size {_HEADER_STRUCT.size} != {HEADER_SIZE}"
@@ -187,6 +181,11 @@ def read_vtrj(source_path: Path) -> tuple[dict, np.ndarray]:
         raise ValueError(f"VTRJ magic mismatch: expected {MAGIC!r}, got {magic!r}")
     if version != VERSION:
         raise ValueError(f"VTRJ version mismatch: expected {VERSION}, got {version}")
+    if body_id not in ALLOWED_BODY_IDS:
+        raise ValueError(
+            f"VTRJ body_id must be one of {sorted(ALLOWED_BODY_IDS)} "
+            f"(V1=-31, V2=-32, Sun=10, planet-barycenters 1..8, Moon=301); got {body_id}"
+        )
     if reserved != b"\x00\x00":
         raise ValueError(f"VTRJ reserved bytes must be 0x0000; got {reserved!r}")
     expected_body_bytes = sample_count * BYTES_PER_SAMPLE

@@ -384,4 +384,32 @@ describe('RenderEngine — lifecycle', () => {
     ).toBe(true);
     engine.dispose();
   });
+
+  // Story 2.0 AC9 — setSize() must re-apply devicePixelRatio so dragging
+  // between monitors with different DPRs takes effect immediately.
+  it('setSize() re-applies devicePixelRatio (Story 2.0 AC9)', () => {
+    const cap = makeRendererCapture();
+    const setPixelRatioSpy = vi.fn();
+    cap.renderer.setPixelRatio = setPixelRatioSpy;
+    const engine = new RenderEngine(CAPS_REVERSE_Z_OK, {}, cap.factory);
+    engine.init(makeFakeCanvas(800, 600));
+    // init() may call setPixelRatio once already — clear, then exercise resize.
+    setPixelRatioSpy.mockClear();
+    const originalDpr = globalThis.devicePixelRatio;
+    Object.defineProperty(globalThis, 'devicePixelRatio', {
+      value: 2.5,
+      configurable: true,
+    });
+    try {
+      engine.setSize(1024, 768);
+      expect(setPixelRatioSpy).toHaveBeenCalledTimes(1);
+      expect(setPixelRatioSpy).toHaveBeenCalledWith(2.5);
+    } finally {
+      Object.defineProperty(globalThis, 'devicePixelRatio', {
+        value: originalDpr,
+        configurable: true,
+      });
+    }
+    engine.dispose();
+  });
 });

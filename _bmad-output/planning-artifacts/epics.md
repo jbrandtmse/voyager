@@ -763,7 +763,8 @@ So that I always know where I am in time and space without the UI competing with
 **When** the simulation timestamp updates,
 **Then** the value renders inside `<time datetime="YYYY-MM-DDTHH:MM:SSZ">YYYY-MM-DD HH:MM</time>` in JetBrains Mono with `font-variant-numeric: tabular-nums` so digits do not jitter,
 **And** the label "UT" precedes the value in `--v-color-fg-quiet` uppercase at `--v-size-hud-mono-sm` with `letter-spacing: 0.06em`,
-**And** the value uses `--v-color-fg` at `--v-size-hud-mono`.
+**And** the value uses `--v-color-fg` at `--v-size-hud-mono`,
+**And** the date string is computed via `dateForHud(et)` (the bare-value sibling of `formatForHud`, kept distinct so the scrubber's `aria-valuetext` form with inline 'UT' is preserved).
 
 **Given** `<v-hud-distance>`,
 **When** the simulation timestamp updates,
