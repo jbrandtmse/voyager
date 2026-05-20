@@ -12,6 +12,7 @@ import { ClockManager } from './services/clock-manager';
 import { ChapterDirector } from './services/chapter-director';
 import { URLSync } from './services/url-sync';
 import { URLRouter } from './services/url-router';
+import { EmbedModeState } from './services/embed-mode-state';
 import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
 import {
@@ -80,6 +81,15 @@ const bootstrap = (): void => {
   // read `clockManager.simTimeEt` from RenderEngine.onFrame callbacks.
   const clockManager = new ClockManager();
 
+  // Story 2.5 — strict-boolean parse of `?embed=true` at boot. The flag
+  // is session-immutable (no public setter on EmbedModeState) and gates
+  // first-paint's conditional `appendChild` calls for chrome elements
+  // (chapter-index toggle today; about / methodology / help in future
+  // stories). It is also carried by URLSync so every writeback preserves
+  // `&embed=true` (AC4). Strict equality against the literal lowercase
+  // `"true"` rejects `1`, `yes`, `TRUE`, `on`, empty, etc. per NFR-S7.
+  const embedMode = EmbedModeState.fromSearch(window.location.search);
+
   // Story 2.4 — parse the full URL (path + query) before any subsystem
   // wires up. `parseInitialPath()` covers both shapes:
   //   - `/` (or `/?t=<iso>`)          → chapter = null
@@ -90,7 +100,12 @@ const bootstrap = (): void => {
   // scrubTo (which clamps + pauses uniformly). first-paint reuses this
   // URLSync instance (no second `?t=` parse) so the chapter path is
   // preserved through the scrubber's first writeback.
-  const urlSync = new URLSync();
+  //
+  // Story 2.5 — pass `embedEnabled` so every writeback preserves
+  // `&embed=true`. The flag is captured here once from the URL; even if
+  // the user mutates `?embed` in the address bar later, the URLSync's
+  // captured state is fixed (mirrors EmbedModeState's immutability).
+  const urlSync = new URLSync({ embedEnabled: embedMode.enabled });
   const initialUrlState = urlSync.parseInitialPath();
   clockManager.scrubTo(initialUrlState.initialEt);
 
@@ -148,7 +163,15 @@ const bootstrap = (): void => {
   // runs so the marker-subscription wires in cleanly.
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
-    { renderEngine: engine, clockManager, chapterDirector, urlSync },
+    {
+      renderEngine: engine,
+      clockManager,
+      chapterDirector,
+      urlSync,
+      // Story 2.5 — skip mounting `<v-chapter-index>` (and future
+      // chrome elements) when embed mode is enabled. AC2.
+      embedEnabled: embedMode.enabled,
+    },
   );
 
   // Story 2.4 — seed the ChapterDirector FSM synchronously to the cold-load
@@ -188,9 +211,15 @@ const bootstrap = (): void => {
     w.__voyagerDebug = {
       ...(w.__voyagerDebug ?? {}),
       scrubber: firstPaintHandle.scrubber,
+      // Story 2.5 — null in embed mode (chapter-index is not mounted).
+      // The MCP smoke must tolerate the missing key by checking embedMode
+      // directly when verifying AC2.
       chapterIndex: firstPaintHandle.chapterIndex,
       urlRouter,
       urlSync,
+      // Story 2.5 — expose the boot-time embed flag so the lead-driven
+      // MCP smoke can assert AC1 (`enabled === true` for `?embed=true`).
+      embedMode,
     };
   }
 

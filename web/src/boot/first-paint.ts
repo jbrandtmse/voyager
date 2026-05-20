@@ -59,6 +59,24 @@ export interface FirstPaintOptions {
    * `?t=` parse runs as before.
    */
   urlSync?: URLSync;
+  /**
+   * Story 2.5 — chrome-less embed mode. When `true`, first-paint SKIPS
+   * mounting chrome elements (the chapter-index toggle today; about /
+   * methodology / help links in future stories). It does NOT add
+   * `display: none` after mount — the elements are not in the DOM at
+   * all, so document-level keyboard shortcuts they own (M / 1..9) are
+   * automatically NO-OPS because no listener is attached. Wire from
+   * `EmbedModeState.fromSearch(location.search).enabled` at boot.
+   *
+   * The simulation surface — canvas, HUD, scrubber, play button, speed
+   * multiplier — still mounts normally; those are the embed view's
+   * actual content, not chrome.
+   *
+   * Per AC2, mounting via conditional `appendChild` (rather than
+   * post-mount `display: none`) is the binding contract: a kiosk-host
+   * cannot accidentally toggle the toggle button back on by editing CSS.
+   */
+  embedEnabled?: boolean;
 }
 
 export interface FirstPaintHandle {
@@ -67,7 +85,13 @@ export interface FirstPaintHandle {
   playButton: VPlayButton;
   speedMultiplier: VSpeedMultiplier;
   hud: VHud;
-  chapterIndex: VChapterIndex;
+  /**
+   * Story 2.5 — `null` when `embedEnabled === true` (the chapter-index
+   * is intentionally not mounted in embed mode); otherwise the mounted
+   * `<v-chapter-index>` element. Consumers like main.ts's debug surface
+   * must null-check before exposing it.
+   */
+  chapterIndex: VChapterIndex | null;
   clockManager: ClockManager;
   urlSync: URLSync;
   /** Detach the global keyboard handlers and stop subscriptions. */
@@ -142,20 +166,29 @@ export const startFirstPaint = (
   hud.style.visibility = 'hidden';
   host.appendChild(hud);
 
-  // Story 2.3 — chapter index (top-right hamburger toggle). Wired with the
-  // shared ClockManager (for scrubTo-on-activation) and the same
-  // ChapterDirector the scrubber consumes (so aria-current tracks the
-  // held chapter). Both must be set BEFORE appendChild so the
-  // connectedCallback sees them and the chapter-transition subscription
-  // wires in cleanly. Visibility tracks the rest of the chrome —
-  // hidden until the title-card dissolves.
-  const chapterIndex = document.createElement('v-chapter-index') as VChapterIndex;
-  chapterIndex.clockManager = clockManager;
-  if (options.chapterDirector !== undefined) {
-    chapterIndex.chapterDirector = options.chapterDirector;
+  // Story 2.3 — chapter index (top-right hamburger toggle).
+  //
+  // Story 2.5 (AC2) — in embed mode, the chapter-index toggle is chrome
+  // and is NOT appended to the DOM. The element's connectedCallback is
+  // what registers the global `M` + `1..9` keyboard shortcuts; by
+  // skipping the appendChild we automatically achieve the AC3 contract
+  // that those shortcuts become NO-OPS in embed mode (no listener
+  // attached). The kiosk-host cannot accidentally toggle the panel back
+  // on via CSS — there is no element to unhide.
+  //
+  // Future Story 2.7 (About / Methodology links) and Story 2.8 (help
+  // overlay icon) should follow the SAME conditional-mount pattern: if
+  // (!options.embedEnabled) host.appendChild(...).
+  let chapterIndex: VChapterIndex | null = null;
+  if (options.embedEnabled !== true) {
+    chapterIndex = document.createElement('v-chapter-index') as VChapterIndex;
+    chapterIndex.clockManager = clockManager;
+    if (options.chapterDirector !== undefined) {
+      chapterIndex.chapterDirector = options.chapterDirector;
+    }
+    chapterIndex.style.visibility = 'hidden';
+    host.appendChild(chapterIndex);
   }
-  chapterIndex.style.visibility = 'hidden';
-  host.appendChild(chapterIndex);
 
   // Per-frame visible-DOM mutation lives outside Lit reactivity
   // (architecture line 424). When a RenderEngine is wired, hook each frame.
@@ -174,7 +207,10 @@ export const startFirstPaint = (
     playButton.style.visibility = '';
     speedMultiplier.style.visibility = '';
     hud.style.visibility = '';
-    chapterIndex.style.visibility = '';
+    // Story 2.5 — chapterIndex is null in embed mode (not appended).
+    if (chapterIndex !== null) {
+      chapterIndex.style.visibility = '';
+    }
   };
   titleCard.addEventListener('voyager:title-card-complete', onComplete, { once: true });
 

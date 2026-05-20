@@ -60,9 +60,41 @@ The `t` parameter pins the simulation to a specific instant. Format: ISO-8601 UT
 
 The "ISO outside the chapter window is STILL accepted on chapter routes" rule lets a user share a deep-link with a precise timestamp that may have drifted just past the chapter's visual window — the user's intent (that timestamp) wins; ChapterDirector decides activeChapter on the next render frame.
 
-### `embed` — boolean (reserved, Story 2.5)
+### `embed` — strict-boolean (Story 2.5)
 
-Reserved for the chrome-less embed mode introduced in Story 2.5. Strict-boolean parse: `?embed=true` enables embed mode; any other value (including `?embed=1` or `?embed=yes`) is rejected silently.
+Enables chrome-less embed mode for kiosk / iframe deployments. **Strict-boolean parse (NFR-S7):** only the literal lowercase `?embed=true` enables embed mode. Every other value — `?embed=1`, `?embed=yes`, `?embed=TRUE`, `?embed=on`, `?embed=`, or no `embed` param at all — silently resolves to "embed disabled." No error UI is surfaced for rejected variants.
+
+**Session-immutable.** The flag is captured once at boot from the URL. Mutating `?embed` in the address bar after page load does not change the embed state — kiosk-host shells decide at navigation time, not mid-session.
+
+**Behavior — chrome elements NOT mounted (not merely hidden).** When embed mode is enabled, the following chrome elements are not appended to the DOM at all. CSS `display: none` is not used; the elements simply do not exist in the document tree.
+
+| Element | Story | Behavior in embed mode |
+| --- | --- | --- |
+| `<v-chapter-index>` toggle button | 2.3 | not mounted; `M` and `1`–`9` global shortcuts become NO-OPS because no listener is attached |
+| About-page link | 2.7 (planned) | not mounted; `A` shortcut becomes a NO-OP |
+| Methodology link | 2.7 (planned) | not mounted |
+| `<v-help-overlay>` toggle icon | 2.8 (planned) | not mounted; `?` shortcut becomes a NO-OP |
+
+This list is **part of the URL contract**: kiosk hosts may rely on the stability of which elements disappear in embed mode. Adding new elements to the strip list requires a major URL-version bump per [ADR-0001](adr/0001-url-contract-as-public-api.md). Removing elements from the strip list (i.e. starting to mount something that was previously stripped) similarly counts as a breaking change.
+
+**Simulation surface — STILL mounts in embed mode.** The following are the embed view's actual content, not chrome, and continue to render normally: canvas, `<v-hud>` and its sub-components, `<v-timeline-scrubber>` with chapter markers, `<v-play-button>`, `<v-speed-multiplier>`, `<v-audio-toggle>` (future).
+
+**Keyboard contract preserved.** All keyboard shortcuts that target the simulation surface continue to work in embed mode: `Space` (play/pause — Story 1.10), `←/→` (scrub — Story 1.9), `Home/End` (jump to mission start/end), `+/-` (speed — Story 1.10), `H` (HUD compaction — Story 6.2 planned). Only the chrome-targeted shortcuts (`M`, `A`, `?`) become NO-OPS.
+
+**URL preservation across writebacks.** When embed mode is enabled at boot, every URL writeback — chapter `pushState`, chapter `replaceState`, free-scrub `?t=` replaceState, home revert, unknown-slug redirect — appends `&embed=true` so the kiosk's deep-link survives the full back-then-forward navigation cycle and any director-driven boundary crossing.
+
+**Example URLs:**
+
+```text
+# Kiosk deep-link with embed mode
+https://voyager.app/c/pale-blue-dot?t=1990-02-14T00:00:00Z&embed=true
+
+# After a user activation that pushes to V2 Neptune — embed=true preserved
+https://voyager.app/c/v2-neptune?t=1989-08-25T09:23:00Z&embed=true
+
+# Director-driven exit to cruise period — embed=true survives the home revert
+https://voyager.app/?t=1986-01-25T00:00:00Z&embed=true
+```
 
 ## State → URL Writeback Rules
 

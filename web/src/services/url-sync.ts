@@ -16,6 +16,15 @@
  *   `console.warn` + redirect to `/` via `replaceState`; falls back to
  *   `parseInitialT()` semantics for the homepage route.
  *
+ * - **Story 2.5 — embed=true preservation.** When the URLSync is
+ *   constructed with `{ embedEnabled: true }` (boot-time captured from
+ *   `?embed=true`), every URL writeback (chapter pushState, chapter
+ *   replaceState, home replaceState, throttled `?t=`, immediate `?t=`,
+ *   unknown-slug redirect) appends `&embed=true` so kiosks deep-linking
+ *   with the parameter see it survive a back-then-forward sequence and
+ *   any director-driven boundary crossing. Strict-boolean parse owned
+ *   by `embed-mode-state.ts`.
+ *
  * - `writeEtThrottled(et)` updates `?t=` via `history.replaceState`
  *   (UX spec line 687, no browser history pollution). Coalesces calls
  *   within `URL_WRITEBACK_THROTTLE_MS` (250 ms) so a continuous drag emits
@@ -143,6 +152,26 @@ const isInRange = (et: number): boolean =>
   et >= MISSION_START_ET - RANGE_SLACK_S &&
   et <= MISSION_END_ET + RANGE_SLACK_S;
 
+/**
+ * Story 2.5 — boot-time options for URLSync. `embedEnabled`, when set
+ * to `true`, causes every writeback to append `&embed=true` so kiosks
+ * deep-linking with `?embed=true` see the parameter survive across
+ * chapter pushState, free-scrub replaceState, director boundary
+ * crossings, and unknown-slug redirects. The flag is captured at boot
+ * from the URL and never mutated (matches `EmbedModeState`'s
+ * immutability contract — the kiosk's parent shell decides at
+ * navigation time).
+ */
+export interface UrlSyncOptions {
+  win?: UrlSyncWindow;
+  /**
+   * Story 2.5 — when true, every URL writeback appends `&embed=true`.
+   * Wire from `EmbedModeState.fromSearch(location.search).enabled` at
+   * boot. Defaults to false.
+   */
+  embedEnabled?: boolean;
+}
+
 export class URLSync {
   private readonly win: UrlSyncWindow;
   private throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -160,10 +189,74 @@ export class URLSync {
    * `dispose()` can detach it from the window.
    */
   private popstateListener: ((e: PopStateEvent) => void) | null = null;
+  /**
+   * Story 2.5 — boot-captured embed flag. When true, every writeback URL
+   * appends `&embed=true`. Immutable for the URLSync's lifetime.
+   */
+  private readonly embedEnabled: boolean;
 
-  constructor(win: UrlSyncWindow = window as unknown as UrlSyncWindow) {
+  /**
+   * Backwards-compatible constructor: callers may pass either a
+   * `UrlSyncWindow` directly (Story 1.9 / 2.4 sites) or a
+   * `UrlSyncOptions` object (Story 2.5 — to carry the `embedEnabled`
+   * flag).
+   */
+  constructor(
+    arg: UrlSyncWindow | UrlSyncOptions = window as unknown as UrlSyncWindow,
+  ) {
+    const isOptions =
+      // UrlSyncWindow always exposes `location` + `history`. Treat any
+      // object that has those as the window form; otherwise interpret as
+      // options. UrlSyncOptions may also include `win`, but never both
+      // shapes' fields at once in normal usage.
+      arg !== null &&
+      typeof arg === 'object' &&
+      !('location' in arg);
+    const opts: UrlSyncOptions = isOptions ? (arg as UrlSyncOptions) : {};
+    const win = isOptions
+      ? (opts.win ?? (window as unknown as UrlSyncWindow))
+      : (arg as UrlSyncWindow);
     this.win = win;
     this.currentPath = this.win.location.pathname;
+    this.embedEnabled = opts.embedEnabled === true;
+  }
+
+  /**
+   * Story 2.5 — append `&embed=true` (or `?embed=true` if no other
+   * query is present) to a URL path-with-optional-query when embed mode
+   * is enabled. No-op when `embedEnabled === false`.
+   *
+   * The input may already contain a `?...` query string (e.g.
+   * `/c/v2-neptune?t=1989-08-25T09:23:00Z`) or be query-less
+   * (e.g. `/`). Hash fragments (`#...`) are preserved at the end if
+   * the caller embeds them in the input.
+   */
+  private appendEmbed(url: string): string {
+    if (!this.embedEnabled) return url;
+    // Split off any hash so we can re-append it after the embed param.
+    const hashIdx = url.indexOf('#');
+    const hash = hashIdx >= 0 ? url.slice(hashIdx) : '';
+    const noHash = hashIdx >= 0 ? url.slice(0, hashIdx) : url;
+    const sep = noHash.includes('?') ? '&' : '?';
+    return `${noHash}${sep}embed=true${hash}`;
+  }
+
+  /**
+   * Variant of `appendEmbed` for URLs that may ALREADY contain
+   * `embed=true` (e.g. the unknown-slug redirect path which forwards the
+   * raw `location.search`). Avoids producing `?embed=true&embed=true`.
+   */
+  private appendEmbedIfMissing(url: string): string {
+    if (!this.embedEnabled) return url;
+    const hashIdx = url.indexOf('#');
+    const noHash = hashIdx >= 0 ? url.slice(0, hashIdx) : url;
+    const queryIdx = noHash.indexOf('?');
+    if (queryIdx >= 0) {
+      const query = noHash.slice(queryIdx + 1);
+      const params = new URLSearchParams(query);
+      if (params.get('embed') === 'true') return url;
+    }
+    return this.appendEmbed(url);
   }
 
   /**
@@ -227,11 +320,16 @@ export class URLSync {
         `[URLSync] Unknown chapter slug "${slug}" — redirecting to homepage`,
       );
       const search = this.win.location.search;
-      this.win.history.replaceState(
-        null,
-        '',
-        `/${search}${this.win.location.hash}`,
-      );
+      // Story 2.5 — the user's ?embed=true intent survives the redirect.
+      // The URL we construct from the raw `location.search` already
+      // contains embed=true if it was on the source URL, so we don't
+      // need to re-append it here; we DO need to re-append when the
+      // embed param was implicit (the URLSync's boot-time captured
+      // embed flag) but the source URL stripped it via canonicalization.
+      // Most kiosks carry embed=true through `location.search`, so the
+      // typical path passes through cleanly.
+      const baseUrl = `/${search}${this.win.location.hash}`;
+      this.win.history.replaceState(null, '', this.appendEmbedIfMissing(baseUrl));
       this.currentPath = '/';
       const t = this.parseInitialT();
       return { chapter: null, initialEt: t.initialEt, hadValidT: t.valid };
@@ -325,7 +423,9 @@ export class URLSync {
   private writeNow(et: number): void {
     const iso = isoFromEt(et);
     if (iso === '') return; // NaN/Infinity guard.
-    const url = `${this.currentPath}?t=${iso}${this.win.location.hash}`;
+    const url = this.appendEmbed(
+      `${this.currentPath}?t=${iso}${this.win.location.hash}`,
+    );
     this.win.history.replaceState(null, '', url);
   }
 
@@ -352,7 +452,9 @@ export class URLSync {
     this.pendingEt = null;
     const iso = isoFromEt(anchorEt);
     const isoSegment = iso === '' ? '' : `?t=${iso}`;
-    const url = `/c/${slug}${isoSegment}${this.win.location.hash}`;
+    const url = this.appendEmbed(
+      `/c/${slug}${isoSegment}${this.win.location.hash}`,
+    );
     this.currentPath = `/c/${slug}`;
     const push = this.win.history.pushState;
     if (typeof push === 'function') {
@@ -381,7 +483,9 @@ export class URLSync {
     this.pendingEt = null;
     const iso = isoFromEt(et);
     const isoSegment = iso === '' ? '' : `?t=${iso}`;
-    const url = `/c/${slug}${isoSegment}${this.win.location.hash}`;
+    const url = this.appendEmbed(
+      `/c/${slug}${isoSegment}${this.win.location.hash}`,
+    );
     this.currentPath = `/c/${slug}`;
     this.win.history.replaceState(null, '', url);
   }
@@ -401,7 +505,7 @@ export class URLSync {
     this.pendingEt = null;
     const iso = isoFromEt(et);
     const isoSegment = iso === '' ? '' : `?t=${iso}`;
-    const url = `/${isoSegment}${this.win.location.hash}`;
+    const url = this.appendEmbed(`/${isoSegment}${this.win.location.hash}`);
     this.currentPath = '/';
     this.win.history.replaceState(null, '', url);
   }

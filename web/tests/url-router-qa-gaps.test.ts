@@ -23,11 +23,12 @@
  *     deep-link ET BEFORE URLRouter subscribes, so cold-load arrival does
  *     NOT trigger a redundant URL write. (Dev's note in url-router.ts
  *     lines 161-163 and main.ts lines 161-167.)
- *   - **`?embed=true` parameter coexistence (Story 2.5 forward compat)** —
- *     documents the CURRENT behavior: the URLRouter's chapter writes
- *     produce `?t=<iso>` only and do NOT preserve `?embed=true`. The
- *     url-contract.md reserves `embed` as a Story 2.5 placeholder; any
- *     change to preserve it through writebacks belongs to Story 2.5.
+ *   - **`?embed=true` parameter preservation (Story 2.5 closure)** —
+ *     verifies the wired-up behavior: with embed=true at boot, the
+ *     URLRouter's chapter writes (push + replace) AND the home revert
+ *     all carry `&embed=true` so a kiosk's deep-link survives every
+ *     subsequent writeback. This replaces the Story 2.4 drop-pin that
+ *     held the gap open for Story 2.5 to close.
  *   - **Out-of-range `?t=` on homepage / chapter routes at the boot
  *     integration tier** — dev's unit tests cover these at the URLSync
  *     surface; this verifies the full boot stack (URLSync ×
@@ -64,9 +65,13 @@ const flushMicrotasks = async (): Promise<void> => {
 /**
  * Boot a stack mirroring `main.ts`'s wireup, with the option to defer
  * router installation so we can observe the boot-time race ordering.
+ *
+ * Story 2.5 — `embedEnabled` propagates the boot-time `?embed=true`
+ * parse through URLSync so writebacks preserve the param. Defaults to
+ * `false` (matches Story 2.4 baseline behavior for the other tests).
  */
 const bootStack = (
-  options: { deferRouterInstall?: boolean } = {},
+  options: { deferRouterInstall?: boolean; embedEnabled?: boolean } = {},
 ): {
   urlSync: URLSync;
   clock: ClockManager;
@@ -75,7 +80,7 @@ const bootStack = (
   installRouter: () => URLRouter;
   dispose: () => void;
 } => {
-  const urlSync = new URLSync();
+  const urlSync = new URLSync({ embedEnabled: options.embedEnabled === true });
   const initial = urlSync.parseInitialPath();
   const clock = new ClockManager();
   clock.scrubTo(initial.initialEt);
@@ -443,18 +448,17 @@ describe('Story 2.4 — boot-time race: URLRouter subscribes AFTER the first dir
 // ?embed=true coexistence (Story 2.5 forward compat) — current behavior
 // ─────────────────────────────────────────────────────────────────────
 
-describe('Story 2.4 — `?embed=true` coexistence with route + ?t= (current behavior)', () => {
-  it('boot at /c/v1-jupiter?embed=true&t=<iso> initializes correctly; the embed param is read by Story 2.5, not Story 2.4', () => {
-    // The URL contract (docs/url-contract.md) reserves `embed` for
-    // Story 2.5. parseInitialPath ignores all params except `t`, which
-    // is the correct Story 2.4 behavior. This test pins that boot does
-    // NOT crash or behave anomalously with embed present.
+describe('Story 2.5 — `?embed=true` preservation through chapter + home writebacks', () => {
+  it('boot at /c/v1-jupiter?embed=true&t=<iso> initializes correctly with embed enabled', () => {
+    // EmbedModeState parses the search at boot; URLSync (constructed with
+    // embedEnabled=true) carries the flag through every writeback. This
+    // verifies the deep-link arrival path is stable with embed present.
     window.history.replaceState(
       null,
       '',
       '/c/v1-jupiter?embed=true&t=1979-03-05T12:00:00Z',
     );
-    const stack = bootStack();
+    const stack = bootStack({ embedEnabled: true });
     try {
       expect(stack.director.activeChapter?.slug).toBe('v1-jupiter');
       const expected = etFromIso('1979-03-05T12:00:00Z');
@@ -464,16 +468,13 @@ describe('Story 2.4 — `?embed=true` coexistence with route + ?t= (current beha
     }
   });
 
-  it('CURRENT BEHAVIOR: chapter pushState DROPS `?embed=true` (Story 2.5 will need to preserve it)', async () => {
-    // The current url-sync writeChapterPushState constructs the new URL as
-    // `/c/<slug>?t=<iso>` only — any other query parameters present at
-    // boot are dropped on the first writeback. The url-contract.md
-    // reserves `embed` for Story 2.5; preserving it through writebacks
-    // is a forward-compat task that belongs to Story 2.5, not 2.4. This
-    // test PINS the current behavior so any regression on the Story 2.5
-    // side is flagged.
+  it('chapter pushState PRESERVES `?embed=true` (closes Story 2.4 drop pin)', async () => {
+    // The Story 2.4 pin test asserted the drop. Story 2.5 closes that
+    // gap: with embedEnabled=true at boot, every URLRouter-driven
+    // writeback appends &embed=true. The kiosk deep-link survives the
+    // first user-driven chapter activation.
     window.history.replaceState(null, '', '/?embed=true');
-    const stack = bootStack();
+    const stack = bootStack({ embedEnabled: true });
     try {
       const v1Jupiter = findChapterBySlug('v1-jupiter')!;
       stack.clock.scrubTo(v1Jupiter.anchorEt);
@@ -486,14 +487,117 @@ describe('Story 2.4 — `?embed=true` coexistence with route + ?t= (current beha
       );
       stack.director.update(stack.clock.simTimeEt);
       await flushMicrotasks();
-      // Path is correct; ?embed is currently DROPPED — only ?t= survives.
-      // Story 2.5 will widen this to include ?embed=true (or whatever
-      // shape the embed-mode contract settles on).
       expect(window.location.pathname).toBe('/c/v1-jupiter');
       const params = new URLSearchParams(window.location.search);
       expect(params.get('t')).not.toBeNull();
-      // Pin: embed is currently absent after the writeback.
-      expect(params.get('embed')).toBeNull();
+      // Closes the drop pin: embed=true is now PRESERVED through the writeback.
+      expect(params.get('embed')).toBe('true');
+    } finally {
+      stack.dispose();
+    }
+  });
+
+  it('back-then-forward sequence keeps `embed=true` in the URL throughout', async () => {
+    // Pin AC4: a full user navigation cycle (push v1-jupiter →
+    // push v2-saturn → back → forward) preserves embed=true on every
+    // resulting URL state. The director-driven boundary replaceState
+    // and home replaceState paths are covered indirectly by this
+    // exercise.
+    window.history.replaceState(null, '', '/?embed=true');
+    const stack = bootStack({ embedEnabled: true });
+    try {
+      const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+      const v2Saturn = findChapterBySlug('v2-saturn')!;
+
+      // Step 1: jump to V1 Jupiter
+      stack.clock.scrubTo(v1Jupiter.anchorEt);
+      document.dispatchEvent(
+        new CustomEvent('chapter-jump', {
+          detail: { slug: v1Jupiter.slug, anchorEt: v1Jupiter.anchorEt },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      stack.director.update(stack.clock.simTimeEt);
+      await flushMicrotasks();
+      expect(window.location.pathname).toBe('/c/v1-jupiter');
+      expect(new URLSearchParams(window.location.search).get('embed')).toBe('true');
+
+      // Step 2: jump to V2 Saturn
+      stack.clock.scrubTo(v2Saturn.anchorEt);
+      document.dispatchEvent(
+        new CustomEvent('chapter-jump', {
+          detail: { slug: v2Saturn.slug, anchorEt: v2Saturn.anchorEt },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      stack.director.update(stack.clock.simTimeEt);
+      await flushMicrotasks();
+      expect(new URLSearchParams(window.location.search).get('embed')).toBe('true');
+
+      // Step 3: browser back → restored /c/v1-jupiter URL. The popstate
+      // restores whatever the browser has stored — which DOES include
+      // embed=true because the pushState wrote it.
+      window.history.back();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(window.location.pathname).toBe('/c/v1-jupiter');
+      expect(new URLSearchParams(window.location.search).get('embed')).toBe('true');
+
+      // Step 4: browser forward → restored /c/v2-saturn URL with embed=true.
+      window.history.forward();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(window.location.pathname).toBe('/c/v2-saturn');
+      expect(new URLSearchParams(window.location.search).get('embed')).toBe('true');
+    } finally {
+      stack.dispose();
+    }
+  });
+
+  it('cruise-period home revert (writeHomeReplaceState) preserves embed=true', async () => {
+    // When a free scrub crosses into a cruise gap, the URL reverts to '/'.
+    // embed=true must survive that revert so the kiosk view stays
+    // chrome-less even between chapters.
+    window.history.replaceState(null, '', '/c/v1-jupiter?embed=true');
+    const stack = bootStack({ embedEnabled: true });
+    try {
+      const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+      const v2Jupiter = findChapterBySlug('v2-jupiter')!;
+      // Scrub past v1-jupiter's window into the cruise gap before v2.
+      const cruiseEt = v1Jupiter.windowEndEt + 1;
+      expect(cruiseEt).toBeLessThan(v2Jupiter.windowStartEt);
+      stack.clock.scrubTo(cruiseEt);
+      stack.director.update(stack.clock.simTimeEt);
+      await flushMicrotasks();
+      expect(window.location.pathname).toBe('/');
+      expect(new URLSearchParams(window.location.search).get('embed')).toBe('true');
+    } finally {
+      stack.dispose();
+    }
+  });
+
+  it('embedEnabled=false produces URLs WITHOUT embed=true (baseline)', async () => {
+    // Sanity: with embedEnabled=false (typical non-kiosk session) the
+    // URLs do not gain an embed param even if the page was navigated
+    // to with one and the URLSync was constructed without the flag.
+    // (Real boot would always reflect the URL through EmbedModeState,
+    // but the URLSync surface is independent of the parse step — this
+    // pins the default.)
+    window.history.replaceState(null, '', '/');
+    const stack = bootStack({ embedEnabled: false });
+    try {
+      const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+      stack.clock.scrubTo(v1Jupiter.anchorEt);
+      document.dispatchEvent(
+        new CustomEvent('chapter-jump', {
+          detail: { slug: v1Jupiter.slug, anchorEt: v1Jupiter.anchorEt },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      stack.director.update(stack.clock.simTimeEt);
+      await flushMicrotasks();
+      expect(new URLSearchParams(window.location.search).get('embed')).toBeNull();
     } finally {
       stack.dispose();
     }

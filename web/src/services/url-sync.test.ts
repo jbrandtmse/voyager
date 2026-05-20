@@ -525,6 +525,119 @@ describe('Story 2.4 AC4 — free-scrub preserves /c/<slug> path', () => {
 // Story 2.4 AC8c — popstate handler
 // ─────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────
+// Story 2.5 AC4 — embed=true preservation through all writeback paths
+// ─────────────────────────────────────────────────────────────────────
+
+describe('Story 2.5 AC4 — URLSync embed=true preservation', () => {
+  it('writeEtImmediate appends &embed=true when embedEnabled=true', () => {
+    const { win, replaceCalls } = makeWin('?embed=true', '/', '');
+    const sync = new URLSync({ win, embedEnabled: true });
+    const et = etFromIso('1989-08-25T09:23:00Z');
+    sync.writeEtImmediate(et);
+    expect(replaceCalls.length).toBe(1);
+    expect(replaceCalls[0]!.url).toBe('/?t=1989-08-25T09:23:00Z&embed=true');
+  });
+
+  it('writeEtThrottled appends &embed=true on the immediate AND trailing writes', () => {
+    vi.useFakeTimers();
+    const { win, replaceCalls } = makeWin('?embed=true', '/', '');
+    const sync = new URLSync({ win, embedEnabled: true });
+    sync.writeEtThrottled(MISSION_START_ET); // immediate
+    sync.writeEtThrottled(MISSION_START_ET + 100); // queued — fires after window
+    vi.advanceTimersByTime(260);
+    expect(replaceCalls.length).toBe(2);
+    expect(replaceCalls[0]!.url as string).toContain('embed=true');
+    expect(replaceCalls[1]!.url as string).toContain('embed=true');
+    vi.useRealTimers();
+  });
+
+  it('writeChapterPushState appends &embed=true', () => {
+    const { win, pushCalls } = makeWin('?embed=true', '/', '');
+    const sync = new URLSync({ win, embedEnabled: true });
+    const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+    sync.writeChapterPushState(v1Jupiter.slug, v1Jupiter.anchorEt);
+    expect(pushCalls.length).toBe(1);
+    const url = pushCalls[0]!.url as string;
+    expect(url.startsWith('/c/v1-jupiter?t=')).toBe(true);
+    expect(url).toContain('&embed=true');
+  });
+
+  it('writeChapterReplaceState appends &embed=true', () => {
+    const { win, replaceCalls } = makeWin('?embed=true', '/c/launch-v2', '');
+    const sync = new URLSync({ win, embedEnabled: true });
+    const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+    sync.writeChapterReplaceState(v1Jupiter.slug, v1Jupiter.anchorEt);
+    const url = replaceCalls[0]!.url as string;
+    expect(url.startsWith('/c/v1-jupiter?t=')).toBe(true);
+    expect(url).toContain('&embed=true');
+  });
+
+  it('writeHomeReplaceState appends &embed=true', () => {
+    const { win, replaceCalls } = makeWin('?embed=true', '/c/v1-jupiter', '');
+    const sync = new URLSync({ win, embedEnabled: true });
+    sync.writeHomeReplaceState(MISSION_END_ET);
+    const url = replaceCalls[0]!.url as string;
+    expect(url.startsWith('/?t=')).toBe(true);
+    expect(url).toContain('&embed=true');
+  });
+
+  it('unknown-slug redirect preserves embed=true exactly once', () => {
+    const { win, replaceCalls } = makeWin('?embed=true', '/c/typo', '');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sync = new URLSync({ win, embedEnabled: true });
+    sync.parseInitialPath();
+    const url = replaceCalls[replaceCalls.length - 1]!.url as string;
+    // The raw location.search already carries embed=true; the redirect
+    // must NOT duplicate the param into embed=true&embed=true.
+    expect(url).toContain('embed=true');
+    const matches = url.match(/embed=true/g) ?? [];
+    expect(matches.length).toBe(1);
+    warnSpy.mockRestore();
+  });
+
+  it('embedEnabled=false leaves URLs unchanged (no embed param appended)', () => {
+    const { win, replaceCalls } = makeWin('', '/', '');
+    const sync = new URLSync({ win, embedEnabled: false });
+    sync.writeEtImmediate(etFromIso('1989-08-25T09:23:00Z'));
+    expect(replaceCalls[0]!.url).toBe('/?t=1989-08-25T09:23:00Z');
+  });
+
+  it('default constructor (no options) defaults embedEnabled to false', () => {
+    const { win, replaceCalls } = makeWin('', '/', '');
+    const sync = new URLSync(win);
+    sync.writeEtImmediate(etFromIso('1989-08-25T09:23:00Z'));
+    expect((replaceCalls[0]!.url as string).includes('embed=')).toBe(false);
+  });
+
+  it('preserves hash fragments AFTER the embed param', () => {
+    const { win, replaceCalls } = makeWin('?embed=true', '/', '#section-2');
+    const sync = new URLSync({ win, embedEnabled: true });
+    sync.writeEtImmediate(MISSION_START_ET);
+    const url = replaceCalls[0]!.url as string;
+    expect(url.endsWith('#section-2')).toBe(true);
+    expect(url).toContain('embed=true');
+    // Sanity: hash comes AFTER embed=true, not in between.
+    expect(url.indexOf('embed=true')).toBeLessThan(url.indexOf('#section-2'));
+  });
+
+  it('back-then-forward sequence preserves embed across all writes (integration via internal state)', () => {
+    // The URLSync itself is just a writer — we verify the writes it
+    // produces always carry embed=true once the flag is set at boot.
+    const { win, pushCalls, replaceCalls } = makeWin('?embed=true', '/', '');
+    const sync = new URLSync({ win, embedEnabled: true });
+    const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+    const v2Saturn = findChapterBySlug('v2-saturn')!;
+    sync.writeChapterPushState(v1Jupiter.slug, v1Jupiter.anchorEt);
+    sync.writeChapterPushState(v2Saturn.slug, v2Saturn.anchorEt);
+    sync.writeChapterReplaceState(v1Jupiter.slug, v1Jupiter.anchorEt); // popstate-induced
+    sync.writeChapterReplaceState(v2Saturn.slug, v2Saturn.anchorEt); // forward
+    for (const call of [...pushCalls, ...replaceCalls]) {
+      expect((call.url as string)).toContain('embed=true');
+    }
+  });
+});
+
 describe('Story 2.4 AC8c — URLSync.installPopstateHandler()', () => {
   it('fires the supplied callback on popstate with re-parsed URL state', () => {
     const wm = makeWin('', '/');
