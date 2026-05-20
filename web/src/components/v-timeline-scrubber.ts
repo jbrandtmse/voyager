@@ -10,6 +10,9 @@ import { isoFromEt, formatForHud } from '../math/et-conversions';
 import { attachPointerHandlers } from '../primitives/pointer-events';
 import { URLSync } from '../services/url-sync';
 import type { ClockManager, ClockState } from '../services/clock-manager';
+import type { ChapterDirector } from '../services/chapter-director';
+import type { ChapterSpec } from '../types/chapter';
+import { ALL_CHAPTERS } from '../chapters/registry';
 
 const ONE_DAY_SECONDS = 86400;
 const TEN_DAYS_SECONDS = 10 * ONE_DAY_SECONDS;
@@ -79,11 +82,30 @@ const clampEt = (et: number): number => {
  * release path calls `writeEtImmediate(et)` so the final URL reflects
  * the released value.
  *
- * ## Chapter markers
+ * ## Chapter markers (Story 2.2)
  *
- * Story 2.2 owns chapter markers (vertebrae). The `chapters` slot is
- * left as a no-op stub so future stories can drop in markers without
- * a breaking change.
+ * When `variant === 'mission'` and a `ChapterDirector` is wired via the
+ * `chapterDirector` property, the scrubber paints 11 vertical pin markers
+ * across the track — one per `ChapterSpec` in `ALL_CHAPTERS`. Each marker
+ * is a `<button>` (so it's individually focusable and Enter-activatable);
+ * the marker for the director's `activeChapter` paints with
+ * `--v-color-accent`, the others with `--v-color-fg-muted`. Markers are
+ * positioned via CSS percentage based on
+ * `(anchorEt - MISSION_START_ET) / (MISSION_END_ET - MISSION_START_ET)`
+ * so the same render function works whether the dev server, CI, or a
+ * Chrome DevTools MCP smoke is driving the page.
+ *
+ * The scrubber subscribes to the director in `connectedCallback` and
+ * re-renders on every transition event (ChapterDirector fires only on
+ * state changes, not per frame — same cool-under-60Hz contract as
+ * ClockManager). Clicking or Enter-pressing a marker calls
+ * `clockManager.scrubTo(anchorEt)` AND emits a bubbling `chapter-jump`
+ * CustomEvent (`{ slug, anchorEt }`) which Story 2.4's URL router will
+ * subscribe to.
+ *
+ * Hover dwell tooltip is CSS-only with a 200ms transition-delay; on
+ * touch devices (`@media (hover: none)`) the marker labels show
+ * persistently as the Tier-2 alternative (UX-DR22).
  */
 export class VTimelineScrubber extends BaseElement {
   static override styles = [
@@ -160,8 +182,92 @@ export class VTimelineScrubber extends BaseElement {
       .chapters {
         position: absolute;
         inset: 0;
+        /* Markers individually accept pointer events; the container does not
+           absorb them, so the underlying track click-to-jump still works
+           where there is no marker. */
         pointer-events: none;
-        /* Story 2.2 will paint chapter markers (vertebrae) into this slot. */
+      }
+
+      .chapter-marker {
+        /* Reset native <button> chrome — markers are visual pins, not
+           gradient buttons. */
+        appearance: none;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        position: absolute;
+        top: 50%;
+        /* Position via inline style="left:X%". Translate -50% so the
+           anchor falls on the visual center of the pin. */
+        transform: translate(-50%, -50%);
+        width: 2px;
+        height: 18px;
+        background-color: var(--v-color-fg-muted);
+        cursor: pointer;
+        pointer-events: auto;
+        outline: none;
+      }
+
+      .chapter-marker[data-active] {
+        background-color: var(--v-color-accent);
+      }
+
+      /* WCAG 2.4.7 — focus indicator routes through the global token
+         (Story 1.7). The pin itself is only 2px wide so the ring is
+         applied as a box-shadow rather than an outline (which would
+         clip on a 2px element). */
+      .chapter-marker:focus-visible {
+        box-shadow: 0 0 0 2px var(--v-color-focus);
+      }
+
+      .chapter-marker-label {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 2px;
+        font-family: var(--v-font-mono);
+        font-size: var(--v-size-hud-mono-sm);
+        text-transform: uppercase;
+        color: var(--v-color-fg-muted);
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .chapter-marker-tooltip {
+        position: absolute;
+        bottom: calc(100% + 18px);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 2px 6px;
+        font-family: var(--v-font-mono);
+        font-size: var(--v-size-hud-mono-sm);
+        color: var(--v-color-accent);
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 80ms ease;
+        transition-delay: 0ms;
+      }
+
+      /* UX-DR22 Tier-1: pointer with hover capability — show tooltip
+         after 200ms dwell, hide immediately on hover-out. */
+      @media (hover: hover) {
+        .chapter-marker:hover .chapter-marker-tooltip,
+        .chapter-marker:focus-visible .chapter-marker-tooltip {
+          opacity: 1;
+          transition-delay: 200ms;
+        }
+      }
+
+      /* UX-DR22 Tier-2: no hover capability (touch) — the persistent
+         label above the pin already disambiguates each chapter, so the
+         hover tooltip is suppressed. */
+      @media (hover: none) {
+        .chapter-marker-tooltip {
+          display: none;
+        }
       }
     `,
   ];
@@ -185,6 +291,15 @@ export class VTimelineScrubber extends BaseElement {
    * tests that haven't been migrated to inject a mock clock.
    */
   clockManager: ClockManager | null = null;
+
+  /**
+   * Story 2.2 source-of-truth for chapter activation. When non-null and
+   * `variant === 'mission'`, the scrubber paints 11 chapter markers and
+   * highlights the one matching `chapterDirector.activeChapter`. The
+   * director is constructed in `main.ts` from `ALL_CHAPTERS` and shared
+   * with the same per-frame ET pump that drives the clock.
+   */
+  chapterDirector: ChapterDirector | null = null;
 
   // Fallback simEt storage used only when no clockManager is wired. Story
   // 1.9 tests that drive the scrubber directly still rely on this.
@@ -241,6 +356,7 @@ export class VTimelineScrubber extends BaseElement {
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
   private detachPointer: (() => void) | null = null;
   private clockUnsub: (() => void) | null = null;
+  private chapterUnsub: (() => void) | null = null;
 
   constructor() {
     super();
@@ -255,6 +371,9 @@ export class VTimelineScrubber extends BaseElement {
     if (this.clockManager !== null && this.clockUnsub === null) {
       this.clockUnsub = this.clockManager.subscribe(this.onClockChange);
     }
+    if (this.chapterDirector !== null && this.chapterUnsub === null) {
+      this.chapterUnsub = this.chapterDirector.subscribe(this.onChapterChange);
+    }
   }
 
   override disconnectedCallback(): void {
@@ -262,6 +381,10 @@ export class VTimelineScrubber extends BaseElement {
     if (this.clockUnsub !== null) {
       this.clockUnsub();
       this.clockUnsub = null;
+    }
+    if (this.chapterUnsub !== null) {
+      this.chapterUnsub();
+      this.chapterUnsub = null;
     }
     if (this.resumeTimer !== null) {
       clearTimeout(this.resumeTimer);
@@ -277,6 +400,14 @@ export class VTimelineScrubber extends BaseElement {
     // Subscribe fires on play/pause/setRate/scrubTo/autoCap. tick()-driven
     // per-frame advances are read directly by render(); they don't fire
     // here, which is correct — we don't want 60 Hz Lit reactivity.
+    this.requestUpdate();
+  };
+
+  private onChapterChange = (): void => {
+    // ChapterDirector fires on state transitions (out↔entering↔held↔exiting↔
+    // passed), NOT per frame. Each transition is a candidate active-marker
+    // change so we requestUpdate(); the render() reads activeChapter
+    // synchronously.
     this.requestUpdate();
   };
 
@@ -397,6 +528,85 @@ export class VTimelineScrubber extends BaseElement {
     return MISSION_START_ET + frac * (MISSION_END_ET - MISSION_START_ET);
   }
 
+  /**
+   * Activate a chapter marker (click or Enter). Jumps the simulation paused
+   * to the chapter's `anchorEt` via `clockManager.scrubTo(et)` and emits a
+   * bubbling/composed `chapter-jump` CustomEvent. Story 2.4's URL router
+   * subscribes to the event to update the URL slug. AC4.
+   */
+  private activateChapter = (chapter: ChapterSpec): void => {
+    if (this.clockManager !== null) {
+      this.clockManager.scrubTo(chapter.anchorEt);
+    } else {
+      // Fallback path for tests that wire markers without a clock — still
+      // honour the visual scrub semantics so the marker remains usable.
+      const clamped = clampEt(chapter.anchorEt);
+      if (clamped !== this._simEtFallback) {
+        const old = this._simEtFallback;
+        this._simEtFallback = clamped;
+        this.requestUpdate('simEt', old);
+      }
+    }
+    this.dispatchEvent(
+      new CustomEvent('chapter-jump', {
+        bubbles: true,
+        composed: true,
+        detail: { slug: chapter.slug, anchorEt: chapter.anchorEt },
+      }),
+    );
+  };
+
+  private onMarkerClick(chapter: ChapterSpec): (e: Event) => void {
+    return (e: Event): void => {
+      // The track also listens for pointerdown via attachPointerHandlers
+      // and would otherwise also dispatch a scrub-from-click. Stop it
+      // here so the click is unambiguously a chapter jump.
+      e.stopPropagation();
+      this.activateChapter(chapter);
+    };
+  }
+
+  /**
+   * Marker pointerdown handler — stops the event before it bubbles to
+   * the track's `attachPointerHandlers` listener. Without this, pressing
+   * a marker would ALSO scrub the simulation to the marker's pixel
+   * position via the track-click path, racing the click handler's
+   * `scrubTo(anchorEt)`. We want chapter activation to be unambiguous:
+   * the click handler is the single source of the jump.
+   */
+  private onMarkerPointerDown = (e: Event): void => {
+    e.stopPropagation();
+  };
+
+  private onMarkerKeyDown(chapter: ChapterSpec): (e: KeyboardEvent) => void {
+    return (e: KeyboardEvent): void => {
+      // Enter and Space activate per WAI-ARIA APG button pattern (Story 1.7
+      // / ADR-0025). Arrow keys are intentionally NOT handled here — they
+      // remain owned by the slider thumb so the keyboard tab-then-arrow
+      // contract from Story 1.9 AC4 stays intact.
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.activateChapter(chapter);
+      }
+    };
+  }
+
+  /**
+   * Fractional position of a chapter's anchor along the mission window.
+   * Returns a value in [0, 1] suitable for CSS `left: X%`. Anchors
+   * outside the mission window (none of the 11 chapters today, but kept
+   * as a safety net) clamp to the bounds rather than overflow the track.
+   */
+  private chapterFraction(chapter: ChapterSpec): number {
+    const span = MISSION_END_ET - MISSION_START_ET;
+    if (span <= 0) return 0;
+    const raw = (chapter.anchorEt - MISSION_START_ET) / span;
+    if (raw < 0) return 0;
+    if (raw > 1) return 1;
+    return raw;
+  }
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     const track = this.trackEl();
@@ -464,10 +674,20 @@ export class VTimelineScrubber extends BaseElement {
     const valueMax = String(MISSION_END_ET);
     const valueNow = isoFromEt(this.simEt);
     const valueText = formatForHud(this.simEt);
+    const activeSlug =
+      this.variant === 'mission' && this.chapterDirector !== null
+        ? this.chapterDirector.activeChapter?.slug ?? null
+        : null;
     return html`
       <div class="track" part="track">
         <div class="fill" style=${`width:${fracPct}`}></div>
-        <div class="chapters" part="chapters"></div>
+        <div class="chapters" part="chapters">
+          ${this.variant === 'mission'
+            ? ALL_CHAPTERS.map((chapter) =>
+                this.renderChapterMarker(chapter, activeSlug),
+              )
+            : null}
+        </div>
         <div
           class="thumb"
           part="thumb"
@@ -483,6 +703,48 @@ export class VTimelineScrubber extends BaseElement {
           @keydown=${this.onKeyDown}
         ></div>
       </div>
+    `;
+  }
+
+  /**
+   * Render a single chapter marker (vertebra) — a focusable `<button>`
+   * with the chapter label above, the chapter name as the ARIA label,
+   * and a hover-dwell tooltip that reveals the full name (suppressed
+   * via CSS on touch devices per UX-DR22 Tier-2).
+   *
+   * The marker is `--v-color-accent` when its slug matches the
+   * director's active chapter, otherwise `--v-color-fg-muted`. The
+   * `data-active` boolean attribute drives the colour selector AND is
+   * the contract surface the lead's Chrome DevTools MCP smoke
+   * (Integration AC7) reads to confirm the active marker.
+   */
+  private renderChapterMarker(
+    chapter: ChapterSpec,
+    activeSlug: string | null,
+  ): TemplateResult {
+    const fracPct = `${(this.chapterFraction(chapter) * 100).toFixed(4)}%`;
+    const isoDate = isoFromEt(chapter.anchorEt).slice(0, 10); // YYYY-MM-DD
+    const ariaLabel = `${chapter.name} — ${isoDate}`;
+    const isActive = chapter.slug === activeSlug;
+    return html`
+      <button
+        type="button"
+        class="chapter-marker"
+        data-slug=${chapter.slug}
+        ?data-active=${isActive}
+        aria-label=${ariaLabel}
+        style=${`left:${fracPct}`}
+        @pointerdown=${this.onMarkerPointerDown}
+        @click=${this.onMarkerClick(chapter)}
+        @keydown=${this.onMarkerKeyDown(chapter)}
+      >
+        <span class="chapter-marker-label" aria-hidden="true"
+          >${chapter.markerLabel}</span
+        >
+        <span class="chapter-marker-tooltip" role="tooltip" aria-hidden="true"
+          >${chapter.name}</span
+        >
+      </button>
     `;
   }
 }

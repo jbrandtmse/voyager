@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:og": "node --import tsx scripts/og-cards.ts",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint .",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "@types/three": "^0.184.1",
+    "focus-trap": "^8.2.1",
     "lit": "^3.3.3",
     "three": "^0.184.0",
     "zod": "^4.4.3"

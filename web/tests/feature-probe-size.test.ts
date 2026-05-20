@@ -33,14 +33,25 @@ describe('Story 1.8 AC1 — inline probe size budget', () => {
   );
 
   it.skipIf(!distHasBuild)(
-    'inline probe references all three capabilities + the /unsupported.html target',
+    'inline probe references the post-Story-1.16 capabilities (WebGL2 + WebAssembly) + the /unsupported.html target',
     () => {
       const html = readFileSync(distIndex, 'utf8');
-      const m = html.match(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/);
+      // The first <script> match in the dist HTML lands inside the
+      // FEATURE_PROBE explanatory comment (which itself contains the
+      // text "<script>"). Match the FIRST REAL <script> tag instead by
+      // requiring a `(function(){` IIFE prefix immediately after `>`.
+      const m = html.match(
+        /<script(?:\s[^>]*)?>(\(function\(\)\{[\s\S]*?)<\/script>/,
+      );
+      expect(m, 'Expected the inline IIFE probe <script> in dist/index.html').toBeTruthy();
       const body = m![1];
       expect(body).toContain('WebGL2RenderingContext');
       expect(body).toContain('WebAssembly');
-      expect(body).toContain("DecompressionStream('br')");
+      // Story 1.16 removed the DecompressionStream('br') probe — brotli
+      // now decompresses via brotli-dec-wasm. The probe MUST NOT carry
+      // a brotli check; if it does, it will incorrectly reject every
+      // production browser (none ship DecompressionStream('br')).
+      expect(body).not.toContain("DecompressionStream('br')");
       expect(body).toContain('/unsupported.html?reason=');
     },
   );
@@ -49,7 +60,9 @@ describe('Story 1.8 AC1 — inline probe size budget', () => {
     'inline probe dynamic-imports a hashed asset URL (not /src/main.ts)',
     () => {
       const html = readFileSync(distIndex, 'utf8');
-      const m = html.match(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/);
+      const m = html.match(
+        /<script(?:\s[^>]*)?>(\(function\(\)\{[\s\S]*?)<\/script>/,
+      );
       const body = m![1];
       // In a prod build the probe must call `import('/assets/main-XXXX.js')`
       // with a hashed filename — never `/src/main.ts` (which is the dev

@@ -61,6 +61,22 @@ Planning artifacts are the source of truth. When dev or QA discovers an interpre
 
 **Why:** Epic 1 surfaced two NFR tripwires (NFR-P6: "ClockManager mutations ≤ 100µs P99" — unmeasurable on browser wall-clock; NFR-M4: "cycle log human-readable" — conflated with lint-clean). Both were worked around with comments and deferred-work entries. A future contributor reading the PRD has no signal that those NFRs are "as-written" vs. "as-implemented-with-comment." Amending in place keeps planning honest.
 
+## Rule 7 — Sub-agent tool inventory is harness-inherited; the lead is the safeguard (Story 2.0 AC1)
+
+This project does **not** maintain a project-local sub-agent tool inventory. Specifically:
+
+- `.claude/agents/` does NOT exist (and is not used) in this repo.
+- The BMAD-skill `customize.toml` files under `.claude/skills/*/customize.toml` and their `_bmad/custom/*.toml` overrides expose only `[workflow]` keys (`activation_steps_prepend`, `activation_steps_append`, `persistent_facts`, `on_complete`). No `tool_inventory`, `allowed_tools`, or `mcp_servers` surface exists on the skill override.
+- The team config at `~/.claude/teams/<team-name>/config.json` records `agentType: "general-purpose"` per spawned member with no `tool_inventory` field. Sub-agents inherit the harness's tool inventory wholesale.
+
+**Implication:** The dev / QA / code-reviewer sub-agents spawned under `/epic-cycle` inherit whatever MCP namespaces are mounted on the harness running the spawn. If `mcp__chrome-devtools-mcp__*` is mounted at the harness level it is automatically available to sub-agents; if it is NOT mounted there is no project-local mechanism to add it just for sub-agents.
+
+**Safeguard:** ADR-0010 (`docs/adr/0010-chrome-devtools-mcp-agent-time-playwright-ci-time.md`) Layer 1 — **ADR-Aware Execution** — places ADR-tooled AC verifications on the **lead** (not the sub-agent) for exactly this reason. The lead's tool inventory is the reliable channel for MCP-driven evidence; sub-agent MCP propagation is best-effort and treated as defense-in-depth, not as the primary gate.
+
+**Action if this ever changes:** if a future Claude Code release introduces project-local sub-agent tool scoping (e.g. `.claude/agents/<name>.md` with frontmatter `allowed-tools: [...]`, or a `tool_inventory` field on the BMAD-skill `customize.toml` surface), update this rule with the discovered mechanism and configure `mcp__chrome-devtools-mcp__*` into the dev / QA / code-reviewer allowed-tools surface. Until then, the lead-executed Layer 1 gate is the binding contract.
+
+**Why:** Story 2.0 AC1 / Action Item A1 from the Epic 1 retrospective asked for sub-agent definitions to include `mcp__chrome-devtools-mcp__*`. The audit found no project-local surface to attach the tool to; documenting the topology here makes the safeguard explicit and tells future contributors where the real gate sits.
+
 ## Rule 6 — Chrome DevTools MCP is the canonical browser-smoke driver (amended Story 1.16)
 
 When automating a browser smoke (per Rule 3) under Chrome DevTools MCP, no special initScript or shim is needed. Story 1.16 (2026-05-20) replaced the chunk-loader's reliance on `DecompressionStream('br')` (which no production browser supports) with a wasm brotli polyfill, and removed the brotli check from Story 1.8's boot-time capability probe. Chrome-for-Testing 148 — which still lacks `DecompressionStream('br')` — now loads Voyager normally.

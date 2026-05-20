@@ -61,7 +61,7 @@ The PRD defines 58 functional requirements organized by capability cluster:
 
 The PRD and technical research have pre-decided a substantial fraction of normally-open architectural territory. These enter the architecture work as inputs, not as decisions:
 
-- **Runtime stack:** TypeScript 5.x strict + Three.js (≥r170, reverse-Z) + Vite. Client-only; no backend.
+- **Runtime stack:** TypeScript 6.x strict (per ADR 0026) + Three.js (≥r170, reverse-Z) + Vite. Client-only; no backend.
 - **Build stack:** Python 3.13 + SpiceyPy 8.1.0 + scipy + numpy. uv for Python deps; Ruff for lint/format. gltf-transform + toktx + Blender (headless) for asset pipeline.
 - **Hosting:** Static CDN — Cloudflare Pages or Vercel free tier (provider TBD).
 - **Storage formats at runtime:** Custom 40-byte-header VTRJ binary (raw little-endian Float64Array), brotli-compressed. Decompression is performed client-side by the `brotli-dec-wasm` polyfill (Story 1.16; originally planned to use `DecompressionStream('br')` but that JS API never standardized brotli — see ADR 0004 § Decompression Strategy). JSON/CSV/MessagePack/Protobuf/Arrow/Parquet at runtime all explicitly rejected.
@@ -183,7 +183,7 @@ voyager/
 
 **Language & Runtime:**
 
-- TypeScript 5.x strict mode (Vite default `tsconfig.json` with `strict: true`)
+- TypeScript 6.x strict mode (per ADR 0026; Vite default `tsconfig.json` with `strict: true`)
 - Python 3.13 (pinned via `uv` and `.python-version`)
 - ESM modules throughout the web side (Vite default)
 
@@ -1319,7 +1319,7 @@ just rollback <deployment-id> # NFR-R3 ≤5 min
 
 ### Coherence Validation ✅
 
-**Decision Compatibility:** All technology choices interoperate cleanly. TypeScript 5.x + Three.js ≥r170 + Vite + Lit 3+ have first-class mutual support. Python 3.13 + SpiceyPy 8.1.0 (released 2026-04-05) + uv + Ruff are version-aligned. Playwright + Vite-built `dist/` is the standard headless-browser pattern. GitHub Actions + Git LFS have native integration. Cloudflare Pages and Vercel both accept static `dist/` artifacts via their CLIs.
+**Decision Compatibility:** All technology choices interoperate cleanly. TypeScript 6.x (per ADR 0026) + Three.js ≥r170 + Vite + Lit 3+ have first-class mutual support. Python 3.13 + SpiceyPy 8.1.0 (released 2026-04-05) + uv + Ruff are version-aligned. Playwright + Vite-built `dist/` is the standard headless-browser pattern. GitHub Actions + Git LFS have native integration. Cloudflare Pages and Vercel both accept static `dist/` artifacts via their CLIs.
 
 **Pattern Consistency:** No contradictions detected. Branded types + service-graph + DI + Lit Reactive Controllers + no-global-store + `<v-*>` Web Component prefix all reinforce each other. The 60-FPS DOM-mutation bypass for hot HUD elements is the one architectural concession to performance over uniformity; it is explicit and documented, not implicit.
 

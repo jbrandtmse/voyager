@@ -11,6 +11,8 @@ import {
 import { isoFromEt, formatForHud } from '../math/et-conversions';
 import type { URLSync } from '../services/url-sync';
 import { ClockManager } from '../services/clock-manager';
+import { ChapterDirector } from '../services/chapter-director';
+import { ALL_CHAPTERS, findChapterBySlug } from '../chapters/registry';
 
 const ONE_DAY = 86400;
 
@@ -467,12 +469,17 @@ describe('Story 1.9 AC8 — 44×44 hit area on thumb', () => {
   });
 });
 
-describe('Story 1.9 — chapter markers slot is a no-op stub', () => {
-  it('renders an empty .chapters element (placeholder for Story 2.2)', async () => {
+describe('Story 1.9 — chapter markers container is present', () => {
+  it('renders the .chapters slot element (now populated by Story 2.2 in mission variant)', async () => {
+    // The empty-slot stub test from Story 1.9 was retired by Story 2.2:
+    // markers now render unconditionally in the mission variant (the
+    // inactive treatment is the default; the active treatment requires a
+    // wired ChapterDirector). This test pins the slot's presence as a
+    // structural invariant for downstream variants (e.g. Story 4.4's
+    // detail variant) that may suppress markers.
     const { el } = await makeScrubber();
     const chapters = el.shadowRoot!.querySelector('.chapters');
     expect(chapters).toBeTruthy();
-    expect(chapters!.children.length).toBe(0);
     el.remove();
   });
 });
@@ -640,5 +647,464 @@ describe('Story 1.9 — thumb visual position tracks simEt fraction', () => {
     const pct = parseFloat(thumb.style.left);
     expect(Math.abs(pct - 50)).toBeLessThan(0.01);
     el.remove();
+  });
+});
+
+// ─── Story 2.2 — Chapter markers (vertebrae) ───────────────────────────
+
+const makeScrubberWithChapterDirector = async (): Promise<{
+  el: VTimelineScrubber;
+  clock: ClockManager;
+  director: ChapterDirector;
+  sync: ReturnType<typeof makeStubUrlSync>;
+}> => {
+  const clock = new ClockManager();
+  const director = new ChapterDirector(ALL_CHAPTERS);
+  const el = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
+  const sync = makeStubUrlSync();
+  el.urlSync = sync;
+  el.clockManager = clock;
+  el.chapterDirector = director;
+  document.body.appendChild(el);
+  await el.updateComplete;
+  const track = el.shadowRoot!.querySelector('.track') as HTMLElement;
+  track.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      right: 1000,
+      top: 0,
+      bottom: 12,
+      width: 1000,
+      height: 12,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  return { el, clock, director, sync };
+};
+
+describe('Story 2.2 AC1 — 11 markers rendered along the track', () => {
+  it('renders exactly 11 chapter markers in mission variant', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const markers = el.shadowRoot!.querySelectorAll('.chapter-marker');
+    expect(markers.length).toBe(11);
+    el.remove();
+  });
+
+  it('emits markers in chronological (ALL_CHAPTERS) order', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    const slugs = markers.map((m) => m.getAttribute('data-slug'));
+    const expected = ALL_CHAPTERS.map((c) => c.slug);
+    expect(slugs).toEqual(expected);
+    el.remove();
+  });
+
+  it('each marker is positioned via left:% per (anchorEt - MISSION_START_ET) / span', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const span = MISSION_END_ET - MISSION_START_ET;
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    for (const marker of markers) {
+      const slug = marker.getAttribute('data-slug')!;
+      const chapter = findChapterBySlug(slug)!;
+      const expectedPct = ((chapter.anchorEt - MISSION_START_ET) / span) * 100;
+      const actualPct = parseFloat(marker.style.left);
+      expect(Math.abs(actualPct - expectedPct)).toBeLessThan(0.001);
+    }
+    el.remove();
+  });
+
+  it('marker label spans render the chapter.markerLabel field', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    for (const marker of markers) {
+      const slug = marker.getAttribute('data-slug')!;
+      const chapter = findChapterBySlug(slug)!;
+      const labelEl = marker.querySelector('.chapter-marker-label');
+      expect(labelEl).toBeTruthy();
+      expect(labelEl!.textContent?.trim()).toBe(chapter.markerLabel);
+    }
+    el.remove();
+  });
+
+  it('active marker (matching ChapterDirector.activeChapter) carries data-active', async () => {
+    const { el, clock, director } = await makeScrubberWithChapterDirector();
+    // Park ClockManager inside launch-v2's window and drive the director.
+    const launchV2 = findChapterBySlug('launch-v2')!;
+    clock.scrubTo(launchV2.anchorEt);
+    director.update(launchV2.anchorEt);
+    await el.updateComplete;
+    const activeMarkers = el.shadowRoot!.querySelectorAll(
+      '.chapter-marker[data-active]',
+    );
+    expect(activeMarkers.length).toBe(1);
+    expect(activeMarkers[0].getAttribute('data-slug')).toBe('launch-v2');
+    el.remove();
+  });
+
+  it('between-chapter ET ⇒ no marker is active', async () => {
+    const { el, director } = await makeScrubberWithChapterDirector();
+    // Choose an ET well outside any chapter window. The 2026-05-XX
+    // post-Voyager-2-Neptune, pre-Pale-Blue-Dot gap is between two
+    // chapter windows; pick a midpoint inside that gap. The cleanest
+    // any-between guarantee comes from the registry helper itself.
+    // We walk every chapter and find an ET strictly between adjacent
+    // windowEndEt and the next windowStartEt.
+    let between: number | null = null;
+    for (let i = 0; i < ALL_CHAPTERS.length - 1; i++) {
+      const a = ALL_CHAPTERS[i];
+      const b = ALL_CHAPTERS[i + 1];
+      if (a.windowEndEt < b.windowStartEt) {
+        between = (a.windowEndEt + b.windowStartEt) / 2;
+        break;
+      }
+    }
+    expect(between).not.toBeNull();
+    director.update(between!);
+    await el.updateComplete;
+    expect(director.activeChapter).toBeNull();
+    const activeMarkers = el.shadowRoot!.querySelectorAll(
+      '.chapter-marker[data-active]',
+    );
+    expect(activeMarkers.length).toBe(0);
+    el.remove();
+  });
+});
+
+describe('Story 2.2 AC2 — Markers are individually keyboard-focusable buttons', () => {
+  it('every marker is a native <button> element', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    expect(markers.length).toBe(11);
+    for (const marker of markers) {
+      expect(marker.tagName).toBe('BUTTON');
+      // Native button has implicit role=button; some a11y testing tools
+      // also recognize an explicit role for non-button hosts. Either is
+      // acceptable per AC2; we use the native element so explicit role
+      // is omitted by design.
+    }
+    el.remove();
+  });
+
+  it('every marker has aria-label="<chapter.name> — <ISO-8601 date>"', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    for (const marker of markers) {
+      const slug = marker.getAttribute('data-slug')!;
+      const chapter = findChapterBySlug(slug)!;
+      const isoDate = isoFromEt(chapter.anchorEt).slice(0, 10);
+      expect(marker.getAttribute('aria-label')).toBe(
+        `${chapter.name} — ${isoDate}`,
+      );
+    }
+    el.remove();
+  });
+
+  it('markers appear in the shadow DOM in chronological order (tab order proxy)', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    // happy-dom doesn't simulate full tab traversal, but DOM order is the
+    // determinant for tab order on a flat sequence of native buttons with
+    // no explicit tabindex overrides (per WAI-ARIA).
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    for (let i = 0; i < markers.length - 1; i++) {
+      const a = findChapterBySlug(markers[i].getAttribute('data-slug')!)!;
+      const b = findChapterBySlug(markers[i + 1].getAttribute('data-slug')!)!;
+      expect(a.anchorEt).toBeLessThanOrEqual(b.anchorEt);
+    }
+    el.remove();
+  });
+});
+
+describe('Story 2.2 AC3 — Hover tooltip + touchscreen alternative', () => {
+  const flattenStyles = (): string =>
+    (VTimelineScrubber.styles as Array<{ cssText?: string } | undefined>)
+      .map((s) => String(s?.cssText ?? ''))
+      .join('\n');
+
+  it('each marker contains a .chapter-marker-tooltip with the full chapter name', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    const markers = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLElement>('.chapter-marker'),
+    );
+    for (const marker of markers) {
+      const slug = marker.getAttribute('data-slug')!;
+      const chapter = findChapterBySlug(slug)!;
+      const tooltip = marker.querySelector('.chapter-marker-tooltip');
+      expect(tooltip).toBeTruthy();
+      expect(tooltip!.textContent?.trim()).toBe(chapter.name);
+    }
+    el.remove();
+  });
+
+  it('tooltip CSS uses a 200ms hover-dwell transition-delay', () => {
+    const joined = flattenStyles();
+    // The 200ms dwell is applied inside the @media (hover: hover) block to
+    // the :hover/:focus-visible state. Verify both the @media gate and
+    // the 200ms delay are present together.
+    expect(joined).toMatch(/@media\s*\(hover:\s*hover\)/);
+    expect(joined).toMatch(/transition-delay:\s*200ms/);
+  });
+
+  it('tooltip color is --v-color-accent', () => {
+    const joined = flattenStyles();
+    expect(joined).toMatch(
+      /\.chapter-marker-tooltip\s*\{[^}]*color:\s*var\(--v-color-accent\)/,
+    );
+  });
+
+  it('on no-hover devices (@media hover: none), tooltip is hidden via display:none', () => {
+    const joined = flattenStyles();
+    expect(joined).toMatch(
+      /@media\s*\(hover:\s*none\)\s*\{[^}]*\.chapter-marker-tooltip\s*\{[^}]*display:\s*none/,
+    );
+  });
+
+  it('marker labels above the pins are present unconditionally (Tier-2 alternative)', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    // Every marker carries a persistent .chapter-marker-label child, so
+    // touchscreens (where the tooltip is suppressed via the (hover: none)
+    // media query) still get a disambiguating glyph.
+    const labels = el.shadowRoot!.querySelectorAll('.chapter-marker-label');
+    expect(labels.length).toBe(11);
+    el.remove();
+  });
+});
+
+describe('Story 2.2 AC4 — Click / Enter activation jumps the simulation', () => {
+  it('clicking a marker calls clockManager.scrubTo(anchorEt)', async () => {
+    const { el, clock } = await makeScrubberWithChapterDirector();
+    clock.play();
+    const markers = el.shadowRoot!.querySelectorAll<HTMLButtonElement>(
+      '.chapter-marker',
+    );
+    // V1 Jupiter is index 2 in chronological order (after launch-v2,
+    // launch-v1). Identify it by slug to be robust against future
+    // re-ordering of unrelated chapters.
+    const v1Jupiter = Array.from(markers).find(
+      (m) => m.getAttribute('data-slug') === 'v1-jupiter',
+    )!;
+    expect(v1Jupiter).toBeTruthy();
+    const chapter = findChapterBySlug('v1-jupiter')!;
+    v1Jupiter.click();
+    // scrubTo pauses as a side effect.
+    expect(clock.playing).toBe(false);
+    expect(clock.simTimeEt).toBe(chapter.anchorEt);
+    el.remove();
+  });
+
+  it('clicking a marker emits a bubbling/composed chapter-jump CustomEvent with slug + anchorEt', async () => {
+    const { el } = await makeScrubberWithChapterDirector();
+    let detail: { slug: string; anchorEt: number } | null = null;
+    el.addEventListener('chapter-jump', (e) => {
+      detail = (e as CustomEvent<{ slug: string; anchorEt: number }>).detail;
+    });
+    const chapter = findChapterBySlug('v2-neptune')!;
+    const marker = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '.chapter-marker[data-slug="v2-neptune"]',
+    )!;
+    marker.click();
+    expect(detail).not.toBeNull();
+    if (detail !== null) {
+      const d = detail as { slug: string; anchorEt: number };
+      expect(d.slug).toBe('v2-neptune');
+      expect(d.anchorEt).toBe(chapter.anchorEt);
+    }
+    el.remove();
+  });
+
+  it('Enter key on a focused marker activates the chapter', async () => {
+    const { el, clock } = await makeScrubberWithChapterDirector();
+    const chapter = findChapterBySlug('pale-blue-dot')!;
+    const marker = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '.chapter-marker[data-slug="pale-blue-dot"]',
+    )!;
+    marker.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    expect(clock.simTimeEt).toBe(chapter.anchorEt);
+    el.remove();
+  });
+
+  it('Space key on a focused marker activates the chapter (WAI-ARIA APG button)', async () => {
+    const { el, clock } = await makeScrubberWithChapterDirector();
+    const chapter = findChapterBySlug('v1-saturn')!;
+    const marker = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '.chapter-marker[data-slug="v1-saturn"]',
+    )!;
+    marker.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+    );
+    expect(clock.simTimeEt).toBe(chapter.anchorEt);
+    el.remove();
+  });
+
+  it('marker click does NOT also dispatch a voyager:scrub on the underlying track', async () => {
+    // The marker's pointerdown handler stops propagation so the track's
+    // attachPointerHandlers listener never sees the press. Otherwise the
+    // simulation would scrub to the marker's pixel position AND then jump
+    // to the exact anchor, producing a brief double-fire.
+    const { el } = await makeScrubberWithChapterDirector();
+    let scrubFired = false;
+    el.addEventListener('voyager:scrub', () => {
+      scrubFired = true;
+    });
+    const marker = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '.chapter-marker[data-slug="v1-jupiter"]',
+    )!;
+    // Synthesize the same pointerdown that real input would dispatch.
+    const evt = new Event('pointerdown', { bubbles: true });
+    Object.defineProperty(evt, 'clientX', { value: 500 });
+    Object.defineProperty(evt, 'clientY', { value: 0 });
+    Object.defineProperty(evt, 'pointerType', { value: 'mouse' });
+    Object.defineProperty(evt, 'pointerId', { value: 1 });
+    Object.defineProperty(evt, 'target', { value: marker });
+    marker.dispatchEvent(evt);
+    expect(scrubFired).toBe(false);
+    el.remove();
+  });
+
+  it('activation works in the no-clockManager fallback path (test back-compat)', async () => {
+    // A test scrubber without a wired ClockManager — exercise that
+    // activating a marker still moves the simEt fallback. Useful for
+    // future variant authors who construct the scrubber in isolation.
+    const director = new ChapterDirector(ALL_CHAPTERS);
+    const el = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
+    el.urlSync = makeStubUrlSync();
+    el.chapterDirector = director;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    const chapter = findChapterBySlug('v1-heliopause')!;
+    const marker = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '.chapter-marker[data-slug="v1-heliopause"]',
+    )!;
+    marker.click();
+    expect(el.simEt).toBe(chapter.anchorEt);
+    el.remove();
+  });
+});
+
+describe('Story 2.2 AC5 — Active marker tracks ChapterDirector state', () => {
+  it('subscribes to ChapterDirector on connect, unsubscribes on disconnect', async () => {
+    const director = new ChapterDirector(ALL_CHAPTERS);
+    const subSpy = vi.spyOn(director, 'subscribe');
+    const el = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
+    el.chapterDirector = director;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(subSpy).toHaveBeenCalledTimes(1);
+    el.remove();
+    // After remove the subscriber should be detached — driving the
+    // director should not throw and should not leave a stale callback
+    // attempting to requestUpdate on a removed Lit host.
+    expect(() => director.update(MISSION_START_ET + 1000 * 86400)).not.toThrow();
+  });
+
+  it('crossing into a chapter window flips data-active to that marker', async () => {
+    const { el, director } = await makeScrubberWithChapterDirector();
+    // Forward-scrub from before-mission to launch-v2's anchor.
+    director.update(MISSION_START_ET);
+    await el.updateComplete;
+    expect(
+      el.shadowRoot!
+        .querySelectorAll('.chapter-marker[data-active]')[0]
+        ?.getAttribute('data-slug'),
+    ).toBe('launch-v2');
+    // Forward to v1-jupiter's anchor.
+    const v1Jupiter = findChapterBySlug('v1-jupiter')!;
+    director.update(v1Jupiter.anchorEt);
+    await el.updateComplete;
+    const activeAfter = el.shadowRoot!.querySelectorAll(
+      '.chapter-marker[data-active]',
+    );
+    expect(activeAfter.length).toBe(1);
+    expect(activeAfter[0].getAttribute('data-slug')).toBe('v1-jupiter');
+    el.remove();
+  });
+
+  it('at most one marker is active at any time', async () => {
+    const { el, director } = await makeScrubberWithChapterDirector();
+    // Sweep every chapter's anchor; at each stop, exactly one marker is
+    // active (ChapterDirector's at-most-one held-state contract from
+    // Story 2.1 AC2 maps directly to the rendered DOM).
+    for (const chapter of ALL_CHAPTERS) {
+      director.update(chapter.anchorEt);
+      await el.updateComplete;
+      const active = el.shadowRoot!.querySelectorAll(
+        '.chapter-marker[data-active]',
+      );
+      expect(active.length).toBe(1);
+      expect(active[0].getAttribute('data-slug')).toBe(chapter.slug);
+    }
+    el.remove();
+  });
+
+  it('reverse scrubbing also updates the active marker', async () => {
+    const { el, director } = await makeScrubberWithChapterDirector();
+    const v2Neptune = findChapterBySlug('v2-neptune')!;
+    const launchV1 = findChapterBySlug('launch-v1')!;
+    director.update(v2Neptune.anchorEt);
+    await el.updateComplete;
+    expect(
+      el.shadowRoot!
+        .querySelector('.chapter-marker[data-active]')!
+        .getAttribute('data-slug'),
+    ).toBe('v2-neptune');
+    director.update(launchV1.anchorEt);
+    await el.updateComplete;
+    expect(
+      el.shadowRoot!
+        .querySelector('.chapter-marker[data-active]')!
+        .getAttribute('data-slug'),
+    ).toBe('launch-v1');
+    el.remove();
+  });
+});
+
+describe('Story 2.2 — focus ring + CSS surface', () => {
+  it('chapter-marker:focus-visible has the 2px focus ring via box-shadow', () => {
+    const joined = (
+      VTimelineScrubber.styles as Array<{ cssText?: string } | undefined>
+    )
+      .map((s) => String(s?.cssText ?? ''))
+      .join('\n');
+    expect(joined).toMatch(
+      /\.chapter-marker:focus-visible\s*\{[^}]*box-shadow:\s*0\s+0\s+0\s+2px\s+var\(--v-color-focus\)/,
+    );
+  });
+
+  it('inactive marker uses --v-color-fg-muted; active uses --v-color-accent', () => {
+    const joined = (
+      VTimelineScrubber.styles as Array<{ cssText?: string } | undefined>
+    )
+      .map((s) => String(s?.cssText ?? ''))
+      .join('\n');
+    expect(joined).toMatch(
+      /\.chapter-marker\s*\{[^}]*background-color:\s*var\(--v-color-fg-muted\)/,
+    );
+    expect(joined).toMatch(
+      /\.chapter-marker\[data-active\]\s*\{[^}]*background-color:\s*var\(--v-color-accent\)/,
+    );
+  });
+
+  it('marker is 2px wide × 18px tall', () => {
+    const joined = (
+      VTimelineScrubber.styles as Array<{ cssText?: string } | undefined>
+    )
+      .map((s) => String(s?.cssText ?? ''))
+      .join('\n');
+    expect(joined).toMatch(/\.chapter-marker\s*\{[^}]*width:\s*2px/);
+    expect(joined).toMatch(/\.chapter-marker\s*\{[^}]*height:\s*18px/);
   });
 });

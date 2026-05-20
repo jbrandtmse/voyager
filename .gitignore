@@ -11,6 +11,8 @@ bake/.venv/
 bake/__pycache__/
 bake/tests/**/__pycache__/
 bake/src/**/__pycache__/
+# pytest cache dirs — defense in depth; pytest auto-ignores via inner .gitignore on first run
+**/.pytest_cache/
 
 # bake/out/ artifacts: list contents individually so we can carve out
 # `l2-reference-fixtures.json` (committed for the web-side AC4 hook test

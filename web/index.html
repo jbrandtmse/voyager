@@ -65,6 +65,12 @@
          dynamic import (NOT a static <script type="module" src> tag) is
          what gates the bundle load behind the probe. -->
     <!-- FEATURE_PROBE -->
+    <!-- Story 2.6 AC2 — Open Graph + Twitter Card meta tags. The Vite
+         plugin in vite.config.ts replaces this slot with the homepage
+         default OG meta block on the root index.html, and with per-
+         chapter OG meta blocks on the per-chapter HTML shells emitted
+         to dist/c/<slug>/index.html. -->
+    <!-- OG_META -->
   </head>
   <body>
     <div id="app"></div>

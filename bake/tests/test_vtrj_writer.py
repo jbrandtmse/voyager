@@ -170,3 +170,35 @@ def test_read_rejects_bad_version(tmp_path: Path) -> None:
     target.write_bytes(brotli.compress(header + body, quality=11))
     with pytest.raises(ValueError, match="version"):
         read_vtrj(target)
+
+
+def test_read_rejects_out_of_set_body_id(tmp_path: Path) -> None:
+    """Story 2.0 AC7: read_vtrj must reject a corrupt VTRJ whose body_id is
+    not in ALLOWED_BODY_IDS, restoring write/read symmetry.
+
+    Constructs a deliberately-corrupt VTRJ with body_id = 0 (not in the
+    allowed set: {-31, -32, 10, 1..8, 301}) bypassing the write-side
+    validator by struct-packing the header directly, then asserts
+    `read_vtrj` raises ValueError on read.
+    """
+    import brotli
+
+    # body_id = 0 — outside ALLOWED_BODY_IDS
+    header = struct.pack("<4sHiddId2s", b"VTRJ", 1, 0, 0.0, 1.0, 1, 1.0, b"\x00\x00")
+    body = struct.pack("<6d", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    target = tmp_path / "bad-body-id.bin.br"
+    target.write_bytes(brotli.compress(header + body, quality=11))
+    with pytest.raises(ValueError, match="body_id"):
+        read_vtrj(target)
+
+
+def test_read_rejects_unexpected_body_id_99(tmp_path: Path) -> None:
+    """Story 2.0 AC7: an out-of-set positive body_id (99) is also rejected."""
+    import brotli
+
+    header = struct.pack("<4sHiddId2s", b"VTRJ", 1, 99, 0.0, 1.0, 1, 1.0, b"\x00\x00")
+    body = struct.pack("<6d", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    target = tmp_path / "bad-body-id-99.bin.br"
+    target.write_bytes(brotli.compress(header + body, quality=11))
+    with pytest.raises(ValueError, match="body_id"):
+        read_vtrj(target)

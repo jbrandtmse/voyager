@@ -5,10 +5,24 @@ import './styles/tokens.css';
 import './styles/fonts.css';
 import './styles/global.css';
 import './styles/breakpoints.css';
+// Story 2.7 — editorial layout for the /about route surface + homepage
+// footer link. The stylesheet stays in the chain even for the simulation
+// surface because the homepage footer ("Attributions" link) uses its
+// `.v-app-footer` rules.
+import './styles/about.css';
+// Story 2.9 — editorial side-panel typography for `<v-chapter-copy>` (Light
+// DOM, so tokens cascade directly). Loaded unconditionally because the
+// component is part of the simulation surface, not chrome.
+import './styles/chapter-copy.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
 import { ClockManager } from './services/clock-manager';
+import { ChapterDirector } from './services/chapter-director';
+import { URLSync } from './services/url-sync';
+import { URLRouter } from './services/url-router';
+import { EmbedModeState } from './services/embed-mode-state';
+import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
 import {
   isPrecisionSmokeMode,
@@ -21,7 +35,8 @@ import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
 } from './dev/ephemeris-perf';
-import { startFirstPaint } from './boot/first-paint';
+import { startFirstPaint, mountAttributionsFooter } from './boot/first-paint';
+import './components/v-about-page';
 import { SpacecraftModels } from './render/spacecraft-models';
 import { TrajectoryLines } from './render/trajectory-lines';
 import { CelestialBodies } from './render/celestial-bodies';
@@ -76,12 +91,81 @@ const bootstrap = (): void => {
   // read `clockManager.simTimeEt` from RenderEngine.onFrame callbacks.
   const clockManager = new ClockManager();
 
+  // Story 2.5 — strict-boolean parse of `?embed=true` at boot. The flag
+  // is session-immutable (no public setter on EmbedModeState) and gates
+  // first-paint's conditional `appendChild` calls for chrome elements
+  // (chapter-index toggle today; about / methodology / help in future
+  // stories). It is also carried by URLSync so every writeback preserves
+  // `&embed=true` (AC4). Strict equality against the literal lowercase
+  // `"true"` rejects `1`, `yes`, `TRUE`, `on`, empty, etc. per NFR-S7.
+  const embedMode = EmbedModeState.fromSearch(window.location.search);
+
+  // Story 2.4 — parse the full URL (path + query) before any subsystem
+  // wires up. `parseInitialPath()` covers both shapes:
+  //   - `/` (or `/?t=<iso>`)          → chapter = null
+  //   - `/c/<known-slug>?t=<iso>`     → chapter resolved + ET parsed
+  //   - `/c/<unknown-slug>...`        → console.warn + replaceState('/')
+  //                                     → falls through to the homepage branch
+  // The resulting `initialEt` is what we seed ClockManager with via
+  // scrubTo (which clamps + pauses uniformly). first-paint reuses this
+  // URLSync instance (no second `?t=` parse) so the chapter path is
+  // preserved through the scrubber's first writeback.
+  //
+  // Story 2.5 — pass `embedEnabled` so every writeback preserves
+  // `&embed=true`. The flag is captured here once from the URL; even if
+  // the user mutates `?embed` in the address bar later, the URLSync's
+  // captured state is fixed (mirrors EmbedModeState's immutability).
+  const urlSync = new URLSync({ embedEnabled: embedMode.enabled });
+  const initialUrlState = urlSync.parseInitialPath();
+  clockManager.scrubTo(initialUrlState.initialEt);
+
+  // Story 2.7 — `/about` route. When cold-loading the about page we mount
+  // ONLY `<v-about-page>` (no canvas, HUD, scrubber, chapter index). On
+  // popstate from / or /c/<slug> into /about (or the reverse) we trigger a
+  // full reload — the simplest correct way to flip between the two
+  // top-level surfaces without leaking simulation state. The reload is
+  // handled by a route-change listener installed below the simulation
+  // bootstrap path so the listener wiring stays close to URLRouter.
+  if (initialUrlState.kind === 'about') {
+    mountAboutSurface();
+    // Install a tiny popstate handler so back/forward across the about ↔
+    // simulation boundary force a reload (matching the cold-load contract
+    // for either surface). URLSync.installPopstateHandler is also wired
+    // here so `&embed=true` preservation and slug parsing stay consistent.
+    urlSync.installPopstateHandler((state) => {
+      if (state.kind !== 'about') {
+        window.location.reload();
+      }
+    });
+    return;
+  }
+
   const engine = new RenderEngine(capabilities, {
     forceLogDepth: params.forceLogDepth,
     clockManager,
   });
   engine.init(canvas);
   engine.start();
+
+  // Story 2.1 — ChapterDirector FSM. Constructed with the frozen
+  // ALL_CHAPTERS registry and driven by the same per-frame ET that
+  // every other onFrame consumer reads. The director itself does NOT
+  // hold a ClockManager reference (it's pure data); the wire-up is
+  // entirely the onFrame callback below, which is the established
+  // Story 1.15 pattern for ET fan-out.
+  const chapterDirector = new ChapterDirector(ALL_CHAPTERS);
+  engine.onFrame((et: number) => {
+    chapterDirector.update(et);
+  });
+
+  // Integration AC8 (Story 2.1) — DEV-only debug surface so the lead's
+  // Chrome DevTools MCP smoke can read `window.__voyagerDebug.chapterDirector`
+  // and assert on the active chapter at a scrubbed ET. Stripped from
+  // production builds by Vite's `import.meta.env.DEV` constant folding.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+    w.__voyagerDebug = { ...(w.__voyagerDebug ?? {}), chapterDirector };
+  }
 
   // Story 1.13 AC5 — FPS readout dev-mode (?perf=fps). Attached to the
   // engine immediately so the very first ticks are recorded. The overlay
@@ -101,10 +185,114 @@ const bootstrap = (): void => {
   //   5. Kick off manifest load in parallel; once it lands, wire the
   //      EphemerisService into <v-hud-distance> so V1/V2 readouts show
   //      real values.
+  //
+  // Story 2.2 — the shared ChapterDirector is also passed here so the
+  // scrubber's mission-variant paints chapter markers (vertebrae) and
+  // highlights the active chapter as the simulation ET crosses each
+  // chapter window. The director is already driven from `engine.onFrame`
+  // above; first-paint sets it on the scrubber BEFORE connectedCallback
+  // runs so the marker-subscription wires in cleanly.
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
-    { renderEngine: engine, clockManager },
+    {
+      renderEngine: engine,
+      clockManager,
+      chapterDirector,
+      urlSync,
+      // Story 2.5 — skip mounting `<v-chapter-index>` (and future
+      // chrome elements) when embed mode is enabled. AC2.
+      embedEnabled: embedMode.enabled,
+    },
   );
+
+  // Story 2.4 — seed the ChapterDirector FSM synchronously to the cold-load
+  // ET BEFORE the URLRouter subscribes. `engine.onFrame((et) => director.update(et))`
+  // above only REGISTERS the per-frame callback; the first invocation
+  // happens on the next RAF tick which is async. If URLRouter subscribed
+  // before this seed, the first director.update would fire `entering→held`
+  // transitions that the router would translate into a redundant
+  // replaceState write (worst case: cold-load `/` morphs to
+  // `/c/launch-v2` because MISSION_START_ET falls inside launch-v2's
+  // window). Seeding here matches what the integration tests model and
+  // honors the URL contract that cold-load arrival is the canonical
+  // state — not a transition the router needs to mirror.
+  chapterDirector.update(clockManager.simTimeEt);
+
+  // Story 2.4 — install the URL router AFTER first-paint so document-level
+  // `chapter-jump` listeners are attached before the scrubber + chapter
+  // index begin dispatching them. The router subscribes to chapter-jump
+  // (user-driven pushState), ChapterDirector transitions (director-driven
+  // replaceState on boundary crossings), and popstate (browser
+  // back/forward).
+  const urlRouter = new URLRouter({
+    urlSync,
+    clockManager,
+    chapterDirector,
+    initialRouteKind: initialUrlState.kind,
+  }).install();
+
+  // Story 2.7 AC4 — homepage footer "Attributions" link. Skipped in embed
+  // mode (extends the Story 2.5 chrome-skip pattern). Clicking the link
+  // pushState-navigates to /about#attribution + triggers a full reload to
+  // swap the surface (simulation → about page); navigating via popstate
+  // is handled by the URLRouter route-change listener below. The footer
+  // host is the same parent the canvas lives in so it shares the embed-
+  // mode chrome-skip discipline.
+  const footerHost = canvas.parentElement ?? document.body;
+  mountAttributionsFooter(footerHost, embedMode.enabled, (url) => {
+    // Surface flip from simulation → about. `location.assign(url)` against
+    // a cross-pathname target ('/' or '/c/<slug>' → '/about#attribution')
+    // forces a fresh document load, which is the contract the about
+    // surface boots under. We intentionally do NOT pushState first —
+    // pushing the target URL first would make `location.assign` a
+    // same-document hash navigation that never reloads, leaving the
+    // simulation surface mounted under the new URL.
+    window.location.assign(url);
+  });
+
+  // Story 2.7 — when the user navigates back/forward across the
+  // /about ↔ simulation boundary, the router emits a route-change event;
+  // we trigger a full reload to mount the appropriate surface.
+  urlRouter.onRouteChange((_from, to) => {
+    if (to === 'about') {
+      window.location.reload();
+    }
+  });
+
+  // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
+  // the lead's Chrome DevTools MCP smoke can read
+  // `window.__voyagerDebug.scrubber` and assert on marker DOM state.
+  // Story 2.3 extends the same surface with `chapterIndex` so the
+  // lead-driven Chrome DevTools MCP smoke (Integration AC8) can open
+  // the panel, exercise keyboard nav + global digits, and inspect
+  // option / ARIA state.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+    w.__voyagerDebug = {
+      ...(w.__voyagerDebug ?? {}),
+      scrubber: firstPaintHandle.scrubber,
+      // Story 2.5 — null in embed mode (chapter-index is not mounted).
+      // The MCP smoke must tolerate the missing key by checking embedMode
+      // directly when verifying AC2.
+      chapterIndex: firstPaintHandle.chapterIndex,
+      // Story 2.8 — same null-in-embed-mode contract for the help
+      // overlay. Lead Chrome DevTools MCP smoke checks AC1 (icon
+      // present non-embed) + AC2/AC6 (?/A no-ops in embed) via this
+      // handle plus the document-level keydown shortcut path.
+      helpOverlay: firstPaintHandle.helpOverlay,
+      // Story 2.9 — chapter-copy panel is editorial content (mounted in
+      // both default and embed modes). Null only when no director was
+      // wired (defensive — the simulation surface always wires one).
+      // Lead MCP smoke uses this to assert AC1 on cold-load of
+      // /c/v1-heliopause + /c/v2-heliopause.
+      chapterCopy: firstPaintHandle.chapterCopy,
+      urlRouter,
+      urlSync,
+      // Story 2.5 — expose the boot-time embed flag so the lead-driven
+      // MCP smoke can assert AC1 (`enabled === true` for `?embed=true`).
+      embedMode,
+    };
+  }
 
   // Story 1.12 — spacecraft + trajectory rendering. SpacecraftModels is
   // constructed up-front so the scene-graph structure is stable; its GLB
@@ -305,6 +493,41 @@ const sizeCanvasToWindow = (canvas: HTMLCanvasElement): void => {
   canvas.style.height = '100vh';
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+};
+
+/**
+ * Story 2.7 — mount the `/about` editorial surface as the sole content of
+ * the #app root. The simulation surface (canvas + HUD + scrubber + chapter
+ * index) is intentionally NOT mounted; per AC1 the about page is its own
+ * top-level surface. The page anchors at `#attribution` via browser-native
+ * fragment scrolling once the dl in `<v-attribution-panel>` is in the DOM.
+ */
+const mountAboutSurface = (): void => {
+  const mount = document.getElementById('app') ?? document.body;
+  while (mount.firstChild) {
+    mount.removeChild(mount.firstChild);
+  }
+  // Reset the page-level styling away from the canvas-friendly
+  // overflow/100vh that the simulation surface assumes. The about page is
+  // a normal document with natural scroll behaviour.
+  document.body.style.overflow = 'auto';
+  const about = document.createElement('v-about-page');
+  mount.appendChild(about);
+  // If the URL carried a hash (e.g. /about#attribution), browser-native
+  // fragment scrolling needs the anchor to exist in the DOM by the time
+  // it tries to scroll. The Lit element renders synchronously enough for
+  // most cases, but we force a hash re-evaluation after the next tick so
+  // the deep-link from the homepage footer lands on the attribution panel
+  // even if the initial parse fired before the dl was attached.
+  if (window.location.hash !== '') {
+    const hash = window.location.hash;
+    void Promise.resolve().then(() => {
+      const target = document.querySelector(hash);
+      if (target !== null) {
+        target.scrollIntoView({ block: 'start' });
+      }
+    });
+  }
 };
 
 if (document.readyState === 'loading') {

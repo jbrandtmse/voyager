@@ -287,7 +287,17 @@ export class ChunkLoader {
 
   private notify(): void {
     const value = this.loading;
-    for (const cb of this.subscribers) cb(value);
+    // Story 2.0 AC10 — wrap each subscriber in try/catch so a synchronously
+    // throwing subscriber does not short-circuit notification of subsequent
+    // subscribers in the Set. Async (promise-rejecting) subscribers are out
+    // of scope: the iteration is synchronous and unawaited.
+    for (const cb of this.subscribers) {
+      try {
+        cb(value);
+      } catch (err) {
+        console.error('chunk-loader subscriber threw:', err);
+      }
+    }
   }
 
   // Test helpers

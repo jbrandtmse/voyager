@@ -573,9 +573,11 @@ describe('Story 1.11 defense — no new @media queries beyond Story 1.7 structur
 });
 
 // ---------------------------------------------------------------------------
-// 15. <v-hud-chapter-title> and <v-hud-instruments> are TRUE stubs.
+// 15. <v-hud-chapter-title> is still a stub (Epic 4 will fill it).
+//     <v-hud-instruments> is filled by Story 2.9 — see v-hud-instruments.test.ts
+//     for the V1/V2 ISS·UVS·PLS·LECP shutoff-readout contract.
 // ---------------------------------------------------------------------------
-describe('Story 1.11 defense — chapter-title and instruments are true stubs (no visible text)', () => {
+describe('Story 1.11 defense — chapter-title is still a true stub (no visible text)', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
   });
@@ -601,11 +603,17 @@ describe('Story 1.11 defense — chapter-title and instruments are true stubs (n
     el.remove();
   });
 
-  it('<v-hud-instruments>: shadowRoot textContent is empty (whitespace only)', async () => {
+  it('<v-hud-instruments>: now renders the V1+V2 instrument-shutoff legend (Story 2.9 filled the Story 1.11 stub)', async () => {
     const el = document.createElement('v-hud-instruments') as VHudInstruments;
     document.body.appendChild(el);
     await el.updateComplete;
-    expect((el.shadowRoot!.textContent ?? '').trim()).toBe('');
+    const text = (el.shadowRoot!.textContent ?? '').trim();
+    expect(text).toContain('V1');
+    expect(text).toContain('V2');
+    expect(text).toContain('ISS');
+    expect(text).toContain('UVS');
+    expect(text).toContain('PLS');
+    expect(text).toContain('LECP');
     el.remove();
   });
 });

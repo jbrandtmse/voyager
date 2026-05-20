@@ -156,6 +156,13 @@ export class RenderEngine {
   setSize(width: number, height: number): void {
     if (!this.renderer) return;
     this.renderer.setSize(width, height, false);
+    // Story 2.0 AC9 — re-apply devicePixelRatio so dragging the window
+    // between monitors with different DPRs takes effect without a reload.
+    // Gated on `typeof devicePixelRatio !== 'undefined'` so the node/jsdom
+    // test path remains operative.
+    if (typeof devicePixelRatio !== 'undefined') {
+      this.renderer.setPixelRatio(devicePixelRatio);
+    }
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }
