@@ -10,6 +10,8 @@ import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
 import { ClockManager } from './services/clock-manager';
 import { ChapterDirector } from './services/chapter-director';
+import { URLSync } from './services/url-sync';
+import { URLRouter } from './services/url-router';
 import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
 import {
@@ -78,6 +80,20 @@ const bootstrap = (): void => {
   // read `clockManager.simTimeEt` from RenderEngine.onFrame callbacks.
   const clockManager = new ClockManager();
 
+  // Story 2.4 — parse the full URL (path + query) before any subsystem
+  // wires up. `parseInitialPath()` covers both shapes:
+  //   - `/` (or `/?t=<iso>`)          → chapter = null
+  //   - `/c/<known-slug>?t=<iso>`     → chapter resolved + ET parsed
+  //   - `/c/<unknown-slug>...`        → console.warn + replaceState('/')
+  //                                     → falls through to the homepage branch
+  // The resulting `initialEt` is what we seed ClockManager with via
+  // scrubTo (which clamps + pauses uniformly). first-paint reuses this
+  // URLSync instance (no second `?t=` parse) so the chapter path is
+  // preserved through the scrubber's first writeback.
+  const urlSync = new URLSync();
+  const initialUrlState = urlSync.parseInitialPath();
+  clockManager.scrubTo(initialUrlState.initialEt);
+
   const engine = new RenderEngine(capabilities, {
     forceLogDepth: params.forceLogDepth,
     clockManager,
@@ -132,8 +148,33 @@ const bootstrap = (): void => {
   // runs so the marker-subscription wires in cleanly.
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
-    { renderEngine: engine, clockManager, chapterDirector },
+    { renderEngine: engine, clockManager, chapterDirector, urlSync },
   );
+
+  // Story 2.4 — seed the ChapterDirector FSM synchronously to the cold-load
+  // ET BEFORE the URLRouter subscribes. `engine.onFrame((et) => director.update(et))`
+  // above only REGISTERS the per-frame callback; the first invocation
+  // happens on the next RAF tick which is async. If URLRouter subscribed
+  // before this seed, the first director.update would fire `entering→held`
+  // transitions that the router would translate into a redundant
+  // replaceState write (worst case: cold-load `/` morphs to
+  // `/c/launch-v2` because MISSION_START_ET falls inside launch-v2's
+  // window). Seeding here matches what the integration tests model and
+  // honors the URL contract that cold-load arrival is the canonical
+  // state — not a transition the router needs to mirror.
+  chapterDirector.update(clockManager.simTimeEt);
+
+  // Story 2.4 — install the URL router AFTER first-paint so document-level
+  // `chapter-jump` listeners are attached before the scrubber + chapter
+  // index begin dispatching them. The router subscribes to chapter-jump
+  // (user-driven pushState), ChapterDirector transitions (director-driven
+  // replaceState on boundary crossings), and popstate (browser
+  // back/forward).
+  const urlRouter = new URLRouter({
+    urlSync,
+    clockManager,
+    chapterDirector,
+  }).install();
 
   // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
   // the lead's Chrome DevTools MCP smoke can read
@@ -148,6 +189,8 @@ const bootstrap = (): void => {
       ...(w.__voyagerDebug ?? {}),
       scrubber: firstPaintHandle.scrubber,
       chapterIndex: firstPaintHandle.chapterIndex,
+      urlRouter,
+      urlSync,
     };
   }
 

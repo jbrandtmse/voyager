@@ -51,6 +51,14 @@ export interface FirstPaintOptions {
    * preserving Story 1.9-only test setups.
    */
   chapterDirector?: ChapterDirector;
+  /**
+   * Story 2.4 — caller-supplied `URLSync`. When provided, first-paint
+   * skips its own `parseInitialT()` + `scrubTo(initialEt)` seed (main.ts
+   * has already done it via `parseInitialPath()`) and just forwards the
+   * shared instance to the scrubber. When omitted, the legacy Story 1.9
+   * `?t=` parse runs as before.
+   */
+  urlSync?: URLSync;
 }
 
 export interface FirstPaintHandle {
@@ -77,17 +85,25 @@ export const startFirstPaint = (
   host: HTMLElement = document.body,
   options: FirstPaintOptions = {},
 ): FirstPaintHandle => {
-  const urlSync = new URLSync();
-  const { initialEt } = urlSync.parseInitialT();
+  // Story 2.4 — when main.ts already constructed a URLSync (so it could
+  // parse `/c/<slug>` AND `?t=` together via parseInitialPath), reuse
+  // that instance and skip the internal seed. Otherwise fall back to the
+  // Story 1.9 `?t=`-only path, which keeps every existing test that
+  // never set up a chapter route working unchanged.
+  const externalUrlSync = options.urlSync !== undefined;
+  const urlSync = options.urlSync ?? new URLSync();
 
   // Reuse a caller-supplied ClockManager if one was provided (Story 1.15
   // wires the same instance into RenderEngine before `startFirstPaint`
   // runs). Falling back to a fresh instance preserves the legacy Story
   // 1.10 test-only call site that didn't construct a clock externally.
   const clockManager = options.clockManager ?? new ClockManager();
-  // Seed the clock to the URL-parsed ET. Uses scrubTo so the clamp + pause
-  // semantics apply uniformly. ?t= always lands paused.
-  clockManager.scrubTo(initialEt);
+  if (!externalUrlSync) {
+    const { initialEt } = urlSync.parseInitialT();
+    // Seed the clock to the URL-parsed ET. Uses scrubTo so the clamp + pause
+    // semantics apply uniformly. ?t= always lands paused.
+    clockManager.scrubTo(initialEt);
+  }
 
   const titleCard = document.createElement('v-title-card');
   host.appendChild(titleCard);
