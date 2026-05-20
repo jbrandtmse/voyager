@@ -138,11 +138,16 @@ const bootstrap = (): void => {
   // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
   // the lead's Chrome DevTools MCP smoke can read
   // `window.__voyagerDebug.scrubber` and assert on marker DOM state.
+  // Story 2.3 extends the same surface with `chapterIndex` so the
+  // lead-driven Chrome DevTools MCP smoke (Integration AC8) can open
+  // the panel, exercise keyboard nav + global digits, and inspect
+  // option / ARIA state.
   if (import.meta.env.DEV) {
     const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
     w.__voyagerDebug = {
       ...(w.__voyagerDebug ?? {}),
       scrubber: firstPaintHandle.scrubber,
+      chapterIndex: firstPaintHandle.chapterIndex,
     };
   }
 

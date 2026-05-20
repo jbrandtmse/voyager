@@ -128,11 +128,17 @@ describe('Story 2.2 QA — first-paint wires the scrubber to ChapterDirector', (
     // happens to fire before the next requestUpdate would be silently
     // missed. Verify the subscription is already live by counting the
     // director's subscribers immediately post-startFirstPaint.
+    //
+    // Story 2.3 added `<v-chapter-index>` as a second consumer of the same
+    // director (aria-current tracks activeChapter). Both consumers subscribe
+    // during their connectedCallback runs, so the spy is now called ≥ 1
+    // time — we keep the original intent ("subscription is live before the
+    // next render frame") by asserting at-least-one rather than exactly-one.
     const clockManager = new ClockManager();
     const director = new ChapterDirector(ALL_CHAPTERS);
     const subscribeSpy = vi.spyOn(director, 'subscribe');
     startFirstPaint(document.body, { clockManager, chapterDirector: director });
-    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    expect(subscribeSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 
   it('omitting chapterDirector leaves scrubber.chapterDirector null and falls back to inactive markers only', async () => {

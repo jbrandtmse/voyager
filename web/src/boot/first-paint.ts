@@ -19,10 +19,12 @@ import '../components/v-timeline-scrubber';
 import '../components/v-play-button';
 import '../components/v-speed-multiplier';
 import '../components/v-hud';
+import '../components/v-chapter-index';
 import type { VTimelineScrubber } from '../components/v-timeline-scrubber';
 import type { VPlayButton } from '../components/v-play-button';
 import type { VSpeedMultiplier } from '../components/v-speed-multiplier';
 import type { VHud } from '../components/v-hud';
+import type { VChapterIndex } from '../components/v-chapter-index';
 import type { RenderEngine } from '../render/render-engine';
 import type { EphemerisService } from '../services/ephemeris-service';
 import type { ChapterDirector } from '../services/chapter-director';
@@ -57,6 +59,7 @@ export interface FirstPaintHandle {
   playButton: VPlayButton;
   speedMultiplier: VSpeedMultiplier;
   hud: VHud;
+  chapterIndex: VChapterIndex;
   clockManager: ClockManager;
   urlSync: URLSync;
   /** Detach the global keyboard handlers and stop subscriptions. */
@@ -123,6 +126,21 @@ export const startFirstPaint = (
   hud.style.visibility = 'hidden';
   host.appendChild(hud);
 
+  // Story 2.3 — chapter index (top-right hamburger toggle). Wired with the
+  // shared ClockManager (for scrubTo-on-activation) and the same
+  // ChapterDirector the scrubber consumes (so aria-current tracks the
+  // held chapter). Both must be set BEFORE appendChild so the
+  // connectedCallback sees them and the chapter-transition subscription
+  // wires in cleanly. Visibility tracks the rest of the chrome —
+  // hidden until the title-card dissolves.
+  const chapterIndex = document.createElement('v-chapter-index') as VChapterIndex;
+  chapterIndex.clockManager = clockManager;
+  if (options.chapterDirector !== undefined) {
+    chapterIndex.chapterDirector = options.chapterDirector;
+  }
+  chapterIndex.style.visibility = 'hidden';
+  host.appendChild(chapterIndex);
+
   // Per-frame visible-DOM mutation lives outside Lit reactivity
   // (architecture line 424). When a RenderEngine is wired, hook each frame.
   let detachFrame: (() => void) | null = null;
@@ -140,6 +158,7 @@ export const startFirstPaint = (
     playButton.style.visibility = '';
     speedMultiplier.style.visibility = '';
     hud.style.visibility = '';
+    chapterIndex.style.visibility = '';
   };
   titleCard.addEventListener('voyager:title-card-complete', onComplete, { once: true });
 
@@ -161,6 +180,7 @@ export const startFirstPaint = (
     playButton,
     speedMultiplier,
     hud,
+    chapterIndex,
     clockManager,
     urlSync,
     dispose,
