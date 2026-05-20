@@ -25,6 +25,7 @@ import type { VSpeedMultiplier } from '../components/v-speed-multiplier';
 import type { VHud } from '../components/v-hud';
 import type { RenderEngine } from '../render/render-engine';
 import type { EphemerisService } from '../services/ephemeris-service';
+import type { ChapterDirector } from '../services/chapter-director';
 
 export interface FirstPaintOptions {
   /** When provided, the HUD wires its per-frame tick into the engine. */
@@ -40,6 +41,14 @@ export interface FirstPaintOptions {
    * (used by tests).
    */
   clockManager?: ClockManager;
+  /**
+   * Story 2.2 — caller-supplied `ChapterDirector`. When provided, set on
+   * the scrubber BEFORE its `connectedCallback` runs so the chapter-
+   * transition subscription wires in cleanly during the first paint.
+   * Omitting the option leaves the scrubber's `chapters` slot empty,
+   * preserving Story 1.9-only test setups.
+   */
+  chapterDirector?: ChapterDirector;
 }
 
 export interface FirstPaintHandle {
@@ -83,6 +92,12 @@ export const startFirstPaint = (
   const scrubber = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
   scrubber.urlSync = urlSync;
   scrubber.clockManager = clockManager;
+  if (options.chapterDirector !== undefined) {
+    // Story 2.2 — set BEFORE appendChild so the scrubber's
+    // connectedCallback sees the director and wires the transition
+    // subscription on the same tick the scrubber mounts.
+    scrubber.chapterDirector = options.chapterDirector;
+  }
   scrubber.style.visibility = 'hidden';
   host.appendChild(scrubber);
 

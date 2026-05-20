@@ -40,10 +40,13 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-18
-last_updated: 2026-05-20
+last_updated: 2026-05-20T08:59
 # 2-1 set to in-progress on 2026-05-20 (dev-2-1 / epic-cycle-2026-05-20)
 # 2-1 set to review on 2026-05-20 (dev-2-1 / epic-cycle-2026-05-20) — T1–T6 implemented; 17 new files + main.ts wire-up; 1321 web vitest pass (+36 from 1285 baseline); typecheck + lint clean (5 pre-existing warnings). FSM transient-state semantics resolved cleanly (entering/exiting are transition events, never resting). Integration AC8 DEV debug surface (`window.__voyagerDebug.chapterDirector`) ready for lead-driven Chrome DevTools MCP smoke. ViewframeService leg forward-deferred to Story 4.1 per story file.
 # 2-1 set to done on 2026-05-20 (epic-cycle-2026-05-20) — QA added 3 cross-cutting test files (42 new tests, vitest 1363 pass); code review APPROVE_WITH_CHANGES_RESOLVED (1 HIGH ADR-0001 slug violation resolved at slug-source — launch chapters renamed to `launch-v1`/`launch-v2`, encounter slugs retained per ADR; epics.md amended for Story 2.1 + 2.4; 3 LOWs deferred). Lead Chrome DevTools MCP smoke PASS: 4 ET probes verified ChapterDirector ↔ ClockManager wire-up (boot launch-v2 / V1 Jupiter / between-chapter null / V2 Neptune). Evidence: _bmad-output/implementation-artifacts/2-1-smoke-evidence/.
+# 2-2 set to in-progress on 2026-05-20 (dev-2-2 / epic-cycle-2026-05-20)
+# 2-2 set to review on 2026-05-20 (dev-2-2 / epic-cycle-2026-05-20) — T1–T5 implemented; web vitest 1390 pass (+27 from 1363 baseline); typecheck clean; lint baseline preserved (5 pre-existing warnings, 0 new). Scrubber consumes ChapterDirector + ALL_CHAPTERS via first-paint wire-up. AC1–AC5 covered by 27 new unit tests; Integration AC7 = lead-executed Chrome DevTools MCP smoke (DEV debug surface `window.__voyagerDebug.scrubber` published).
+# 2-2 set to done on 2026-05-20 (cr-2-2 / epic-cycle-2026-05-20) — code review APPROVE_WITH_CHANGES_RESOLVED (1 MEDIUM auto-resolved: redundant native title= attribute on marker button removed, restoring AC3 single-tooltip contract; 2 LOW deferred to deferred-work.md). Web vitest 1411 pass, typecheck clean, lint baseline (5 pre-existing warnings) preserved. ADR-0001/0013/0025/0026 compliance verified. Integration AC7 lead-executed Chrome DevTools MCP smoke remains the binding browser-evidence gate (Rule 7); code-side prerequisites in place.
 # 2-0 set to in-progress on 2026-05-19 (dev-2-0 / epic-cycle-2026-05-19)
 # 2-0 set to review on 2026-05-19 (dev-2-0 / epic-cycle-2026-05-19) — T1–T10 implemented; web vitest 1285 pass; bake pytest 245 pass (excluding 2 pre-existing ck_inventory determinism failures unrelated to Story 2.0); typecheck + lint clean
 # 2-0 set to done on 2026-05-20 (epic-cycle-2026-05-20 resume) — QA added 2 AC8 defense tests; code review APPROVE_WITH_CHANGES_RESOLVED (0 ADR violations, 1 LOW auto-resolved, 3 LOWs deferred); lead-side Chrome DevTools MCP browser smoke PASS (console clean, AC9 setPixelRatio canvas-buffer math verified). Cycle log: _bmad-output/implementation-artifacts/cycle-log-epic-2.md. Pre-existing ck_inventory failures reclassified as CRLF normalization drift (tests pass on direct run; LOW deferred for `git add --renormalize .` cleanup).
@@ -100,7 +103,7 @@ development_status:
   epic-2: in-progress
   2-0-epic-1-deferred-cleanup: done
   2-1-chapterdirector-fsm-and-11-declarative-chapter-specs: done
-  2-2-chapter-markers-on-mission-scrubber-vertebrae: backlog
+  2-2-chapter-markers-on-mission-scrubber-vertebrae: done
   2-3-v-chapter-index-listbox-and-chapter-jump-keyboard-shortcuts: backlog
   2-4-per-chapter-url-slug-scheme-and-pushstate-navigation: backlog
   2-5-embed-true-chrome-less-mode: backlog

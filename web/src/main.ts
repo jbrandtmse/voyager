@@ -123,10 +123,28 @@ const bootstrap = (): void => {
   //   5. Kick off manifest load in parallel; once it lands, wire the
   //      EphemerisService into <v-hud-distance> so V1/V2 readouts show
   //      real values.
+  //
+  // Story 2.2 — the shared ChapterDirector is also passed here so the
+  // scrubber's mission-variant paints chapter markers (vertebrae) and
+  // highlights the active chapter as the simulation ET crosses each
+  // chapter window. The director is already driven from `engine.onFrame`
+  // above; first-paint sets it on the scrubber BEFORE connectedCallback
+  // runs so the marker-subscription wires in cleanly.
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
-    { renderEngine: engine, clockManager },
+    { renderEngine: engine, clockManager, chapterDirector },
   );
+
+  // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
+  // the lead's Chrome DevTools MCP smoke can read
+  // `window.__voyagerDebug.scrubber` and assert on marker DOM state.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+    w.__voyagerDebug = {
+      ...(w.__voyagerDebug ?? {}),
+      scrubber: firstPaintHandle.scrubber,
+    };
+  }
 
   // Story 1.12 — spacecraft + trajectory rendering. SpacecraftModels is
   // constructed up-front so the scene-graph structure is stable; its GLB
