@@ -371,6 +371,13 @@ REQUIRED_RECIPES = {
     # future refactor from silently dropping them.
     "ck-inventory",
     "fk-inventory",
+    # Story 3.1 AC6 — `bake-attitude` is the new CK-kernel attitude bake
+    # recipe (Story 3.1 ck_sample.py producer); `bake-trajectories` is the
+    # split-out Story 1.4 baseline so `just bake` can compose both halves into
+    # a single command. Lock both into the recipe contract so future refactors
+    # can't drop one half silently.
+    "bake-attitude",
+    "bake-trajectories",
 }
 
 
@@ -651,6 +658,54 @@ def test_voyager_spk_selection_uses_exact_prefix_basename_match() -> None:
         f"V1 selection found {v1_pick_only_v12.file if v1_pick_only_v12 else None!r} "
         f"in a kernel set containing only Voyager_12 — substring fallback regression."
     )
+
+
+# --- 11. Story 3.1 AC4: attitude bake fast-tier determinism surrogate -----
+
+
+def test_attitude_walk_plus_write_is_byte_deterministic(tmp_path: Path) -> None:
+    """Story 3.1 AC4 / NFR-R4: walk_signs + write_vtrj("attitude") chain is byte-deterministic.
+
+    Fast-tier surrogate for the full-bake determinism gate (slow-tier covers
+    the actual `just bake-attitude` twice in T8.1). This test locks the
+    in-memory pre-bake → serialize path: given identical numpy quaternion
+    input, two passes through the chain produce identical SHA-256 outputs.
+
+    Doesn't need real CK kernels — exercises the deterministic-by-construction
+    parts (walk + write) using synthetic adversarial inputs.
+    """
+    import sys as _sys
+
+    if str(BAKE_SRC) not in _sys.path:
+        _sys.path.insert(0, str(BAKE_SRC))
+    from quat_continuity import walk_signs  # noqa: WPS433
+    from vtrj_writer import write_vtrj  # noqa: WPS433
+
+    # Build an adversarial input: sign-flipped every other sample
+    rng = np.random.default_rng(seed=42)
+    raw = rng.standard_normal(size=(500, 4))
+    raw = (raw / np.linalg.norm(raw, axis=1, keepdims=True)).astype(np.float64)
+    raw[1::2] = -raw[1::2]  # adversarial sign flips
+
+    # Two passes through walk_signs + write_vtrj
+    walked_a = walk_signs(raw)
+    walked_b = walk_signs(raw)
+    np.testing.assert_array_equal(walked_a, walked_b)
+
+    target_a = tmp_path / "a.bin.br"
+    target_b = tmp_path / "b.bin.br"
+    ets = np.linspace(0.0, 499.0, walked_a.shape[0], dtype=np.float64)
+    sha_a = write_vtrj(
+        target_path=target_a, body_id=-31000, et_start=0.0, et_end=499.0,
+        cadence_seconds=1.0, samples=walked_a, kind="attitude", ets=ets,
+    )
+    sha_b = write_vtrj(
+        target_path=target_b, body_id=-31000, et_start=0.0, et_end=499.0,
+        cadence_seconds=1.0, samples=walked_b, kind="attitude", ets=ets,
+    )
+    assert sha_a == sha_b, "attitude write SHA mismatch — pre-bake determinism broken"
+    # And the actual on-disk bytes match
+    assert target_a.read_bytes() == target_b.read_bytes()
 
 
 def test_bake_trajectories_source_uses_exact_prefix_match_not_substring() -> None:

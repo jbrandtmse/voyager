@@ -8,6 +8,7 @@ import {
   ENCOUNTER_DATES,
   HELIOPAUSE_DATES,
   INSTRUMENTS_IN_ORDER,
+  PBD_DATE,
   SPACECRAFT_IN_ORDER,
   isShutOffAt,
   getShutoffEt,
@@ -64,6 +65,16 @@ describe('Story 2.9 AC2 — MISSION_FACTS.md parity', () => {
 
   it('the doc declares ADR-0021 as the chapter-copy authoring contract', () => {
     expect(doc).toContain('ADR-0021');
+  });
+
+  // Story 3.1 AC7 (QA gap-fill): PBD_DATE was added to mission-facts.ts by
+  // Story 3.1 as part of the closest-approach-anchor source-of-truth work.
+  // The pre-Story-3.1 parity test loop didn't reach it because PBD_DATE is a
+  // standalone exported constant (not in ENCOUNTER_DATES). This test closes
+  // the parity gap so a future edit that "fixes" PBD_DATE without updating
+  // MISSION_FACTS.md fails immediately (voyager-skill-rules.md Rule 5).
+  it('Pale Blue Dot date (PBD_DATE) appears verbatim in MISSION_FACTS.md', () => {
+    expect(doc).toContain(PBD_DATE);
   });
 });
 

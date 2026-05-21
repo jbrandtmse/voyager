@@ -64,7 +64,7 @@ The PRD and technical research have pre-decided a substantial fraction of normal
 - **Runtime stack:** TypeScript 6.x strict (per ADR 0026) + Three.js (≥r170, reverse-Z) + Vite. Client-only; no backend.
 - **Build stack:** Python 3.13 + SpiceyPy 8.1.0 + scipy + numpy. uv for Python deps; Ruff for lint/format. gltf-transform + toktx + Blender (headless) for asset pipeline.
 - **Hosting:** Static CDN — Cloudflare Pages or Vercel free tier (provider TBD).
-- **Storage formats at runtime:** Custom 40-byte-header VTRJ binary (raw little-endian Float64Array), brotli-compressed. Decompression is performed client-side by the `brotli-dec-wasm` polyfill (Story 1.16; originally planned to use `DecompressionStream('br')` but that JS API never standardized brotli — see ADR 0004 § Decompression Strategy). JSON/CSV/MessagePack/Protobuf/Arrow/Parquet at runtime all explicitly rejected.
+- **Storage formats at runtime:** Custom 40-byte-header VTRJ binary (raw little-endian Float64Array), brotli-compressed. Decompression is performed client-side by the `brotli-dec-wasm` polyfill (Story 1.16; originally planned to use `DecompressionStream('br')` but that JS API never standardized brotli — see ADR 0004 § Decompression Strategy). **Body layout is discriminated by `body_id` namespace** (Story 3.1 amendment): trajectory body IDs `{-31, -32, 10, 1..8, 301}` store `[x,y,z,vx,vy,vz]` at uniform cadence (time implicit via `et_start + i × cadence_seconds`); attitude body IDs `{-31000, -31100, -32000, -32100}` store `[et, qw, qx, qy, qz]` with explicit per-sample ET to support the mission's variable-cadence schedule. JSON/CSV/MessagePack/Protobuf/Arrow/Parquet at runtime all explicitly rejected.
 - **Numerical methods:** Cubic Hermite over position+velocity for trajectories; SLERP for quaternions (Catmull-Rom rejected).
 - **Depth precision:** Reverse-Z on WebGLRenderer; logarithmic depth as GPU fallback. WebGPURenderer deferred until it supports reverse-Z.
 - **Coordinate patterns:** Single canonical heliocentric J2000 Float64 frame; per-frame `ViewFrame.getTransform(et)`; floating-origin recenter via `WorldGroup.position = -cameraWorldPos / SCALE`; smoothstep blend over ±2 days at encounter boundaries.
@@ -247,8 +247,8 @@ All scripts share a common pattern: read a per-class manifest entry (`{url, expe
 **Pre-decided (PRD/research, recorded for traceability):**
 
 - Python 3.13 + SpiceyPy 8.1.0 + scipy.CubicHermiteSpline + numpy
-- Custom VTRJ binary (40-byte header + raw little-endian Float64Array body), brotli-compressed for transport; client decompression via `brotli-dec-wasm` polyfill (Story 1.16)
-- Chunking: per-decade trajectory files at daily cadence; per-encounter higher-cadence overlays (1-hour at ±30 days from CA, 1-minute at ±2 days, 10-second at ±1 hour)
+- Custom VTRJ binary (40-byte header + raw little-endian Float64Array body), brotli-compressed for transport; client decompression via `brotli-dec-wasm` polyfill (Story 1.16). Body layout per `body_id` namespace: trajectory = `(N, 6)` `[x,y,z,vx,vy,vz]` uniform cadence; attitude = `(N, 5)` `[et, qw, qx, qy, qz]` explicit per-sample ET (Story 3.1 amendment — see ADR 0004 § Body Layout per Kind)
+- Chunking: per-decade trajectory files at daily cadence; per-encounter higher-cadence overlays (1-hour at ±30 days from CA, 1-minute at ±2 days, 10-second at ±1 hour). For attitude, the mixed cadence is stored inline in a single file per encounter-kind (explicit-ET body); for trajectory, mixed cadence requires separate files per band (implicit-ET body)
 - Hash-pinned NAIF kernel manifest (SHA-256)
 - Byte-identical bake determinism (NFR-R4)
 

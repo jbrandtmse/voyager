@@ -38,11 +38,27 @@ Data (numSamples × componentsPerSample × 8 bytes):
   float64[]
 ```
 
-- **Time is implicit** (`t = t0 + dt * i`), saving 50% of bytes vs storing timestamps.
-- **Variable-cadence segments** (flyby high-resolution overlays) live in separate chunk files, each with its own header — keeps the on-wire format simple.
+- **Time is implicit for trajectory** (`t = t0 + dt * i`), saving 50% of bytes vs storing timestamps. **Time is explicit for attitude** (first column of each sample row) — see § Body Layout per Kind below for the Story 3.1 amendment.
 - **TypeScript loader is zero-copy:** `new Float64Array(buffer, HEADER_SIZE, numSamples * componentsPerSample)` is a view, not an allocation.
-- **Same layout serves attitude streams** with `componentsPerSample = 4` (quaternion qw,qx,qy,qz) — single loader; single header parser.
+- **Same loader serves both trajectory and attitude streams** — the body-shape discrimination is via `body_id` namespace (see § Body Layout per Kind below).
 - **Brotli compression** at build time, served as immutable static assets with `Cache-Control: public, max-age=31536000, immutable` (per ADR 0017's content-hash discipline).
+
+### Body Layout per Kind (amended 2026-05-21 per Story 3.1)
+
+The Story 1.4 implementation locked the actual on-disk header struct as `<4sHiddId2s` (4-byte magic + u16 version + i32 body_id + f64 et_start + f64 et_end + u32 sample_count + f64 cadence_seconds + 2-byte reserved = 40 bytes). The `dt_sec / componentsPerSample / bodyId at offset 32` layout in the original Decision block above was aspirational pseudocode that the implementation never produced. The actual header layout is the canonical contract; **see `bake/src/vtrj_writer.py` for the authoritative struct.**
+
+Body layout is **discriminated by `body_id` namespace**, not by a `componentsPerSample` header field:
+
+- **Trajectory body IDs** (`{-31, -32, 10, 1..8, 301}` — Voyager 1, Voyager 2, Sun, planet barycenters, Moon): body = `N × 6 × float64` = `[x, y, z, vx, vy, vz]` per sample. Cadence is **uniform**; sample at index `i` lies at ET `et_start + i × cadence_seconds`. The `cadence_seconds` header field is exact.
+- **Attitude body IDs** (`{-31000, -31100, -32000, -32100}` — CK structure IDs for V1/V2 bus and scan platform): body = `N × 5 × float64` = `[et, qw, qx, qy, qz]` per sample. Cadence is **variable per file** (10-sec near closest approach, 1-min through encounter, daily during CK-covered cruise — the mission cadence schedule). The decoder MUST read explicit ETs from column 0 of each sample row; the `cadence_seconds` header field is **informational only** (the finest cadence band that contributed to the file, useful for diagnostic emission).
+
+`BYTES_PER_SAMPLE` is namespace-driven: 48 for trajectory body IDs, 40 for attitude body IDs. The discrimination at decode time is `body_id ∈ ATTITUDE_BODY_IDS` (see `vtrj_writer.py:ATTITUDE_BODY_IDS`).
+
+**Why explicit ETs for attitude:** the mission cadence schedule is intentionally non-uniform — quaternion rate of change during the closest-approach minutes is two orders of magnitude higher than during quiet cruise, and the storage budget rewards dense sampling only where attitude is actually changing. A uniform-cadence file would either (a) waste hundreds of MB on cruise samples or (b) lose precision through the encounter peak. Splitting into per-band files (one possibility per the "Variable-cadence segments live in separate chunk files" line of the original Decision) would introduce internal boundary stitching with knot-continuity gotchas at exactly the most visually-sensitive moments of the experience. Inline explicit ETs at 25% bytes-per-sample overhead (40 vs 32 for implicit-ET) keeps the data shape mathematically faithful, single-file-per-encounter, and SLERP-trivial.
+
+**Why the `cadence_seconds` header field stays:** trajectory consumers (chunk-loader, ephemeris service) read it as the canonical step; preserving the field preserves the Story 1.4 trajectory contract verbatim. The trajectory write path is unchanged.
+
+**On-disk forward compatibility:** the header struct format string is unchanged; the body shape change is detected entirely by the `body_id ∈ ATTITUDE_BODY_IDS` check that already gates the schema-extension code path. No `schemaVersion` bump is needed (additive within the body_id namespace partition). A future format change that affects the header itself (or introduces new body_id namespaces) MUST bump `version`, supersede this ADR, and document migration.
 
 ### Decompression Strategy (amended 2026-05-20 per Story 1.16)
 

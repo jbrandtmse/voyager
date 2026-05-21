@@ -183,3 +183,122 @@ def test_bake_commit_present_or_unknown(tmp_path: Path) -> None:
     if commit != "unknown":
         assert len(commit) == 40
         int(commit, 16)  # parses as hex
+
+
+# --- Story 3.1 AC3: provenance field for attitude entries ------------------
+
+
+def _attitude_bodies() -> list[BodyEntry]:
+    """Mixed body record: V1 has both trajectory + attitude entries."""
+    return [
+        BodyEntry(
+            naifId=-31,
+            name="Voyager 1",
+            files=[
+                FileEntry(
+                    timeRangeEt=(0.0, 100.0),
+                    cadenceSec=60.0,
+                    kind="trajectory",
+                    url="data/voyager-1-seg01-X-Y.bin.br",
+                    sha256="a" * 64,
+                    sizeBytes=1024,
+                    # provenance defaults to None — trajectory entries don't emit it
+                ),
+                FileEntry(
+                    timeRangeEt=(200.0, 300.0),
+                    cadenceSec=60.0,
+                    kind="bus_attitude",
+                    url="data/v1-bus-attitude-jupiter.bin.br",
+                    sha256="b" * 64,
+                    sizeBytes=2048,
+                    provenance="ck",
+                ),
+                FileEntry(
+                    timeRangeEt=(200.0, 300.0),
+                    cadenceSec=10.0,
+                    kind="platform_attitude",
+                    url="data/v1-platform-attitude-jupiter.bin.br",
+                    sha256="c" * 64,
+                    sizeBytes=3072,
+                    provenance="ck",
+                ),
+            ],
+        )
+    ]
+
+
+def test_emit_manifest_with_attitude_files(tmp_path: Path) -> None:
+    """AC3: attitude entries carry `provenance: "ck"`; trajectory entries do NOT.
+
+    Verifies the on-disk JSON has `provenance` only on the attitude rows and
+    that the field value is exactly the literal "ck". Round-trip parity with
+    Story 1.4 manifest tests: trajectory rows preserve their pre-Story-3.1
+    shape (no new key surface).
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_attitude_bodies(), _sample_kernels(), out, tmp_path)
+    doc = load_manifest(out)
+    files = doc["bodies"][0]["files"]
+    assert len(files) == 3
+
+    # Sort by kind so test is order-independent
+    by_kind = {fe["kind"]: fe for fe in files}
+    assert "trajectory" in by_kind and "bus_attitude" in by_kind and "platform_attitude" in by_kind
+
+    # Trajectory: NO provenance key
+    traj = by_kind["trajectory"]
+    assert "provenance" not in traj, (
+        "trajectory entries must NOT emit `provenance` (forward-compat with Story 1.4)"
+    )
+
+    # Attitude: provenance == "ck"
+    for kind in ("bus_attitude", "platform_attitude"):
+        entry = by_kind[kind]
+        assert entry["provenance"] == "ck", (
+            f"{kind}: expected provenance='ck', got {entry.get('provenance')!r}"
+        )
+
+
+def test_trajectory_only_manifest_has_no_provenance_keys(tmp_path: Path) -> None:
+    """AC3 byte-stability: a trajectory-only manifest produces the same JSON
+    structure pre- and post-Story-3.1.
+
+    Story 1.4's existing tests pin the trajectory FileEntry shape; this is the
+    explicit "no surprises" guard ensuring `provenance` doesn't leak into
+    trajectory rows even by accident.
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path)
+    doc = load_manifest(out)
+    for body in doc["bodies"]:
+        for fe in body["files"]:
+            assert "provenance" not in fe, (
+                f"{fe['url']}: trajectory entry leaked `provenance` key — "
+                f"breaks Story 1.4 byte-stability"
+            )
+
+
+def test_provenance_field_serialization_round_trips(tmp_path: Path) -> None:
+    """AC3: an attitude FileEntry's provenance survives JSON round-trip verbatim."""
+    bodies = _attitude_bodies()
+    out = tmp_path / "manifest.json"
+    emit_manifest(bodies, _sample_kernels(), out, tmp_path)
+    raw_text = out.read_text(encoding="utf-8")
+    # The literal pair `"provenance": "ck"` must appear in the JSON text
+    assert '"provenance": "ck"' in raw_text, (
+        f"expected literal `\"provenance\": \"ck\"` in manifest JSON; got:\n{raw_text}"
+    )
+
+
+def test_attitude_files_preserve_sorted_keys(tmp_path: Path) -> None:
+    """AC3 (NFR-R4): with the new `provenance` key, sort_keys=True still applies.
+
+    The serializer must place `provenance` alphabetically between `kind` and
+    `sha256` — JSON keys at every level remain sorted.
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_attitude_bodies(), _sample_kernels(), out, tmp_path)
+    text = out.read_text(encoding="utf-8")
+    reloaded = json.loads(text)
+    canonical = json.dumps(reloaded, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    assert text == canonical, "manifest JSON keys are not in sorted order"

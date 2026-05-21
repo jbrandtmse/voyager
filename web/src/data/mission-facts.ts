@@ -87,6 +87,14 @@ export const HELIOPAUSE_DATES: Readonly<Record<SpacecraftId, string>> = Object.f
 });
 
 /**
+ * Pale Blue Dot family-portrait imaging-sequence anchor (Voyager 1 only).
+ * Date-level sourcing: the imaging sequence spans several hours; the canonical
+ * anchor is midnight UTC. Story 3.1 uses this as the closest-approach equivalent
+ * for the PBD encounter window's 10-second-cadence attitude bake.
+ */
+export const PBD_DATE: string = '1990-02-14T00:00:00Z';
+
+/**
  * Pre-computed ET thresholds for the instrument-shutoff schedule. Built once
  * at module load so the HUD's per-frame comparison is a flat numeric lookup
  * rather than re-parsing the ISO strings every tick. AC3 — the 8 comparisons

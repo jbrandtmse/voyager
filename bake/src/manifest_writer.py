@@ -24,14 +24,30 @@ VALIDATION_TOLERANCES: dict[str, float] = {
 
 @dataclass(frozen=True)
 class FileEntry:
-    """Per-file entry inside a body's `files` array. Mirrors Decision 1b."""
+    """Per-file entry inside a body's `files` array. Mirrors Decision 1b.
+
+    Story 3.1 AC3: `provenance` is an OPTIONAL field (default None) marking the
+    source of attitude data — currently `"ck"` for samples extracted from
+    SPICE CK kernels via `ck_sample.py`. Future stories may introduce other
+    provenance markers (e.g. `"synthesized"` for the cruise HGA-Earth pointing
+    Story 3.2 owns). For trajectory entries, provenance remains None so the
+    pre-Story-3.1 manifest serialization is byte-identical (no new key emitted
+    when the value is None — see `_file_entry_to_dict`).
+
+    schemaVersion remains 1: the runtime ManifestSchema in `manifest-loader.ts`
+    uses Zod v4 z.object() which silently strips unknown keys by default
+    (verified against Zod 4.4.3 in web/node_modules), so this extension is
+    forward-compatible with the existing loader. Story 3.2 will add the
+    provenance field to the loader's schema when it consumes attitude entries.
+    """
 
     timeRangeEt: tuple[float, float]
     cadenceSec: float
-    kind: str  # "trajectory" for Story 1.4; "attitude" / "chapter" in later stories
+    kind: str  # "trajectory" | "bus_attitude" | "platform_attitude" | "chapter"
     url: str  # path relative to web/public/data/ once Story 1.6 copies bakes into place
     sha256: str
     sizeBytes: int
+    provenance: str | None = None  # Story 3.1 AC3: "ck" for attitude entries; None for trajectory
 
 
 @dataclass(frozen=True)
@@ -70,7 +86,7 @@ def _git_head_sha(repo_root: Path) -> str:
 
 
 def _file_entry_to_dict(fe: FileEntry) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "cadenceSec": float(fe.cadenceSec),
         "kind": fe.kind,
         "sha256": fe.sha256,
@@ -78,6 +94,12 @@ def _file_entry_to_dict(fe: FileEntry) -> dict[str, Any]:
         "timeRangeEt": [float(fe.timeRangeEt[0]), float(fe.timeRangeEt[1])],
         "url": fe.url,
     }
+    # Story 3.1 AC3: emit `provenance` ONLY when non-None so existing trajectory
+    # manifest entries stay byte-identical on disk (forward-compat for Story 1.4
+    # baseline tests + the runtime manifest-loader Zod schema).
+    if fe.provenance is not None:
+        out["provenance"] = str(fe.provenance)
+    return out
 
 
 def _body_entry_to_dict(be: BodyEntry) -> dict[str, Any]:

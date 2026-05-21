@@ -18,9 +18,22 @@ default:
 # --- Bake half --------------------------------------------------------------
 
 # Bake VTRJ trajectory binaries from pinned kernels (Story 1.4 AC1).
+# Story 3.1 AC6: `bake` now chains into `bake-attitude` so `just bake` produces
+# BOTH trajectory AND attitude VTRJ binaries (single command for the full bake).
 [working-directory("bake")]
-bake:
+bake: bake-attitude
+
+# Bake the trajectory half only (Story 1.4 baseline; rarely needed standalone).
+[working-directory("bake")]
+bake-trajectories:
     uv run python -m src.bake_trajectories
+
+# Bake VTRJ attitude binaries from CK kernels (Story 3.1 AC6, ADR-0024).
+# Depends on `bake-trajectories` so the trajectory manifest exists before
+# `ck_sample.py` extends it with attitude entries.
+[working-directory("bake")]
+bake-attitude: bake-trajectories
+    uv run python -m src.ck_sample
 
 # Run the Layer-1 Python validation harness against baked VTRJ files (Story 1.4 AC4).
 [working-directory("bake")]

@@ -61,15 +61,23 @@ V2_STRUCTURES = [
 # of pre-existing fields (label, start_utc, end_utc, scan_id) is preserved so
 # any downstream tuple-unpacking continues to work; `bus_id` is appended as
 # the fifth positional element.
-ENCOUNTERS: list[tuple[str, str, str, int, int]] = [
-    # (label, start_utc, end_utc, scan_id, bus_id)
-    ("V1 Jupiter encounter (1979-03 closest approach 03-05)", "1979-02-15T00:00:00", "1979-04-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS),
-    ("V1 Saturn encounter (1980-11 closest approach 11-12)", "1980-10-15T00:00:00", "1980-12-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS),
-    ("V1 Pale Blue Dot (1990-02-14 family portrait)", "1990-02-13T00:00:00", "1990-02-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS),
-    ("V2 Jupiter encounter (1979-07 closest approach 07-09)", "1979-06-15T00:00:00", "1979-08-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
-    ("V2 Saturn encounter (1981-08 closest approach 08-25)", "1981-07-15T00:00:00", "1981-09-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
-    ("V2 Uranus encounter (1986-01 closest approach 01-24)", "1985-12-15T00:00:00", "1986-02-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
-    ("V2 Neptune encounter (1989-08 closest approach 08-25)", "1989-07-15T00:00:00", "1989-09-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS),
+#
+# Story 3.1 AC7 — `closest_approach_utc` is appended as the sixth positional
+# element. The values are sourced verbatim from MISSION_FACTS.md (Story 2.9 R4
+# canonical citation surface): the six planetary encounter UTCs live there
+# already; PBD (the V1 family-portrait imaging-sequence anchor) was added by
+# Story 3.1 under its own MISSION_FACTS.md section. Mirroring the Story 3.0
+# extend-don't-replace pattern: positional ordering of the prior 5 fields is
+# preserved so existing unpacks continue to work.
+ENCOUNTERS: list[tuple[str, str, str, int, int, str]] = [
+    # (label, start_utc, end_utc, scan_id, bus_id, closest_approach_utc)
+    ("V1 Jupiter encounter (1979-03 closest approach 03-05)", "1979-02-15T00:00:00", "1979-04-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS, "1979-03-05T12:05:00Z"),
+    ("V1 Saturn encounter (1980-11 closest approach 11-12)", "1980-10-15T00:00:00", "1980-12-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS, "1980-11-12T23:46:00Z"),
+    ("V1 Pale Blue Dot (1990-02-14 family portrait)", "1990-02-13T00:00:00", "1990-02-15T00:00:00", V1_SCAN_PLATFORM, V1_BUS, "1990-02-14T00:00:00Z"),
+    ("V2 Jupiter encounter (1979-07 closest approach 07-09)", "1979-06-15T00:00:00", "1979-08-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS, "1979-07-09T22:29:00Z"),
+    ("V2 Saturn encounter (1981-08 closest approach 08-25)", "1981-07-15T00:00:00", "1981-09-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS, "1981-08-26T00:00:00Z"),
+    ("V2 Uranus encounter (1986-01 closest approach 01-24)", "1985-12-15T00:00:00", "1986-02-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS, "1986-01-24T17:59:00Z"),
+    ("V2 Neptune encounter (1989-08 closest approach 08-25)", "1989-07-15T00:00:00", "1989-09-15T00:00:00", V2_SCAN_PLATFORM, V2_BUS, "1989-08-25T03:56:00Z"),
 ]
 
 MAX_INTERVALS = 100000  # SPICE cell size for ckcov
@@ -222,7 +230,7 @@ def build_inventory(root: Path) -> str:
 
     pbd_scan_status = "**NO** — synthesis required"
     pbd_bus_status = "**NO**"
-    for label, t_start_utc, t_end_utc, scan_id, bus_id in ENCOUNTERS:
+    for label, t_start_utc, t_end_utc, scan_id, bus_id, _closest_approach_utc in ENCOUNTERS:
         t_start_et = spice.utc2et(t_start_utc)
         t_end_et = spice.utc2et(t_end_utc)
 

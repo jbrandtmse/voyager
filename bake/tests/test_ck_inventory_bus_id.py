@@ -31,7 +31,7 @@ def test_every_encounter_resolves_to_correct_bus_id() -> None:
     dependent.
     """
     assert ENCOUNTERS, "ENCOUNTERS list is empty"
-    for label, _start, _end, _scan_id, bus_id in ENCOUNTERS:
+    for label, _start, _end, _scan_id, bus_id, _closest in ENCOUNTERS:
         if "V1" in label or "Pale Blue Dot" in label:
             assert bus_id == V1_BUS, (
                 f"{label!r}: bus_id={bus_id}, expected V1_BUS={V1_BUS}"
@@ -48,7 +48,7 @@ def test_every_encounter_resolves_to_correct_bus_id() -> None:
 
 def test_bus_id_is_one_of_the_two_voyager_structure_ids() -> None:
     """Belt-and-braces: bus_id must be V1_BUS or V2_BUS only."""
-    for label, _start, _end, _scan_id, bus_id in ENCOUNTERS:
+    for label, _start, _end, _scan_id, bus_id, _closest in ENCOUNTERS:
         assert bus_id in (V1_BUS, V2_BUS), (
             f"{label!r}: bus_id={bus_id} not in {{V1_BUS={V1_BUS}, V2_BUS={V2_BUS}}}"
         )
@@ -58,8 +58,64 @@ def test_pale_blue_dot_buses_to_v1() -> None:
     """PBD is the V1 family-portrait window (1990-02-14); bus must be V1_BUS."""
     pbd = [e for e in ENCOUNTERS if "Pale Blue Dot" in e[0]]
     assert len(pbd) == 1, f"expected exactly one PBD encounter, got {len(pbd)}"
-    _label, _start, _end, _scan_id, bus_id = pbd[0]
+    _label, _start, _end, _scan_id, bus_id, _closest = pbd[0]
     assert bus_id == V1_BUS, f"PBD bus_id={bus_id}, expected V1_BUS={V1_BUS}"
+
+
+def test_encounters_have_valid_closest_approach_utc() -> None:
+    """Story 3.1 AC7: every ENCOUNTERS entry has a parseable ISO-8601 UTC string in
+    the closest_approach_utc field (6th positional element).
+
+    This locks the schema contract so a future label-text edit or row-reorder
+    can't silently drop or malform the closest-approach anchor that ck_sample.py
+    consumes for the 10-second-cadence band.
+    """
+    from datetime import datetime
+
+    assert ENCOUNTERS, "ENCOUNTERS list is empty"
+    for entry in ENCOUNTERS:
+        assert len(entry) == 6, (
+            f"ENCOUNTERS entry must be 6-tuple "
+            f"(label, start_utc, end_utc, scan_id, bus_id, closest_approach_utc); "
+            f"got {len(entry)}-tuple: {entry!r}"
+        )
+        label, _start, _end, _scan_id, _bus_id, closest_approach_utc = entry
+        assert isinstance(closest_approach_utc, str) and closest_approach_utc, (
+            f"{label!r}: closest_approach_utc must be a non-empty ISO-8601 UTC string"
+        )
+        # Parse — must succeed. Accept the trailing 'Z' (per MISSION_FACTS.md
+        # convention) by replacing with +00:00 for fromisoformat.
+        normalized = closest_approach_utc.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError as exc:
+            raise AssertionError(
+                f"{label!r}: closest_approach_utc={closest_approach_utc!r} is not parseable ISO-8601: {exc}"
+            ) from exc
+        assert parsed is not None  # type guard
+
+
+def test_encounters_closest_approach_utc_falls_inside_window() -> None:
+    """Story 3.1 AC7: closest_approach_utc must lie within [start_utc, end_utc] of its row.
+
+    Sanity check: a future edit that swaps the closest-approach value between
+    encounter rows (e.g., V1 Jupiter value pasted into V2 Jupiter) would be
+    caught here. The window bounds in ck_inventory are wide (±~1 month) so
+    inversions are clearly out-of-range.
+    """
+    from datetime import datetime
+
+    for label, start_utc, end_utc, _scan_id, _bus_id, closest_approach_utc in ENCOUNTERS:
+        start = datetime.fromisoformat(start_utc)
+        end = datetime.fromisoformat(end_utc)
+        closest = datetime.fromisoformat(closest_approach_utc.replace("Z", "+00:00"))
+        # Strip tz from closest for the comparison if start/end are naive
+        if closest.tzinfo is not None and start.tzinfo is None:
+            closest = closest.replace(tzinfo=None)
+        assert start <= closest <= end, (
+            f"{label!r}: closest_approach_utc={closest_approach_utc} "
+            f"not inside [{start_utc}, {end_utc}]"
+        )
 
 
 def test_ck_inventory_source_no_longer_uses_substring_match() -> None:
@@ -78,3 +134,33 @@ def test_ck_inventory_source_no_longer_uses_substring_match() -> None:
         "fragile startswith fallback on encounter label has been re-introduced — "
         "AC1 contract regression"
     )
+
+
+# === Story 3.1 AC7 (QA gap-fill): cross-half parity with MISSION_FACTS.md ===
+
+
+def test_encounters_closest_approach_utcs_appear_in_mission_facts_md() -> None:
+    """Story 3.1 AC7 parity: every ENCOUNTERS closest_approach_utc value must appear
+    verbatim in MISSION_FACTS.md (the canonical citation surface, Story 2.9 R4).
+
+    The web-side mission-facts.test.ts asserts this parity for ENCOUNTER_DATES
+    in mission-facts.ts; this is the bake-side mirror — ck_inventory.py's
+    ENCOUNTERS is an independent source surface, so a future edit that "fixes"
+    a closest-approach value without updating MISSION_FACTS.md would silently
+    drift the two surfaces apart. This test closes that gap.
+
+    Voyager-skill-rules.md Rule 5 (planning artifacts amended in place): if a
+    new closest-approach value is introduced in ENCOUNTERS, MISSION_FACTS.md
+    MUST be the authoritative source — not the reverse.
+    """
+    mission_facts_path = REPO_ROOT / "MISSION_FACTS.md"
+    assert mission_facts_path.exists(), f"MISSION_FACTS.md missing at {mission_facts_path}"
+    doc = mission_facts_path.read_text(encoding="utf-8")
+
+    for label, _start, _end, _scan_id, _bus_id, closest_approach_utc in ENCOUNTERS:
+        assert closest_approach_utc in doc, (
+            f"{label!r}: closest_approach_utc={closest_approach_utc!r} does NOT appear "
+            f"verbatim in MISSION_FACTS.md. Either fix the bake constant or add the value "
+            f"to MISSION_FACTS.md (per voyager-skill-rules.md Rule 5 — planning artifacts "
+            f"amended in place, not worked around)."
+        )
