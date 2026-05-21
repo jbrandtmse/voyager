@@ -1,3 +1,277 @@
+# Epic Development Cycle Workflow — v3
+
+This document is a self-contained recreation kit for the `/epic-cycle` workflow. Run it after a fresh BMAD reinstall (which clears the project's `_bmad/custom/` directory) to regenerate every artifact the workflow needs.
+
+What v3 produces:
+
+- **5 BMAD skill customizations** under `_bmad/custom/` — the rules registry + four `.toml` files, one per BMAD skill the workflow invokes.
+- **1 slash command** at `.claude/commands/epic-cycle.md` — the runtime workflow body, fully self-contained.
+
+## Why v3 (and what changed from v2)
+
+v2 was built on Claude Code's experimental **Agent Teams** feature: `TeamCreate` provisioned a stateful team, named teammates were spawned via `Agent({team_name, name, ...})` and addressed back via `SendMessage`, with a structured `STATUS: completed` envelope serving as the completion signal. To get teammates to actually send that envelope, v2 wired the instruction into each BMAD skill's `on_complete` hook (the right TOML field, after a long evolution that ruled out `persistent_facts` and `activation_steps_append`).
+
+That design lost to reality. In real workflow runs, every dev/qa/cr stage in an epic typically carries `hygiene_issue=<agent>_silent_lead_reconstructed_from_file_evidence` — meaning the spawn finished its work but never delivered the envelope. The "10–12% empirical silence rate" v2 was designed to absorb climbed toward 100% on long-running stages. The lead's fallback recovery (reconstruct file list from `git status --short`, write cycle log with a hygiene marker, run the verification manually) ran on every story, defeating the whole point of having an envelope.
+
+The diagnosis is straightforward: SendMessage delivery between named teammates is the unreliable mechanism. v2 already acknowledged that SendMessage at spawn time is unreliable enough to forbid the spawn-then-message pattern — then turned around and required SendMessage from agent back to lead at completion. Same channel, same reliability profile. The recovery path was always the real path; the envelope was decoration.
+
+**v3 abandons Agent Teams entirely.** Each pipeline stage is a plain `Agent` tool call. The Agent tool returns the agent's final message as the tool result — that is the completion signal. No `TeamCreate`, no `SendMessage`, no shutdown handshake, no name collisions, no Task-in-Prompt block, no silence-recovery protocol. Parallelism still works because multiple `Agent` tool calls in a single assistant message run concurrently.
+
+**v3 also retires the `on_complete` hooks in the BMAD customizations.** v2 used `on_complete` for two purposes: (a) firing the SendMessage envelope, and (b) running verification gates (NFR-tripwire check, test-discoverability check, ADR/deferred-work rules, Integration AC presence). With the envelope gone, the only remaining purpose was the verification gates — but those instructions can live just as effectively in the workflow's spawn prompt, where they're inspectable and adjustable without touching BMAD's customization layer. The TOML customizations in v3 are therefore minimal: each `.toml` loads only the project's `persistent_facts` (rule registry); no `on_complete` array. This makes the upgrade path clean — uninstall the v2 on_complete blocks, leave the persistent_facts, and the workflow's spawn prompt becomes the single source of truth for runtime agent behavior.
+
+What gets cut entirely:
+
+- The Agent Teams pre-flight check (no flag dependency)
+- `TeamCreate` / `TeamDelete` lifecycle
+- Task-in-Prompt Pattern (the prompt is just the prompt now)
+- Shutdown-Before-Respawn Sequencing (no team membership = no name collisions = no shutdown handshake)
+- Agent Silence Recovery (`Agent` tool returns the result message; if it errors, the lead handles a tool error, not a missing message)
+- The `STATUS: completed` structured envelope (the closing-summary content now lives as markdown sections inside the agent's natural final message — same content, delivered via the same channel as any other tool result)
+- The "Single-Task Agent (Task-in-Prompt Mode)" marker phrase
+- BMAD `on_complete` hooks (verification gates and closing-summary instructions move to the spawn prompt)
+
+What stays load-bearing:
+
+- The project's `<project>-skill-rules.md` rule registry, loaded by each skill via `persistent_facts`. The rules are visible to the agent throughout the run.
+- The workflow's spawn-prompt skeleton (in the slash command) explicitly restates the rules each stage must follow and instructs the agent to end its final message with closing-summary sections.
+- The lead parses those sections from the Agent tool's return, falling back to `git status --short` if a section is missing — normal extraction, not a hygiene event.
+
+---
+
+## Pre-flight Runtime Check
+
+v3 needs only the standard `Agent` tool. No experimental flag required.
+
+If a project's harness exposes `Agent` as a deferred tool, load its schema via `ToolSearch` with `"select:Agent"` before first use. If `Agent` is not available at all, this workflow cannot run — surface to the user.
+
+`TeamCreate`, `SendMessage`, and `TeamDelete` are NOT used by v3. If they happen to be loaded for unrelated reasons, ignore them.
+
+---
+
+## Construction overview
+
+Once `Agent` is available, the reader (a Claude Code session executing this doc) does the following in order:
+
+1. Pick the project's short name (e.g., `voyager`, `loanapp`, `engine`). Substitute it for every `<project>` placeholder below.
+2. Create the BMAD customization files in Part 1, in order — the rules file first, then each `.toml`.
+3. Create the slash command in Part 2 by writing the verbatim body to `.claude/commands/epic-cycle.md`.
+4. Run the validation checks in Part 3.
+5. (Optional) Delete this v3 design doc — the slash command + customizations are now standalone.
+
+---
+
+## Part 1: BMAD skill customizations
+
+The `/epic-cycle` workflow has gates that depend on each invoked BMAD skill behaving a certain way: ending with a structured closing summary, enforcing integration ACs at story-creation time, treating ADR violations as HIGH severity, pausing on NFR tripwires, and so on. These customization files are what make those "shoulds" into "actually."
+
+**Schema reminder (carried over from v2).** BMAD's `[workflow]` customization surface has four fields:
+
+- `activation_steps_prepend` / `activation_steps_append` — run at setup time, before main work.
+- `persistent_facts` — static context, loaded throughout. Informational, not behavioral. Right place for rule definitions; visible to the agent the whole way through the run.
+- `on_complete` — fires when the workflow reaches its terminal stage, after the main output has been delivered.
+
+v3 uses only `persistent_facts` — and only to load the project's rule registry. The verification gates and closing-summary instructions that v2 put in `on_complete` move to the workflow's spawn prompt instead (see "Agent Invocation Pattern" in Part 2). This keeps all runtime agent behavior in one inspectable place — the slash command — rather than split between the slash command and four `.toml` files. The `.toml` files in v3 are therefore minimal: each loads the rules file and nothing else.
+
+### File 1 — `_bmad/custom/<project>-skill-rules.md`
+
+The cross-cutting rule registry. Loaded by every skill via `persistent_facts`.
+
+```markdown
+# <Project> BMAD Skill Rules
+
+These rules are loaded as `persistent_facts` by every BMAD skill (`bmad-create-story`, `bmad-code-review`, `bmad-dev-story`, `bmad-qa-generate-e2e-tests`) on activation. They encode project-specific discipline learned from epic retrospectives and are the durable home for those decisions — they survive skill upgrades.
+
+## Rule 1 — Integration ACs (applies to `bmad-create-story`)
+
+Every story that introduces a service, module, or shared component **must** include at least one "Integration AC" of the form:
+
+> *Consumer `X` reads from this service/module and produces observable effect `Y`.*
+
+The integration AC must be testable by the consumer's automation tier (unit, integration, E2E, browser-MCP smoke, API smoke, etc.), not by inspecting the introducing module's internal state. The point is to verify the wire-up between modules, not that the new module's state is correct in isolation.
+
+A story that introduces a service without naming any consumers must explicitly say so in an "Integration ACs" section ("No consumers in this story; the first consumer will be Story X.Y, which inherits the integration AC."). Silence is not acceptable.
+
+**Why:** A prior project's Epic 1 shipped two services that were both individually tested and both individually correct, but were never wired together. Unit tests passed; the product was broken. Integration ACs catch this class of bug at the planning stage.
+
+## Rule 2 — Consumed-by linkage (applies to `bmad-create-story`)
+
+Every story that introduces a service must include a `## Consumed-by` section listing the stories that will consume it (by epic-story ID and the consumer's purpose).
+
+Every story that *consumes* a previously-introduced service must list it in its `## Consumes` section, and its Integration ACs must verify the consumer↔service wire-up — not by mocking the service, but by exercising the consumer against a real instance.
+
+**Why:** Same lesson as Rule 1. The `Consumed-by` linkage forces both the producer and consumer stories to think about the integration explicitly. If a producer story names no consumers and no future consumer story declares consumption, the integration gap is visible at planning time.
+
+## Rule 3 — Per-story smoke evidence is a per-story exit criterion (applies to `bmad-code-review`)
+
+A code review MUST NOT approve a story whose code touches a user-facing surface without evidence of a per-story smoke executed in the target runtime. The form of evidence depends on the deliverable:
+
+- **UI / browser-deployed stories** — a browser-MCP-driven test (or Playwright in CI) navigating the dev server, exercising the feature, and asserting on observable DOM/render state. A manual browser-smoke note in the Dev Agent Record citing what was exercised is acceptable when automated tooling isn't yet wired up.
+- **CLI / library stories** — actual invocation of the new CLI command or library entrypoint against a real runtime, with stdout/stderr/exit-code/produced-file assertions.
+- **Service / API stories** — a real HTTP request against the local server (or staging), asserting on status code, response body, and any side-effect surface.
+
+Pure non-user-facing stories (build pipeline, internal tooling, refactors) are exempt; note the exemption explicitly in the review.
+
+Reviews must flag missing smoke evidence as a HIGH finding when the story touches a user-facing surface.
+
+**Why:** A prior project's automated tiers (unit + integration + visual + a11y) collectively passed every story to "done" while the deployed product had four HIGH defects only a real runtime session could surface. The test pyramid is necessary but not sufficient.
+
+## Rule 4 — Closing summary in the final message (applies to `bmad-dev-story`, `bmad-qa-generate-e2e-tests`, `bmad-code-review`, `bmad-create-story`)
+
+When invoked under the `/epic-cycle` workflow, the skill MUST end its final assistant message with the following markdown sections, in this order. The lead reads the `Agent` tool's return value and parses these sections for the next stage's context handoff.
+
+```markdown
+## Files Modified
+- <full path from repo root>
+- <full path from repo root>
+(or "(none)")
+
+## Tests Added
+- <full path from repo root>
+(or "(none)")
+
+## Decisions
+- <one-line summary of any non-obvious choice>
+(or "(none)")
+
+## Issues Encountered
+- <one-line summary of an issue and how it was resolved or surfaced>
+(or "(none)")
+```
+
+The closing summary is part of the agent's normal output — not a separate envelope, not delivered via any side channel. After writing it, the agent's run terminates naturally; the `Agent` tool returns the final message to the lead. If the agent forgets the sections, the lead reconstructs the file list from `git status --short` against the story's `Files to Modify` table; this is normal extraction, not a hygiene event.
+
+If the skill encounters ambiguous requirements that require user input, the agent halts BEFORE the closing summary and ends its final message with a `## Clarification Needed` section instead, stating the question and its context in one paragraph. The lead surfaces it to the user, then re-spawns the agent with the clarification baked into the next spawn's prompt.
+
+If the skill is invoked outside the `/epic-cycle` context (i.e., directly by the user via the `Skill` tool), this rule does not apply — emit a normal human-facing completion summary instead.
+
+**Enforcement note (v3):** the closing-summary instruction is re-stated in every `/epic-cycle` spawn prompt — that's where it's actually enforced at runtime. This rule is the canonical definition of the expected format; the workflow's spawn-prompt skeleton points at it. There is no BMAD `on_complete` hook driving this anymore.
+
+**Why:** v2 used Agent Teams + `SendMessage` to deliver a `STATUS: completed` envelope, with a BMAD `on_complete` hook telling the agent to send that envelope and stop. In practice the SendMessage channel was unreliable enough that the lead's fallback recovery ran on essentially every spawn — defeating the envelope's purpose. v3 uses the `Agent` tool's natural return value as the completion signal; the closing-summary sections live inside that return value, with the same content as the v2 envelope but delivered through the channel that already works.
+
+## Rule 5 — NFR tripwire response (applies to `bmad-dev-story`, `bmad-code-review`)
+
+If, during implementation or review, a non-functional requirement is found to be unmeasurable, mathematically impossible, internally contradictory, or otherwise un-implementable as worded, the response is **NOT** to work around it in code comments + `deferred-work.md`. The response is:
+
+1. Halt the story implementation at the affected task.
+2. File an amendment to the relevant planning artifact (`prd.md`, `architecture.md`, or `epics.md`) clarifying the NFR — preferably as part of the same change-set as the story.
+3. Document the original-vs-amended wording with rationale in the story's Dev Agent Record.
+4. Continue the story against the amended NFR.
+
+**Why:** Planning artifacts are the source of truth. When dev or QA discovers an interpretation tripwire, the artifact is amended in place rather than the truth being scattered across code comments and a side-file. A future contributor reading the PRD must not have to guess which NFRs are "as-written" vs. "as-implemented-with-comment."
+
+## Rule 6 — ADR violations are HIGH severity (applies to `bmad-code-review`)
+
+An AC implementation that violates an Accepted ADR — uses the wrong tool stack for the work, ships the wrong architectural pattern, contradicts a committed methodology — is a **HIGH-severity** finding because it breaks a committed decision, not an ordinary LOW deferrable.
+
+Code review must:
+
+1. Cross-check each AC in the story against the project's ADR registry (typically `docs/adr/`).
+2. For every AC whose implementation choice is constrained by an Accepted ADR, verify the implementation matches the ADR's commitment.
+3. File any mismatch as HIGH. Auto-resolve inline if possible; otherwise pause for the lead.
+
+**Why:** A prior project's Story 1.5 AC5 was deferred to "manual run" when ADR 0010 explicitly committed Chrome DevTools MCP for that exact use case at agent-time. Treating ADR violations as ordinary deferrables lets committed decisions silently rot.
+
+## Rule 7 — Sub-agent tool inventory is harness-inherited (applies to all skills)
+
+This project does **not** maintain a project-local sub-agent tool inventory. Sub-agents spawned by `/epic-cycle` inherit whatever MCP namespaces and tools are mounted on the harness running the lead. If a specific MCP (e.g., Chrome DevTools MCP) is mounted at the harness level it is automatically available to sub-agents; if it is NOT mounted there is no project-local mechanism to add it just for sub-agents.
+
+**Implication:** ADR-tooled AC verifications (e.g., browser-MCP smokes that an Accepted ADR commits to) are placed on the **lead** (not the sub-agent) for exactly this reason. The lead's tool inventory is the reliable channel; sub-agent MCP propagation is best-effort and treated as defense-in-depth, not as the primary gate.
+
+**Action if this ever changes:** if a future Claude Code release introduces project-local sub-agent tool scoping, update this rule with the discovered mechanism and configure the relevant MCPs into the dev / QA / code-reviewer allowed-tools surface. Until then, the lead-executed gate is the binding contract.
+
+## Project-specific rules (add below as retros surface them)
+
+> Add additional rules here as your project's retrospectives identify durable patterns. Number them sequentially after Rule 7. Each rule should state what it applies to (which skill or skills), describe the obligation, and explain *why* with a concrete prior incident.
+```
+
+All four `.toml` files have the same minimal shape: they load the project's rule registry via `persistent_facts` and nothing else. No `on_complete` hooks. Verification gates and closing-summary instructions are owned by the workflow's spawn-prompt skeleton (see Part 2 § "Agent Invocation Pattern"), not by these `.toml` files.
+
+### File 2 — `_bmad/custom/bmad-create-story.toml`
+
+```toml
+# Project override for bmad-create-story.
+# Loads <project>-skill-rules.md so the rule registry is visible to the
+# agent throughout the skill's run. No on_complete hook: the /epic-cycle
+# workflow's spawn-prompt skeleton restates the relevant rules and the
+# closing-summary requirement at runtime — that's the single source of
+# truth for agent behavior under this workflow.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/<project>-skill-rules.md",
+]
+```
+
+### File 3 — `_bmad/custom/bmad-dev-story.toml`
+
+```toml
+# Project override for bmad-dev-story.
+# Loads <project>-skill-rules.md so Rule 5 (NFR tripwire response) and the
+# other shared rules are visible mid-flow. No on_complete hook: the
+# /epic-cycle workflow's spawn-prompt skeleton enforces the verification
+# gates and closing-summary requirement.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/<project>-skill-rules.md",
+]
+```
+
+### File 4 — `_bmad/custom/bmad-qa-generate-e2e-tests.toml`
+
+```toml
+# Project override for bmad-qa-generate-e2e-tests.
+# Loads <project>-skill-rules.md as informational context. No on_complete
+# hook: the /epic-cycle workflow's spawn-prompt skeleton handles the
+# test-discoverability check and closing-summary requirement.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/<project>-skill-rules.md",
+]
+```
+
+### File 5 — `_bmad/custom/bmad-code-review.toml`
+
+```toml
+# Project override for bmad-code-review.
+# Loads <project>-skill-rules.md so Rule 1 (Integration ACs), Rule 3
+# (smoke evidence), Rule 5 (NFR tripwires), and Rule 6 (ADR violations)
+# are visible to the reviewer throughout. No on_complete hook: the
+# /epic-cycle workflow's spawn-prompt skeleton restates these checks
+# and the closing-summary requirement at runtime.
+
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/<project>-skill-rules.md",
+]
+```
+
+### Upgrading from v2
+
+If the project currently has v2 `.toml` files with `on_complete = [...]` arrays, the upgrade is straightforward: delete the `on_complete` block from each `.toml` and leave `persistent_facts` in place. No other change to BMAD customization is needed. The `<project>-skill-rules.md` rule registry stays where it is.
+
+```text
+# v2 -> v3 upgrade (per .toml file)
+[workflow]
+persistent_facts = [...]   # KEEP this
+on_complete = [...]        # DELETE this block entirely
+```
+
+---
+
+## Part 2: Slash command — `.claude/commands/epic-cycle.md`
+
+Write everything between the `BEGIN .claude/commands/epic-cycle.md` and `END .claude/commands/epic-cycle.md` markers below to that file path, verbatim, including the frontmatter. **Overwrite any existing file at that path** — the BMAD reinstall only clears `_bmad/custom/`, so the previous version of the slash command will still be there and must be replaced.
+
+```text
+=== BEGIN .claude/commands/epic-cycle.md ===
+```
+
 ---
 description: Run the BMAD Method epic development cycle for one or more epics
 ---
@@ -34,7 +308,7 @@ If `Agent` is a deferred tool in this harness, load its schema via `ToolSearch` 
 
 ## Execution Guidelines
 
-Each pipeline-stage task is delegated via the `Agent` tool. The lead invokes lead-side skills (sprint planning, story creation, retrospective, and code review during silent-extraction fallback) directly via the `Skill` tool.
+Each pipeline-stage task is delegated via the `Agent` tool. The lead invokes lead-side skills (sprint planning, story creation, retrospective, code review during silent-extraction fallback) directly via the `Skill` tool.
 
 Automatically resolve all HIGH and MED severity issues found during code review using your best judgment and BMAD guidance.
 
@@ -59,10 +333,10 @@ Each pipeline-stage subagent is a single `Agent` tool call. The `Agent` tool ret
 For each pipeline stage, the lead:
 
 1. **Spawns** the subagent via `Agent` with:
-   - `subagent_type: "general-purpose"` (the default; specialized types may be used if the project has one configured).
-   - `mode: "bypassPermissions"`.
-   - `description: <3-5 word task description>`.
-   - `prompt: <full task embedded in the spawn prompt — see Spawn Prompt Skeleton below>`.
+   - `subagent_type: "general-purpose"` (the default works fine; pick a specialized type only if the project has one configured)
+   - `mode: "bypassPermissions"`
+   - `description: <3-5 word task description>`
+   - `prompt: <full task embedded in the spawn prompt — see Spawn Prompt Skeleton below>`
 2. **Reads** the returned message for the closing-summary sections (`## Files Modified`, `## Tests Added`, `## Decisions`, `## Issues Encountered`).
 3. **Falls back** to `git status --short` filtered against the story's `Files to Modify` table if the closing sections are missing or incomplete. This is normal extraction, not a hygiene event.
 4. **Records** the stage in the cycle log (see Completion Logging).
@@ -75,10 +349,10 @@ Because v3 has no BMAD `on_complete` hooks, the spawn prompt itself is the singl
 1. The literal phrase `**Epic Cycle Stage: <stage-name> for Story <id>**` (e.g., "Epic Cycle Stage: dev for Story 3.3"). This is a marker so the agent (and a human reading the transcript later) can tell this run is under `/epic-cycle` rather than a direct user invocation.
 2. The story file path (captured by the lead at story creation).
 3. The list of files modified by upstream stages (for QA: dev's `## Files Modified`; for code review: dev's + QA's combined list).
-4. The project's ADR registry path: `docs/adr/`.
+4. The project's ADR registry path (typically `docs/adr/`) as factual context.
 5. The directive: `Use the Skill tool to invoke /<bmad-skill-name>.`
-6. The stage-specific rule block from the section below.
-7. The closing-summary directive — the agent must end its final message with the markdown sections per Rule 4 in `_bmad/custom/voyager-skill-rules.md`. The rule block already includes the section template, so this is covered.
+6. The stage-specific verification rules the agent must follow mid-flow and confirm before closing (see "Stage-specific rule blocks" below).
+7. The closing-summary directive — the agent must end its final message with the markdown sections per Rule 4 in the project skill rules. Quote the section names inline so the agent has them at hand.
 8. Skill-specific context (story-only for dev; story + file list for QA; story + dev files + QA files for code review).
 
 ### Stage-specific rule blocks (copy into spawn prompts)
@@ -88,7 +362,7 @@ Each stage's spawn prompt includes the rule block from the matching subsection b
 **Dev spawn — append this block:**
 
 ```text
-Rules for this stage (from _bmad/custom/voyager-skill-rules.md):
+Rules for this stage (from <project>-skill-rules.md):
 
 - Rule 5 (NFR tripwire response): if any task encounters an NFR that is
   unmeasurable, mathematically impossible, or internally contradictory, halt
@@ -99,10 +373,6 @@ Rules for this stage (from _bmad/custom/voyager-skill-rules.md):
 - Rule 6 (ADRs): consult the ADR registry above for any architectural or
   methodology decisions referenced in this story's ACs and Dev Notes. Match
   the implementation to the ADR's commitments.
-- Rule 9 (APG primitives): a new slider component MUST consume
-  `createSliderKeyboardHandler`; a new listbox component MUST consume
-  `createListboxKeyboardHandler`. Inline re-implementation of an extracted
-  APG contract is a HIGH-severity violation. See web/src/primitives/.
 
 End your final assistant message with the following markdown sections, in
 this order (Rule 4):
@@ -127,20 +397,14 @@ the question and its context in one paragraph.
 **QA spawn — append this block:**
 
 ```text
-Rules for this stage (from _bmad/custom/voyager-skill-rules.md):
+Rules for this stage (from <project>-skill-rules.md):
 
 - Test discoverability: the test files you generate MUST be discoverable
   by the project's default test suite. Confirm they (a) follow the
-  project's test-file naming convention (web vitest: `*.test.ts`; bake
-  pytest: `test_*.py`), (b) are NOT excluded by an ignore file, and (c)
-  are NOT tagged in a way that opts them out of the default run (slow /
-  integration / @skip markers, etc.). New tests that exist on disk but
-  never run are not progress.
-- Rule 3 + Rule 8 + the Chrome DevTools MCP smoke-stage policy in the
-  bmad-qa-generate-e2e-tests.toml persistent_facts: when the story
-  touches web/src/, the test-summary output must include a dedicated
-  "Chrome DevTools MCP smoke" section in addition to the standard
-  Vitest unit / integration sections.
+  project's test-file naming convention, (b) are NOT excluded by an
+  ignore file, and (c) are NOT tagged in a way that opts them out of the
+  default run (slow / integration / @skip markers, etc.). New tests
+  that exist on disk but never run are not progress.
 
 End your final assistant message with the following markdown sections, in
 this order (Rule 4):
@@ -164,7 +428,7 @@ final message with a "## Clarification Needed" section instead.
 **Code-review spawn — append this block:**
 
 ```text
-Rules for this stage (from _bmad/custom/voyager-skill-rules.md):
+Rules for this stage (from <project>-skill-rules.md):
 
 - Rule 3 (per-story smoke evidence): if this story touches a user-facing
   surface and you approve it without evidence of a smoke in the target
@@ -177,10 +441,6 @@ Rules for this stage (from _bmad/custom/voyager-skill-rules.md):
   ADR's commitment. Mismatch = HIGH severity, NOT a LOW deferrable.
 - Rule 1 (Integration ACs): if this is a service-introducing story and no
   Integration AC is present in the story file's ACs, that is a HIGH finding.
-- Rule 9 (APG primitives): inline re-implementation of slider or listbox
-  keyboard logic in a component is a HIGH finding — components must consume
-  `createSliderKeyboardHandler` / `createListboxKeyboardHandler` from
-  web/src/primitives/.
 
 All deferred items (any item not auto-resolved) MUST be added to
 _bmad-output/implementation-artifacts/deferred-work.md with the originating
@@ -218,11 +478,10 @@ Project ADR registry: docs/adr/
 
 Use the Skill tool to invoke /bmad-dev-story against the story file above.
 
-Rules for this stage (from _bmad/custom/voyager-skill-rules.md):
+Rules for this stage (from <project>-skill-rules.md):
 
 - Rule 5 (NFR tripwire response): ...
 - Rule 6 (ADRs): ...
-- Rule 9 (APG primitives): ...
 
 End your final assistant message with the following markdown sections...
 [remainder of dev rule block]
@@ -237,7 +496,7 @@ A clarification-needed return is NOT logged as `<stage>_complete` — log it as 
 ### Pipeline Flow
 
 ```
-Lead resolves project ADR registry path (docs/adr/) — persisted for every spawn prompt and per-story Layer-1 gate
+Lead resolves project ADR registry path (typically docs/adr/) — persisted for every spawn prompt and per-story Layer-1 gate
 
 For each epic in range:
   Lead executes /bmad-sprint-planning via Skill tool; logs sprint_planning_complete
@@ -267,7 +526,7 @@ For each epic in range:
 
 When two or more stories within the same epic touch **disjoint files** and have **all prerequisites already committed**, the lead may run them as a **parallel batch** to reduce wall-clock time. Parallelism is opt-in per batch — when in doubt, run sequentially.
 
-**Mechanism:** multiple `Agent` tool calls in a single assistant message run concurrently. To dispatch a parallel batch, the lead emits one assistant message containing N `Agent` calls (one per story at the current stage) and waits for the tool-results message that resolves all of them together.
+**Mechanism in v3:** multiple `Agent` tool calls in a single assistant message run concurrently. To dispatch a parallel batch, the lead emits one assistant message containing N `Agent` calls (one per story at the current stage) and waits for the tool-results message that resolves all of them together.
 
 **What stays sequential (no exceptions):**
 
@@ -323,20 +582,21 @@ Sequential resume is always safe. When in doubt, resume sequentially.
 
 After a story's code review completes (and any HIGH/MED findings are resolved) and before the lead commits, the lead must perform a **per-story smoke** — a direct exercise of the story's deliverable in its target runtime. **Mandatory**; only the *method* varies by project type. The smoke is performed by the **lead**, not by a spawned agent, because the lead reliably has access to project runtime tooling (MCP servers, dev server, CLI, deployment environment) while subagents may not.
 
-**Method selection for Voyager:**
+**Method selection — match the deliverable's runtime:**
 
-- **Web/browser stories** (any `web/src/` change) — Drive the dev server via Chrome DevTools MCP. Navigate to the affected surface, exercise the feature, assert on observable DOM / render state / console output. See Rule 8 in voyager-skill-rules.md (Chrome DevTools MCP is the canonical browser-smoke driver; no shim needed post-Story 1.16).
-- **Bake/CLI stories** (any `bake/` change with no web touch) — Invoke the relevant `just bake-*` recipe and inspect the produced files / stdout. Bake-only stories may be exempt from MCP smoke per Rule 3 — note the exemption explicitly.
-- **Mixed stories** — Smoke both surfaces.
+- **UI / browser-deployed projects** — Drive the dev server (or a deployed build) via a browser-automation MCP. Navigate to the affected surface, exercise the feature, assert on observable DOM / render state / console output. For graphics projects: screenshots verifying actual visual change frame-over-frame.
+- **CLI / library projects** — Invoke the CLI command or call the public test method against a real runtime. Assert on stdout / stderr / return code / produced files.
+- **Service / API projects** — Issue a real HTTP request against the local server (or staging) and assert on status code + response body + side-effect surface.
+- **Other** — Whatever exercise mirrors how the deliverable will be used in production. Minimum bar: "the lead actually invoked the new code path against a real runtime, and observed the expected outcome via an out-of-band channel."
 
 The smoke is NOT a substitute for automated test tiers; it's the final check that the wired-up system, end to end, produces the user-observable outcome the story promises.
 
 **Mechanics:**
 
 1. After `cr_complete` (with HIGH/MED resolved), determine the smoke method from the story's File List + ACs.
-2. Execute the smoke directly, capturing evidence (screenshots, stdout, response body) into `_bmad-output/implementation-artifacts/<story-id>-smoke-evidence/`.
+2. Execute the smoke directly, capturing evidence (screenshots, stdout, response body).
 3. If the smoke fails, do NOT commit. Either (a) surface to the user for guidance, or (b) re-spawn the dev agent for a follow-up pass to fix and re-smoke. Failed smoke is a HIGH-severity finding that must clear before commit — never deferrable.
-4. On success, append a cycle-log entry: `<UTC> TAB Story <id> TAB smoke_complete TAB method=<browser|cli|api|other> result=pass iterations=<N> defects_caught=<N> evidence=<path-or-summary> model=<lead-model>`. The `iterations` value is 1 for a smoke that passed on the first run; bump for each follow-up dev pass triggered by smoke failure. The `defects_caught` value is the count of bugs the smoke surfaced that the prior automated tiers passed — load-bearing telemetry for the "test pyramid is necessary but not sufficient" lesson.
+4. On success, append a cycle-log entry: `<UTC> TAB Story <id> TAB smoke_complete TAB method=<browser|cli|api|other> result=pass iterations=<N> defects_caught=<N> evidence=<path-or-summary> model=<lead-model>`. The `iterations` value is 1 for a smoke that passed on the first run; bump for each follow-up dev pass triggered by smoke failure. The `defects_caught` value is the count of bugs the smoke surfaced that the prior automated tiers passed — this is the load-bearing telemetry for the "test pyramid is necessary but not sufficient" lesson.
 5. Proceed to commit.
 
 Single-threaded across a parallel batch — smoke each story in story order.
@@ -346,7 +606,7 @@ Single-threaded across a parallel batch — smoke each story in story order.
 After sprint planning and before building the story list, review the previous epic's retrospective and create a cleanup story. **Mandatory** — it closes the feedback loop between retrospectives and sprint planning.
 
 1. **Calculate previous epic number** — if processing Epic N, look for Epic N-1's retrospective.
-2. **Search for the retrospective file** — convention: `_bmad-output/implementation-artifacts/epic-{N-1}-retro-*.md`. If multiple matches exist, select latest by mtime, tie-break by lexicographic filename. Log which file was selected.
+2. **Search for the retrospective file** — convention: `_bmad-output/implementation-artifacts/epic-{N-1}-retro-*.md`. Verify against your project's `/bmad-retrospective` skill's output path; if multiple matches exist, select latest by mtime, tie-break by lexicographic filename. Log which file was selected.
 3. **If a retrospective exists**, extract: all action items (with status: completed / in-progress / not addressed), all deferred review findings, preparation tasks for the current epic.
 4. **Also read `_bmad-output/implementation-artifacts/deferred-work.md`** (if it exists) for centralized deferred items.
 5. **Triage every item** into: include in Story X.0; defer with rationale; drop.
@@ -380,13 +640,15 @@ After all stories in an epic complete:
 
 The lead executes `/bmad-create-story` directly via the `Skill` tool — NOT via an agent. This is a deliberate pipeline gate that prevents agents from racing ahead. **Capture the story file path** from the skill output to pass to the developer agent.
 
-**Integration AC validation (lead-side, also a gate).** Before spawning the dev agent, read the story file's ACs and ask: does this story introduce a service, module, or component that later stories will consume? Indicators: a new file under `web/src/services/` or similar; a new exported class / factory / module; a `## Consumed-by` field naming downstream stories; an AC describing a public surface other stories will call against.
+**Integration AC validation (lead-side, also a gate).** Before spawning the dev agent, read the story file's ACs and ask: does this story introduce a service, module, or component that later stories will consume? Indicators: a new file under `services/` or `lib/`; a new exported class / factory / module; a `## Consumed-by` field naming downstream stories; an AC describing a public surface other stories will call against.
 
 If yes — the story is **service-introducing** — it MUST contain at least one **Integration AC** of the form "consumer X reads from this service and produces observable effect Y." If absent, pause for the user:
 
 > "Story <id> introduces <service-name>. No Integration AC found. Re-run `/bmad-create-story` to populate `## Integration ACs`, OR proceed without (with the consequence that producer-consumer wire-up defects can ship green)?"
 
 If NOT service-introducing (pure refactor, doc-only, internal cleanup, defect-fix), this check finds no work; proceed.
+
+The skill customization for `/bmad-create-story` enforces Rule 1 in `on_complete`. This workflow gate is defense-in-depth.
 
 ### Context Handoff Between Stages (Critical)
 
@@ -401,27 +663,27 @@ If a return value is missing the closing sections, fall back to `git status --sh
 
 ### ADR-Aware Execution (Required)
 
-Voyager's ADR registry is `docs/adr/`. ADRs commit to specific tooling, methodology, and architectural patterns. An AC satisfied by the wrong tool stack is equivalent to a HIGH-severity defect — it violates an Accepted ADR.
+Projects with an Accepted-Decisions registry (typically `docs/adr/`) commit to specific tooling, methodology, and architectural patterns. An AC satisfied by the wrong tool stack is equivalent to a HIGH-severity defect — it violates an Accepted ADR.
 
 **Layer 1 — Lead-executed ADR-tooling gate (between `dev_complete` and `qa_spawn`).**
 
-After dev returns and before QA is spawned, the lead inspects the story's ACs for any that map to ADR-committed agent-time tooling (visual / precision verification, performance profiling, audits, etc.). For each matched AC, the lead drives the verification using its own tool inventory — Chrome DevTools MCP for browser verification (ADR 0010 + Rule 8), etc.
+After dev returns and before QA is spawned, the lead inspects the story's ACs for any that map to ADR-committed agent-time tooling (visual / precision verification, performance profiling, audits, etc.). For each matched AC, the lead drives the verification using its own tool inventory — typically the project's MCP servers.
 
 This gate exists because **MCP tool inventories may not propagate reliably to spawned subagents**. The lead always has the MCP servers at the session level. Relocating ADR-mandated verification to the lead guarantees access without depending on subagent inheritance.
 
 **Mechanics:**
 
 1. Lead reads the story file (path captured at `story_created`).
-2. For each AC, consult `docs/adr/`. If any Accepted ADR commits to a specific tool stack for the work the AC describes, the AC is "ADR-tooled."
+2. For each AC, consult the project's ADR registry. If any Accepted ADR commits to a specific tool stack for the work the AC describes, the AC is "ADR-tooled."
 3. Lead drives each ADR-tooled AC verification using the relevant MCP / tool, recording pass/fail + evidence paths.
 4. Lead appends one cycle-log entry per story: `<UTC> TAB Story <id> TAB adr_verifications_complete TAB <metadata>` where metadata is whitespace-separated `key=value` pairs covering each verified AC.
 5. On failure, surface to the user before spawning QA (the QA stage assumes the implementation is functionally correct).
 6. Pass verification results (pass/fail + evidence pointers) to the code reviewer's spawn-prompt context.
 7. If no ADR-tooled ACs exist, emit a single `adr_verifications_complete result=none_required` entry and proceed.
 
-**Layer 2 — ADR registry path in every spawn prompt.**
+**Layer 2 — Project ADR registry path in every spawn prompt.**
 
-`Project ADR registry: docs/adr/` is included in every agent spawn prompt as factual context. Agents must consult ADRs for architectural and methodology decisions referenced in their story's ACs and Dev Notes. The code reviewer specifically must verify implementations match Accepted ADR commitments — violations are HIGH severity, not LOW deferrable (Rule 6).
+The lead resolves the ADR registry path once at workflow start and includes it in every agent spawn prompt as factual context (e.g., `Project ADR registry: docs/adr/`). Agents must consult ADRs for architectural and methodology decisions referenced in their story's ACs and Dev Notes. The code reviewer specifically must verify implementations match Accepted ADR commitments — violations are HIGH severity, not LOW deferrable (Rule 6 in the project's skill-rules file).
 
 ## When to Pause
 
@@ -447,12 +709,14 @@ When an agent returns with a `## Clarification Needed` section instead of the cl
 
 ## Submodule Commit Order (Critical, if Applicable)
 
-**Applies only to projects with git submodules.** Voyager currently has no submodules — this section is informational for future state.
+**Applies only to projects with git submodules.** Skip this section if `.gitmodules` is absent or empty.
 
 When stories modify files in submodule directories:
 
 1. **Commit and push inside each affected submodule first** (`git -C <submodule-path> add ... && git -C <submodule-path> commit && git -C <submodule-path> push`).
 2. **Then commit and push in the parent repo**, staging both parent files AND the updated submodule pointers (`git add <submodule-path>`).
+
+If the parent is pushed with a submodule pointer that doesn't exist on the submodule's remote, other developers get checkout failures. Always submodules-first.
 
 After each story, run `git -C <submodule-path> status --short` for every submodule listed in `.gitmodules` to determine which (if any) have changes.
 
@@ -474,7 +738,7 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 
 - Fields separated by a single literal TAB character (`\t`), not runs of spaces.
 - The **metadata** field is whitespace-separated `key=value` pairs. Values are comma-separated lists when multi-valued; values must NOT contain spaces or tabs (percent-encode if needed). Keys are lowercase snake_case.
-- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete`; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed`), `committed`, `epic_summary` (optional, once per epic after the last committed entry). Clarification events use `<stage>_clarification_requested` and are followed by the eventual `<stage>_complete` on re-spawn.
+- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete`; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed`), `committed`, `epic_summary` (optional, once per epic after the last committed entry — see Workflow Telemetry). Clarification events use `<stage>_clarification_requested` and are followed by the eventual `<stage>_complete` on re-spawn.
 
 **Standardized telemetry metadata (record on every `*_complete` entry):**
 
@@ -533,6 +797,8 @@ After the last `committed` entry in an epic, the lead may write an aggregate sum
 
 The summary is derivable from the per-stage entries above, so it's a convenience artifact, not a source of truth.
 
+**Cross-project comparability.** The cycle log format is stable and project-agnostic. Across multiple projects using `/epic-cycle`, the same parser produces apples-to-apples comparisons.
+
 ## Anti-Patterns (Do NOT Use)
 
 - **Agent Teams (`TeamCreate` / `SendMessage` / `TeamDelete`)** — v3 abandoned this pattern after real workflow runs observed silence-rates climbing toward 100% on the SendMessage envelope. Use plain `Agent` tool calls.
@@ -547,7 +813,7 @@ The summary is derivable from the per-stage entries above, so it's a convenience
 - **Skipping retrospective review before epic start** — Without explicitly reading the previous retro and triaging deferred items, accumulation goes silent.
 - **Parallelizing without verifying disjoint files** — Two agents writing the same file produce non-deterministic state and corrupt the commit.
 - **Deferring ADR-mandated agent-time verification without surfacing it** — Saying "I can't do X from this environment" for work an Accepted ADR commits to specific tooling. The lead executes ADR-tooled verifications directly because MCP propagation to subagents is unreliable.
-- **Treating ADR violations as LOW deferrable findings** — An implementation that violates an Accepted ADR is HIGH severity. Code-reviewer customization must enforce this (Rule 6).
+- **Treating ADR violations as LOW deferrable findings** — An implementation that violates an Accepted ADR is HIGH severity. Code-reviewer customization must enforce this (Rule 6 in the project's skill-rules file).
 - **Skipping the per-story smoke** — Test pyramid passing while the deployed product is broken (because wiring between independently-correct modules was never verified end-to-end) is a recurring failure. Failed smoke is HIGH, never deferrable.
 - **Smoke executed by a spawned subagent** — Subagents may not have reliable access to runtime tooling. The smoke is lead-side, same reason ADR-tooled verifications and `/bmad-retrospective` are lead-side.
 - **Service-introducing story spawned without an Integration AC** — A producer + consumer can both ship green with the wiring between them never built. The lead validates integration-AC presence at `/bmad-create-story` and pauses for the user if absent.
@@ -569,4 +835,66 @@ Carry-forward wisdom from prior project runs.
 9. **Integration ACs catch the wiring gap that unit ACs miss.**
 10. **NFR tripwires amend planning artifacts in place** — when an NFR is found unmeasurable, mathematically impossible, or internally contradictory, the response is NOT to add a code comment + a `deferred-work.md` entry. Amend the PRD/architecture/epics in place.
 11. **Inter-agent message channels are the unreliable part of multi-agent workflows; the Agent tool's natural return value is the reliable part.** Real workflow runs observed silence-rates climbing toward 100% on v2's SendMessage envelope despite the BMAD `on_complete` hook being correctly placed. The fix is to stop using the message channel: deliver the completion-summary content inside the agent's final message (which the Agent tool returns to the lead as its tool result), parse it from there, and fall back to `git status --short` if a section is missing. This is structurally equivalent to v2's "silence recovery protocol" being the primary path — but renamed from "recovery" to "normal extraction" because there is no separate envelope to be silent about.
-12. **Keep agent-behavior instructions in one place.** v2 split runtime agent behavior between the workflow's spawn prompts and four BMAD `.toml` `on_complete` hooks. When behavior changes, both surfaces have to stay in sync — and `on_complete` blocks are easy to forget about. v3 puts all runtime behavior in the spawn-prompt skeleton (this slash command) and keeps the `.toml` files minimal. Single source of truth.
+12. **Keep agent-behavior instructions in one place.** v2 split runtime agent behavior between the workflow's spawn prompts and four BMAD `.toml` `on_complete` hooks. When behavior changes, both surfaces have to stay in sync — and `on_complete` blocks are easy to forget about. v3 puts all runtime behavior in the spawn-prompt skeleton (in the slash command) and keeps the `.toml` files minimal. Single source of truth.
+
+```text
+=== END .claude/commands/epic-cycle.md ===
+```
+
+---
+
+## Part 3: Validation
+
+After writing all files, run these checks:
+
+1. **Slash command is self-contained:**
+   ```
+   grep "epic-cycle-teams" .claude/commands/epic-cycle.md
+   ```
+   Result must be **zero matches**. If any matches, the slash command body references the design doc; fix and re-validate.
+
+2. **Slash command does NOT reference Agent Teams:**
+   ```
+   grep -E "TeamCreate|TeamDelete|SendMessage|team_name|shutdown_request|shutdown_response" .claude/commands/epic-cycle.md
+   ```
+   Result must be **zero matches**. The only acceptable mention is in the Anti-Patterns section explicitly forbidding Agent Teams.
+
+3. **All five customization files exist:**
+   ```
+   ls _bmad/custom/
+   ```
+   Expected entries: `<project>-skill-rules.md`, `bmad-create-story.toml`, `bmad-dev-story.toml`, `bmad-qa-generate-e2e-tests.toml`, `bmad-code-review.toml`.
+
+4. **No `.toml` carries an `on_complete` hook:**
+   ```
+   grep -l "on_complete" _bmad/custom/bmad-*.toml
+   ```
+   Expected: **zero matches**. v3 retired `on_complete` — verification gates and closing-summary instructions live in the workflow's spawn-prompt skeleton, not in the `.toml` files. If any match, the v2 hooks weren't cleaned up during the upgrade; delete the `on_complete` block from each affected file.
+
+5. **No `.toml` references the v2 STATUS envelope or SendMessage:**
+   ```
+   grep -E "STATUS: completed|STATUS: clarification_needed|SendMessage|shutdown_request" _bmad/custom/bmad-*.toml
+   ```
+   Result must be **zero matches**. The v3 customizations emit closing-summary markdown sections in the agent's final message; no separate envelope.
+
+6. **Each `.toml` still loads the rules registry via `persistent_facts`:**
+   ```
+   grep -c "persistent_facts" _bmad/custom/bmad-*.toml
+   ```
+   Expected: each of the four `.toml` files reports `1` (one `persistent_facts` declaration). If any reports `0`, the rules registry isn't wired into that skill.
+
+7. **The slash command contains every section:** open `.claude/commands/epic-cycle.md` and confirm presence of: Pre-flight Runtime Check, Task Sequence, Permission Mode, Skill Tool Invocation, Agent Invocation Pattern (with Spawn Prompt Skeleton, Stage-specific rule blocks, Clarification protocol, Pipeline Flow, Smart Parallelism, Per-Story Smoke, Retrospective Review & Story X.0 Creation, Sprint Planning Per Epic, Retrospective Per Epic, Lead Creates Story Files, Context Handoff Between Stages, ADR-Aware Execution), When to Pause, Handling Clarifications, Submodule Commit Order, Completion Logging, **Workflow Telemetry**, Anti-Patterns, Lessons Learned.
+
+8. **Telemetry metadata is documented:**
+   ```
+   grep -c "spawn_at" .claude/commands/epic-cycle.md
+   grep -c "model=" .claude/commands/epic-cycle.md
+   grep -c "closing_sections_present" .claude/commands/epic-cycle.md
+   ```
+   First two must return ≥ 3 matches; third must return ≥ 2 matches (the new v3 telemetry key for closing-summary extraction reliability).
+
+## Part 4: After construction
+
+Once all validation checks pass, the workflow is ready to use. **Keep `epic-cycle-teams.md` (v1), `epic-cycle-teams-v2.md`, and `epic-cycle-teams-v3.md` (this file) in the project root** as the historical design record. They're useful as reference when retrospectives surface gaps that need workflow-level fixes, and as the canonical authoring source if you ever need to regenerate the customizations or the slash command again. The slash command and customizations under `_bmad/custom/` are self-contained at runtime, but the design docs are the authoring trail showing how the workflow evolved away from the Agent Teams dependency.
+
+The next epic's retrospective should explicitly evaluate whether v3's natural-return pattern eliminates the silence problem, and whether the new `closing_sections_present` telemetry key reveals any pattern (e.g., longer stories more likely to drop the closing summary, certain models more reliable than others). If `closing_sections_present=false` rate climbs above ~20%, consider adding a one-paragraph re-emphasis of the closing-summary requirement to the spawn-prompt skeleton — but do not reintroduce a separate message channel.

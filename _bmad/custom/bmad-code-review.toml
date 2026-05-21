@@ -1,59 +1,14 @@
 # Project override for bmad-code-review.
-# Loads voyager-skill-rules.md as persistent facts (informational) AND
-# attaches an on_complete hook that fires at the workflow's terminal stage
-# to enforce ADR-violation severity, Integration AC verification, deferred-work
-# tracking, and the structured-completion handshake.
-# See _bmad/custom/voyager-skill-rules.md for the rule set.
+# Loads voyager-skill-rules.md so Rule 1 (Integration ACs), Rule 3
+# (smoke evidence), Rule 5 (NFR tripwires), and Rule 6 (ADR violations)
+# are visible to the reviewer throughout. No on_complete hook: the
+# /epic-cycle workflow's spawn-prompt skeleton restates these checks
+# and the closing-summary requirement at runtime.
+#
+# See epic-cycle-teams-v3.md for the upgrade rationale.
 
 [workflow]
 
 persistent_facts = [
   "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
-]
-
-# on_complete accepts a string scalar OR an array of instructions executed
-# in order. Override wins (replaces the base empty string).
-on_complete = [
-  """
-  Verify the review you produced complies with the following rules from
-  voyager-skill-rules.md:
-
-  - Rule 3 (per-story smoke evidence): if this story touches a user-facing
-    surface and the review approves it without evidence of a smoke in the
-    target runtime, that is a HIGH finding. File it.
-  - Rule 5 (NFR tripwire response): if the implementation worked around an
-    unmeasurable NFR with code comments + deferred-work.md instead of amending
-    the planning artifact, that is a HIGH finding. File it.
-  - Rule 6 (ADR violations are HIGH): for each AC in the story whose
-    implementation choice is constrained by an Accepted ADR, verify the
-    implementation matches the ADR's commitment. Any mismatch is HIGH severity,
-    NOT a LOW deferrable. File it.
-  - Rule 1 (Integration ACs): if this is a service-introducing story and no
-    Integration AC is present in the story file's ACs, that is a HIGH finding
-    (the producer would ship with consumer wire-up untested). File it.
-
-  All deferred items (any item not auto-resolved during this review) MUST be
-  added to _bmad-output/implementation-artifacts/deferred-work.md with the
-  originating story ID, severity, issue summary, deferral rationale, and
-  suggested resolution. Deferring to the story file alone is insufficient —
-  centralized tracking is what makes deferred items visible at the next epic's
-  Story X.0 triage.
-
-  Auto-resolve HIGH and MED findings inline where reasonable; document the
-  fix in the story file's Review Findings section.
-  """,
-  """
-  If invoked as a subagent under /epic-cycle (the calling context will include
-  the literal phrase "Single-Task Agent (Task-in-Prompt Mode)" in the spawn
-  prompt), follow Rule 4: send EXACTLY ONE STATUS: completed envelope to the
-  team lead in the format specified in the rules file, then STOP.
-
-  Populate DECISIONS with the resolved/deferred/dismissed counts and any HIGH
-  fix names (e.g., "resolved 2 HIGH: integration-AC missing for X; ADR-0010
-  violation in Y; deferred 5 LOW; dismissed 1"). Populate ISSUES_ENCOUNTERED
-  with anything unusual (e.g., NFR tripwire surfaced and amendment filed).
-
-  If invoked directly by the user (no Task-in-Prompt Mode marker), emit a normal
-  human-facing completion summary instead.
-  """,
 ]

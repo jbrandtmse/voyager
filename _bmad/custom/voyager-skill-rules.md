@@ -36,42 +36,38 @@ Reviews must flag missing smoke evidence as a HIGH finding when the story touche
 
 **Why:** A prior project's automated tiers (unit + integration + visual + a11y) collectively passed every story to "done" while the deployed product had four HIGH defects only a real runtime session could surface. The test pyramid is necessary but not sufficient.
 
-## Rule 4 — Structured completion handshake (applies to `bmad-dev-story`, `bmad-qa-generate-e2e-tests`, `bmad-code-review`, and `bmad-create-story`)
+## Rule 4 — Closing summary in the final message (applies to `bmad-dev-story`, `bmad-qa-generate-e2e-tests`, `bmad-code-review`, `bmad-create-story`)
 
-When invoked as a subagent under the `/epic-cycle` workflow's Agent Teams pattern, the skill MUST end by sending EXACTLY ONE structured message to the team lead before going idle:
+When invoked under the `/epic-cycle` workflow, the skill MUST end its final assistant message with the following markdown sections, in this order. The lead reads the `Agent` tool's return value and parses these sections for the next stage's context handoff.
 
-```
-STATUS: completed
-STORY_ID: <epic.story, e.g., 2.3>
-FILES_MODIFIED:
-- <full path 1>
-- <full path 2>
-(or "(none)" if no files modified)
-TESTS_ADDED:
-- <full path 1>
+```markdown
+## Files Modified
+- <full path from repo root>
+- <full path from repo root>
 (or "(none)")
-DECISIONS:
-- <one-line decision summary>
+
+## Tests Added
+- <full path from repo root>
 (or "(none)")
-ISSUES_ENCOUNTERED:
-- <one-line summary of issue and how resolved>
+
+## Decisions
+- <one-line summary of any non-obvious choice>
+(or "(none)")
+
+## Issues Encountered
+- <one-line summary of an issue and how it was resolved or surfaced>
 (or "(none)")
 ```
 
-Use the literal section headers; preserve the order. After sending this message, STOP completely — do not call `TaskList`, do not look for more work, approve any shutdown request immediately.
+The closing summary is part of the agent's normal output — not a separate envelope, not delivered via any side channel. After writing it, the agent's run terminates naturally; the `Agent` tool returns the final message to the lead. If the agent forgets the sections, the lead reconstructs the file list from `git status --short` against the story's `Files to Modify` table; this is normal extraction, not a hygiene event.
 
-If the skill encounters ambiguous requirements or needs user input, send EXACTLY ONE clarification message instead and STOP:
+If the skill encounters ambiguous requirements that require user input, the agent halts BEFORE the closing summary and ends its final message with a `## Clarification Needed` section instead, stating the question and its context in one paragraph. The lead surfaces it to the user, then re-spawns the agent with the clarification baked into the next spawn's prompt.
 
-```
-STATUS: clarification_needed
-STORY_ID: <epic.story>
-QUESTION:
-<one paragraph stating the question and its context>
-```
+If the skill is invoked outside the `/epic-cycle` context (i.e., directly by the user via the `Skill` tool), this rule does not apply — emit a normal human-facing completion summary instead.
 
-If the skill is invoked outside the `/epic-cycle` context (i.e., directly by the user via the `Skill` tool), this rule does not apply — emit a normal human-facing completion summary instead. The marker for "subagent under /epic-cycle" is the literal phrase "Single-Task Agent (Task-in-Prompt Mode)" in the spawn prompt.
+**Enforcement note (v3):** the closing-summary instruction is re-stated in every `/epic-cycle` spawn prompt — that's where it's actually enforced at runtime. This rule is the canonical definition of the expected format; the workflow's spawn-prompt skeleton points at it. There is no BMAD `on_complete` hook driving this anymore.
 
-**Why:** Empirically, ~10–12% of agent spawns in prior projects finished their work, wrote all files, but exited without sending the structured completion message. Each required a manual status-check ping from the lead, breaking the otherwise-automatic pipeline cadence. Making the handshake an explicit skill-prompt obligation via `on_complete` closes the loop — that field fires when the workflow reaches its terminal stage, after the main output has been delivered. Earlier attempts via `persistent_facts` did NOT close the loop (facts are informational, not behavioral — the skill body's natural ending can finish without acting on them), and `activation_steps_append` would not close it either (those steps run at setup time, before the work begins).
+**Why:** v2 used Agent Teams + `SendMessage` to deliver a `STATUS: completed` envelope, with a BMAD `on_complete` hook telling the agent to send that envelope and stop. In practice the SendMessage channel was unreliable enough that the lead's fallback recovery ran on essentially every spawn — defeating the envelope's purpose. v3 uses the `Agent` tool's natural return value as the completion signal; the closing-summary sections live inside that return value, with the same content as the v2 envelope but delivered through the channel that already works.
 
 ## Rule 5 — NFR tripwire response (applies to `bmad-dev-story`, `bmad-code-review`)
 
