@@ -119,9 +119,15 @@ this order (Rule 4):
 - <one-line summary of issue surfaced or resolved>
 (or "(none)")
 
-If you encountered ambiguous requirements that need user input, end your
-final message with a "## Clarification Needed" section instead, stating
-the question and its context in one paragraph.
+If you cannot make confident progress for ANY reason — ambiguous ACs,
+a missing prerequisite (story references data/code/context that isn't
+present), a choice between reasonable options where the user's preference
+matters, an environment or dependency failure that blocks the work, OR any
+case where proceeding risks breaking a stated constraint (security,
+performance, correctness, ADR commitment) — STOP and end your final
+message with a "## Clarification Needed" section instead of the closing
+summary. State the question, what you tried, and what specifically is
+blocking you, in one paragraph. Do not guess; do not soldier on.
 ```
 
 **QA spawn — append this block:**
@@ -157,8 +163,14 @@ this order (Rule 4):
 - <one-line summary of issue surfaced or resolved>
 (or "(none)")
 
-If you encountered ambiguous requirements that need user input, end your
-final message with a "## Clarification Needed" section instead.
+If you cannot make confident progress for ANY reason — ambiguous ACs,
+a missing prerequisite, a choice between reasonable options where the
+user's preference matters, an environment or dependency failure, OR any
+case where proceeding risks breaking a stated constraint (security,
+performance, correctness, ADR commitment) — STOP and end your final
+message with a "## Clarification Needed" section instead of the closing
+summary. State the question, what you tried, and what is blocking, in
+one paragraph. Do not guess; do not soldier on.
 ```
 
 **Code-review spawn — append this block:**
@@ -202,8 +214,14 @@ this order (Rule 4):
 - <one-line summary of anything unusual (NFR tripwire, ADR violation, etc.)>
 (or "(none)")
 
-If you encountered ambiguous requirements that need user input, end your
-final message with a "## Clarification Needed" section instead.
+If you cannot make confident progress for ANY reason — ambiguous ACs,
+a missing prerequisite, a choice between reasonable options where the
+user's preference matters, an environment or dependency failure, OR any
+case where proceeding risks breaking a stated constraint (security,
+performance, correctness, ADR commitment) — STOP and end your final
+message with a "## Clarification Needed" section instead of the closing
+summary. State the question, what you tried, and what is blocking, in
+one paragraph. Do not guess; do not soldier on.
 ```
 
 **Story-creation note:** `/bmad-create-story` is lead-invoked (not via Agent), so it does not need a spawn prompt. The lead validates Integration AC presence inline after the skill returns (see "Lead Creates Story Files" below).
@@ -425,11 +443,15 @@ This gate exists because **MCP tool inventories may not propagate reliably to sp
 
 ## When to Pause
 
-Within each agent, only pause to surface a clarification (via the `## Clarification Needed` section described in the Agent Invocation Pattern) if:
+Within each agent, halt and surface a clarification (via the `## Clarification Needed` section described in the Agent Invocation Pattern) if ANY of these hold:
 
 - The acceptance criteria or requirements are ambiguous.
-- There are multiple reasonable design options and user preference matters.
-- Proceeding would risk breaking important constraints (security, compliance, performance, interoperability).
+- A prerequisite is missing — the story file references data, code, or context that isn't present.
+- There are multiple reasonable design options and the user's preference matters.
+- An environment or dependency failure blocks the work — a tool unavailable, a service down, a fixture missing, a kernel/asset that should be in place but isn't.
+- Proceeding would risk breaking a stated constraint — security, compliance, performance, correctness, or an ADR commitment.
+
+Do not guess; do not soldier on. The lead can answer the question in one round and re-spawn the agent with the answer baked into the next prompt. A short pause beats a wrong implementation that has to be unwound later.
 
 ## Handling Clarifications
 
