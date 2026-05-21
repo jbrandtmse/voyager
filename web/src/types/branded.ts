@@ -70,6 +70,42 @@ export const meshLocalVec3 = (x: number, y: number, z: number): MeshLocalVec3 =>
   return arr as MeshLocalVec3;
 };
 
+// === Branded Quaternion =============================================
+//
+// Story 3.2 AC2 — branded scalar-LAST quaternion (Three.js / WebGL convention).
+// SPICE stores quaternions as scalar-FIRST `[w, x, y, z]`; the convention
+// permute happens ONCE inside AttitudeService at decode time so the cached
+// knot quaternions are already Three.js-convention. The brand prevents a
+// non-permuted SPICE quaternion from being assigned to an AttitudeService
+// consumer surface — every public AttitudeService method returns the branded
+// Quaternion, and the only way to construct one is via the `quaternion(...)`
+// helper below.
+//
+// The structural shape mirrors `THREE.Quaternion` for zero-cost interop
+// (callers can pass a branded `Quaternion` directly into `THREE.Object3D.
+// quaternion.copy(q)`), but the brand is purely TypeScript-level: at runtime
+// it is an ordinary plain object with `{x, y, z, w}` and nothing else.
+
+export type Quaternion = Readonly<{
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}> & { readonly __brand: 'Quaternion' };
+
+/**
+ * Construct a branded scalar-LAST quaternion. The convention is Three.js /
+ * WebGL: `q = w + x·i + y·j + z·k` stored as `[x, y, z, w]`. SPICE produces
+ * scalar-first `[w, x, y, z]`; the AttitudeService decoder performs the
+ * permute before calling this constructor.
+ */
+export const quaternion = (
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+): Quaternion => ({ x, y, z, w }) as Quaternion;
+
 // === Unit conversions ===============================================
 //
 // KM_PER_AU is re-exported from math/constants.ts as the canonical home, but

@@ -33,6 +33,12 @@ const FileSchema = z.object({
   timeRangeEt: z.tuple([z.number(), z.number()]),
   cadenceSec: z.number().positive(),
   kind: z.enum(['trajectory', 'bus_attitude', 'platform_attitude']),
+  // Story 3.1 AC3: attitude entries carry `provenance: "ck"` to denote
+  // SPICE-CK-derived samples. Trajectory entries omit the field. The Zod
+  // schema accepts an optional enum so old manifests (pre-Story-3.1) parse
+  // unchanged and the runtime AttitudeService can branch on the field
+  // without `string | undefined` widening.
+  provenance: z.enum(['ck']).optional(),
 });
 
 const BodySchema = z.object({

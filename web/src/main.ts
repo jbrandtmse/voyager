@@ -31,6 +31,7 @@ import {
 import { ManifestLoader, type Manifest } from './services/manifest-loader';
 import { ChunkLoader } from './services/chunk-loader';
 import { EphemerisService } from './services/ephemeris-service';
+import { AttitudeService } from './services/attitude-service';
 import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
@@ -325,7 +326,28 @@ const bootstrap = (): void => {
     async (manifest) => {
       const chunkLoader = new ChunkLoader();
       const ephemerisService = new EphemerisService(manifest, chunkLoader);
+      // Story 3.2 — AttitudeService is constructed AFTER EphemerisService so
+      // the synthesized HGA-Earth-pointing cruise path can query both
+      // spacecraft and Earth positions through the injected EphemerisService.
+      // Shares the SAME ChunkLoader instance (one cache, one decoder).
+      const attitudeService = new AttitudeService(
+        manifest,
+        chunkLoader,
+        ephemerisService,
+      );
       firstPaintHandle.hud.ephemerisService = ephemerisService;
+
+      // Story 3.2 AC8 — dev-only debug surface for the lead's Chrome DevTools
+      // MCP smoke. Exposed alongside the existing Story 2.x surfaces under
+      // `window.__voyagerDebug.attitudeService`. Stripped from production
+      // builds by Vite's `import.meta.env.DEV` constant folding.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+        w.__voyagerDebug = {
+          ...(w.__voyagerDebug ?? {}),
+          attitudeService,
+        };
+      }
 
       // Hook spacecraft + celestial-body updates onto the render loop
       // immediately. All three modules handle null returns via
