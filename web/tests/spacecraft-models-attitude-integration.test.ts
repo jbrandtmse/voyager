@@ -250,8 +250,10 @@ const makeStubFetch = (): typeof fetch => {
     [PLATFORM_URL, platformBytes],
   ]);
   return (async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const buf = map.get(url);
+    const raw = typeof input === 'string' ? input : input.toString();
+    // Story 3.3.1 — see attitude-service-integration.test.ts comment for context.
+    const path = raw.startsWith('http') ? new URL(raw).pathname.replace(/^\//, '') : raw;
+    const buf = map.get(path) ?? map.get(raw);
     if (buf === undefined) {
       return {
         ok: false,

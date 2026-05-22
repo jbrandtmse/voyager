@@ -6,6 +6,7 @@ import {
   VtrjFormatError,
   parseVtrjHeader,
   DEFAULT_LRU_CAPACITY,
+  resolveAgainstRoot__forTest,
 } from './chunk-loader';
 import type { ManifestFile } from './manifest-loader';
 
@@ -202,6 +203,124 @@ describe('ChunkLoader.load — happy path', () => {
     const [a, b] = await Promise.all([loader.load(file), loader.load(file)]);
     expect(a).toBe(b);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ChunkLoader — URL resolution (Story 3.3.1)', () => {
+  // Story 3.3 smoke surfaced a pre-existing HIGH: from a chapter route like
+  // /c/v1-jupiter, a `fetch('data/foo.bin.br')` resolves to
+  // /c/data/foo.bin.br (Vite then serves the SPA fallback HTML and the
+  // integrity check throws against the HTML's hash). The chunk-loader now
+  // resolves every URL against `${origin}/` via `resolveAgainstRoot__forTest`,
+  // so the active page URL doesn't affect chunk fetches.
+  //
+  // These tests target the resolution helper directly (the chunk-loader's
+  // test environment is `node`, so `window` is undefined and the helper
+  // returns the URL unchanged — matching the SSR fallback path documented
+  // in the helper's docblock. Stub a window for each test that needs one.)
+
+  const originalWindow = (globalThis as { window?: unknown }).window;
+
+  const stubWindow = (origin: string): void => {
+    (globalThis as { window?: unknown }).window = {
+      location: { origin },
+    };
+  };
+
+  const restoreWindow = (): void => {
+    if (originalWindow === undefined) {
+      delete (globalThis as { window?: unknown }).window;
+    } else {
+      (globalThis as { window?: unknown }).window = originalWindow;
+    }
+  };
+
+  it('resolves a root-relative URL to the origin root from a chapter page', () => {
+    stubWindow('http://127.0.0.1:5173');
+    try {
+      // Sanity: even though the active page is /c/v1-jupiter, the URL
+      // constructor against `${origin}/` ignores the page path entirely.
+      const resolved = resolveAgainstRoot__forTest('data/voyager-1-seg01.bin.br');
+      expect(resolved).toBe('http://127.0.0.1:5173/data/voyager-1-seg01.bin.br');
+      expect(resolved).not.toContain('/c/v1-jupiter/');
+    } finally {
+      restoreWindow();
+    }
+  });
+
+  it('leaves an already-absolute URL anchored at the origin root', () => {
+    stubWindow('http://127.0.0.1:5173');
+    try {
+      const resolved = resolveAgainstRoot__forTest('/data/already-absolute.bin.br');
+      expect(resolved).toBe('http://127.0.0.1:5173/data/already-absolute.bin.br');
+    } finally {
+      restoreWindow();
+    }
+  });
+
+  it('leaves a fully-qualified URL untouched (e.g. CDN-hosted asset)', () => {
+    stubWindow('http://127.0.0.1:5173');
+    try {
+      const resolved = resolveAgainstRoot__forTest('https://cdn.example.com/data/foo.bin.br');
+      expect(resolved).toBe('https://cdn.example.com/data/foo.bin.br');
+    } finally {
+      restoreWindow();
+    }
+  });
+
+  it('returns the URL unchanged in a no-window environment (Node / SSR)', () => {
+    // Node-default state — no `window` global. This is the path test runners
+    // and SSR builds exercise; the chunk-loader's downstream fetchImpl is
+    // expected to be mocked or proxied in those contexts anyway.
+    restoreWindow();
+    expect(resolveAgainstRoot__forTest('data/foo.bin.br')).toBe('data/foo.bin.br');
+  });
+
+  it('chunk-loader uses the resolver in the fetch call (integration via stubbed window)', async () => {
+    stubWindow('http://127.0.0.1:5173');
+    try {
+      const samples = new Float64Array([1, 2, 3, 0.1, 0.2, 0.3, 4, 5, 6, 0.4, 0.5, 0.6]);
+      const decompressed = buildVtrj({
+        bodyId: -31,
+        etStart: 100.0,
+        etEnd: 160.0,
+        sampleCount: 2,
+        cadenceSeconds: 60.0,
+        samples,
+      });
+      const compressed = passthrough(decompressed);
+      const sha = sha256Hex(compressed);
+      const file: ManifestFile = {
+        url: 'data/voyager-1-seg01.bin.br',
+        sha256: sha,
+        decompressedSha256: sha,
+        sizeBytes: compressed.byteLength,
+        timeRangeEt: [100.0, 160.0],
+        cadenceSec: 60.0,
+        kind: 'trajectory',
+      };
+
+      const received: string[] = [];
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+        received.push(String(input));
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          arrayBuffer: async () => compressed,
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      const loader = new ChunkLoader({ fetchImpl });
+      await loader.load(file);
+
+      expect(received).toHaveLength(1);
+      // The chunk-loader's fetchImpl receives the RESOLVED URL, not the raw
+      // manifest URL. This is the load-bearing contract for Story 3.3.1.
+      expect(received[0]).toBe('http://127.0.0.1:5173/data/voyager-1-seg01.bin.br');
+    } finally {
+      restoreWindow();
+    }
   });
 });
 

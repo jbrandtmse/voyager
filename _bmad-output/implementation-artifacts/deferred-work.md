@@ -444,7 +444,7 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 ## Deferred from: Story 3.3 lead-driven smoke (2026-05-22)
 
-### [3.3 / HIGH] Chunk-loader resolves chapter-relative URLs against the active path instead of root
+### ✅ RESOLVED in Story 3.3.1 (2026-05-22) — [3.3 / HIGH] Chunk-loader resolves chapter-relative URLs against the active path instead of root
 
 **Severity:** HIGH (load-bearing data pipeline fails on chapter routes; pre-existing since Story 2.4)
 **Surfaced by:** Story 3.3 AC9 smoke when navigating to `/c/v1-jupiter`

@@ -76,6 +76,31 @@ export class VtrjFormatError extends Error {
 
 // === Injectable defaults ===========================================
 
+/**
+ * Story 3.3.1 — anchor a manifest URL against the document root (the origin's
+ * `/` path), not the active page URL. The base is `${origin}/` so the URL
+ * constructor produces a root-relative absolute URL for any input shape.
+ *
+ * Fallbacks:
+ *   - Server-side / no-window (tests in Node, SSR) — return the URL as-is.
+ *     `URL(url, '/')` would throw without an origin; tests inject their own
+ *     `fetchImpl` and don't care about resolution.
+ */
+// Exported for unit testing (Story 3.3.1). The runtime call site is the only
+// production consumer; the export carries the `__forTest` suffix so the
+// surface contract reads "internal" at the callsite.
+export const resolveAgainstRoot__forTest = (url: string): string => resolveAgainstRoot(url);
+
+const resolveAgainstRoot = (url: string): string => {
+  if (typeof window === 'undefined' || !window.location) return url;
+  try {
+    return new URL(url, `${window.location.origin}/`).toString();
+  } catch {
+    // Malformed URL — let the underlying fetch surface the real error.
+    return url;
+  }
+};
+
 const defaultSha256Hex = async (buffer: ArrayBuffer): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', buffer);
   const bytes = new Uint8Array(digest);
@@ -289,7 +314,18 @@ export class ChunkLoader {
   }
 
   private async fetchAndDecode(file: ManifestFile): Promise<LoadedChunk> {
-    const response = await this.fetchImpl(file.url);
+    // Story 3.3.1 — resolve manifest URLs against the document root, not the
+    // active page URL. The manifest's `files[].url` values are root-relative
+    // (e.g. "data/voyager-1-seg01.bin.br" — no leading slash). On a chapter
+    // route like /c/v1-jupiter, a bare `fetch(file.url)` resolves to
+    // /c/data/voyager-... — Vite serves the SPA fallback HTML for the
+    // unmatched path, and the integrity check then hashes that HTML and
+    // throws. We anchor against `${origin}/` so any URL — root-relative
+    // ("data/foo.bin.br"), absolute ("/data/foo.bin.br"), or fully-qualified
+    // ("https://cdn.example.com/foo.bin.br") — resolves consistently
+    // regardless of the active page URL.
+    const fetchUrl = resolveAgainstRoot(file.url);
+    const response = await this.fetchImpl(fetchUrl);
     if (!response.ok) {
       throw new Error(
         `Chunk fetch failed: ${file.url} returned HTTP ${response.status} ${response.statusText}`,

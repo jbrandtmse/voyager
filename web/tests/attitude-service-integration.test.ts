@@ -156,8 +156,13 @@ const makeStubFetch = (): typeof fetch => {
     [PLATFORM_URL, platformBytes],
   ]);
   return (async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const buf = map.get(url);
+    const raw = typeof input === 'string' ? input : input.toString();
+    // Story 3.3.1 — chunk-loader now resolves URLs against `${origin}/` so the
+    // active page URL doesn't change the fetch target. Normalize the incoming
+    // URL back to its root-relative form (without leading slash) to match the
+    // map keys, which are kept in the original short form for readability.
+    const path = raw.startsWith('http') ? new URL(raw).pathname.replace(/^\//, '') : raw;
+    const buf = map.get(path) ?? map.get(raw);
     if (buf === undefined) {
       return {
         ok: false,
