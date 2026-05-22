@@ -302,3 +302,149 @@ def test_attitude_files_preserve_sorted_keys(tmp_path: Path) -> None:
     reloaded = json.loads(text)
     canonical = json.dumps(reloaded, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     assert text == canonical, "manifest JSON keys are not in sorted order"
+
+
+# --- Story 3.3 AC4: `models` parameter ----------------------------------------
+
+
+def _sample_models_fragment() -> list[dict]:
+    """Minimal valid 4-LOD models fragment matching the AC4 schema."""
+    return [
+        {
+            "id": "voyager",
+            "lods": [
+                {
+                    "level": 0,
+                    "url": "/models/voyager-lod0.aaaaaaaa.glb",
+                    "sha256": "a" * 64,
+                    "sizeBytes": 2048000,
+                    "maxDistanceKm": 0.001,
+                },
+                {
+                    "level": 1,
+                    "url": "/models/voyager-lod1.bbbbbbbb.glb",
+                    "sha256": "b" * 64,
+                    "sizeBytes": 1024000,
+                    "maxDistanceKm": 0.1,
+                },
+                {
+                    "level": 2,
+                    "url": "/models/voyager-lod2.cccccccc.glb",
+                    "sha256": "c" * 64,
+                    "sizeBytes": 256000,
+                    "maxDistanceKm": 1.0,
+                },
+                {
+                    "level": 3,
+                    "url": "/models/voyager-lod3.dddddddd.glb",
+                    "sha256": "d" * 64,
+                    "sizeBytes": 64000,
+                    "maxDistanceKm": None,
+                },
+            ],
+            "pivotMeters": [0, 0, 0],
+            "scaleToKm": 0.001,
+        }
+    ]
+
+
+def test_emit_manifest_without_models_omits_field(tmp_path: Path) -> None:
+    """AC4 byte-stability: when `models` is None (or absent), the manifest
+    JSON does NOT contain a `models` key — preserves the pre-Story-3.3 shape
+    so trajectory-only / attitude-only bakes don't introduce diff churn.
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path)
+    doc = load_manifest(out)
+    assert "models" not in doc, (
+        "models field should be omitted entirely when not provided (byte-stability)"
+    )
+
+
+def test_emit_manifest_with_models_round_trips(tmp_path: Path) -> None:
+    """AC4: a manifest emitted with `models=...` round-trips through JSON
+    with the model entries intact.
+    """
+    out = tmp_path / "manifest.json"
+    models = _sample_models_fragment()
+    emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path, models=models)
+    doc = load_manifest(out)
+    assert "models" in doc
+    assert len(doc["models"]) == 1
+    model = doc["models"][0]
+    assert model["id"] == "voyager"
+    assert len(model["lods"]) == 4
+    # Last LOD's maxDistanceKm is null/None.
+    assert model["lods"][3]["maxDistanceKm"] is None
+    assert model["pivotMeters"] == [0, 0, 0]
+    assert model["scaleToKm"] == 0.001
+
+
+def test_emit_manifest_with_models_byte_stable_across_reruns(tmp_path: Path) -> None:
+    """AC4: re-emitting with the same models fragment produces byte-identical
+    output (modulo bakeTimestamp / bakeCommit). This is the determinism
+    contract that lets `just bake-glb` + `just bake` be idempotent.
+    """
+    out_a = tmp_path / "a.json"
+    out_b = tmp_path / "b.json"
+    fixed_ts = datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc)
+    models = _sample_models_fragment()
+    emit_manifest(_sample_bodies(), _sample_kernels(), out_a, tmp_path,
+                  bake_timestamp=fixed_ts, models=models)
+    emit_manifest(_sample_bodies(), _sample_kernels(), out_b, tmp_path,
+                  bake_timestamp=fixed_ts, models=models)
+    assert out_a.read_bytes() == out_b.read_bytes()
+
+
+def test_emit_manifest_rejects_malformed_models_before_write(tmp_path: Path) -> None:
+    """AC4: a malformed models fragment is rejected with a ValueError BEFORE
+    any file is written. The defensive pre-write check exists so a bad
+    `web/scripts/build_glb.ts` doesn't surface as a Zod validation error at
+    runtime (blocking first paint on every contributor's machine).
+    """
+    out = tmp_path / "manifest.json"
+    # Bad sha256 (not 64 hex chars).
+    bad_models = [
+        {
+            "id": "voyager",
+            "lods": [
+                {
+                    "level": 0,
+                    "url": "/models/voyager-lod0.x.glb",
+                    "sha256": "deadbeef",  # too short
+                    "sizeBytes": 1024,
+                    "maxDistanceKm": 0.001,
+                },
+            ],
+            "pivotMeters": [0, 0, 0],
+            "scaleToKm": 0.001,
+        }
+    ]
+    try:
+        emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path, models=bad_models)
+        raise AssertionError("emit_manifest should have raised on bad sha256")
+    except ValueError as exc:
+        assert "sha256" in str(exc)
+    # Manifest file must NOT have been written.
+    assert not out.exists(), (
+        "manifest file should not be written when models fragment validation fails"
+    )
+
+
+def test_emit_manifest_rejects_models_with_empty_lods(tmp_path: Path) -> None:
+    """AC4: a model entry whose lods is empty is rejected — the Zod schema
+    requires .min(1)."""
+    out = tmp_path / "manifest.json"
+    bad = [
+        {
+            "id": "voyager",
+            "lods": [],
+            "pivotMeters": [0, 0, 0],
+            "scaleToKm": 0.001,
+        }
+    ]
+    try:
+        emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path, models=bad)
+        raise AssertionError("emit_manifest should have raised on empty lods")
+    except ValueError as exc:
+        assert "lods" in str(exc)

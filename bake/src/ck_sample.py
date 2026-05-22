@@ -45,6 +45,7 @@ Canonical invocation::
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -596,11 +597,32 @@ def bake_attitude(
             for k in kernel_entries
         ]
         manifest_path = out / "manifest.json"
+        # Story 3.3 AC4 — merge the models manifest fragment emitted by
+        # `web/scripts/build_glb.ts` (via `just bake-glb`) when present. The
+        # fragment lives at `bake/out/models-manifest-fragment.json`. When the
+        # fragment is absent (e.g., contributor hasn't run `just bake-glb`
+        # yet), the manifest omits the `models` field entirely so the
+        # pre-Story-3.3 manifest shape is byte-stable.
+        models_fragment_path = out / "models-manifest-fragment.json"
+        models_arg: list | None = None
+        if models_fragment_path.exists():
+            try:
+                fragment = json.loads(models_fragment_path.read_text(encoding="utf-8"))
+                models_arg = fragment.get("models")
+                if models_arg is not None and not isinstance(models_arg, list):
+                    print(
+                        f"[WARN]   {models_fragment_path}: 'models' must be a list, ignoring."
+                    )
+                    models_arg = None
+            except json.JSONDecodeError as exc:
+                print(f"[WARN]   {models_fragment_path}: invalid JSON ({exc}); skipping merge.")
+                models_arg = None
         emit_manifest(
             bodies=body_records,
             kernels=manifest_kernels,
             output_path=manifest_path,
             repo_root=repo,
+            models=models_arg,
         )
         n_attitude_files = len(emissions)
         print(

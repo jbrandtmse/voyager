@@ -72,19 +72,19 @@
           "sizeBytes": 330817,
           "timeRangeEt": [
             -600549280.1523788,
-            -441806400.0
+            -441806400
           ],
           "url": "data/voyager-1-seg06--600549281--441806400.bin.br"
         },
         {
-          "cadenceSec": 86400.0,
+          "cadenceSec": 86400,
           "decompressedSha256": "31333def51370768a77ce2fa89e0d5804c7bc91333fd3772b8675ffc73e1133d",
           "kind": "trajectory",
           "sha256": "f307dd76df6f6e2c0ab72c6c41a5570d0ded54588208e908e0af9e68c7649467",
           "sizeBytes": 541230,
           "timeRangeEt": [
-            -441806400.0,
-            978264000.0
+            -441806400,
+            978264000
           ],
           "url": "data/voyager-1-seg07--441806400-978264000.bin.br"
         }
@@ -210,19 +210,19 @@
           "sizeBytes": 225609,
           "timeRangeEt": [
             -324745382.0613611,
-            -323524800.0
+            -323524800
           ],
           "url": "data/voyager-2-seg10--324745383--323524800.bin.br"
         },
         {
-          "cadenceSec": 86400.0,
+          "cadenceSec": 86400,
           "decompressedSha256": "0b35f789ab91dbae8c4972b3c7854429ff97da6612849c4c1c5e10cde74704e2",
           "kind": "trajectory",
           "sha256": "003bc8439fb2d28dcfbd7ab8e3aeed823a1cb7c7ef8a699dfabd4b116adc0d5d",
           "sizeBytes": 501911,
           "timeRangeEt": [
-            -323524800.0,
-            978264000.0
+            -323524800,
+            978264000
           ],
           "url": "data/voyager-2-seg11--323524800-978264000.bin.br"
         }
@@ -518,7 +518,48 @@
   ],
   "schemaVersion": 1,
   "validationTolerances": {
-    "maxPositionErrorKm": 20.0,
-    "rmsPositionErrorKm": 5.0
-  }
+    "maxPositionErrorKm": 20,
+    "rmsPositionErrorKm": 5
+  },
+  "models": [
+    {
+      "id": "voyager",
+      "lods": [
+        {
+          "level": 0,
+          "url": "/models/voyager-lod0.82e422a1.glb",
+          "sha256": "82e422a1133a5dfd0b8a2c9e0c74d90f17175c2ce1992bfe4cb2ceaf3b310fe8",
+          "sizeBytes": 1157676,
+          "maxDistanceKm": 0.001
+        },
+        {
+          "level": 1,
+          "url": "/models/voyager-lod1.0d4a3bc9.glb",
+          "sha256": "0d4a3bc9470f9553a54f8ba2b146a510a1afc36f9ad52747ce6f0eb4fec9a025",
+          "sizeBytes": 1050872,
+          "maxDistanceKm": 0.1
+        },
+        {
+          "level": 2,
+          "url": "/models/voyager-lod2.0152fdad.glb",
+          "sha256": "0152fdadcff22e93d4f99a798fca7b85050dae1efbd7436ff5a30794cbc3e560",
+          "sizeBytes": 1033608,
+          "maxDistanceKm": 1
+        },
+        {
+          "level": 3,
+          "url": "/models/voyager-lod3.2dbff318.glb",
+          "sha256": "2dbff318815d9f16acc5e7645591f7b46daba63d92fecfbb593d6837bb9ba27a",
+          "sizeBytes": 1032680,
+          "maxDistanceKm": null
+        }
+      ],
+      "pivotMeters": [
+        0,
+        0,
+        0
+      ],
+      "scaleToKm": 0.001
+    }
+  ]
 }

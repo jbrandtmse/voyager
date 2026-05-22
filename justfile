@@ -18,10 +18,17 @@ default:
 # --- Bake half --------------------------------------------------------------
 
 # Bake VTRJ trajectory binaries from pinned kernels (Story 1.4 AC1).
-# Story 3.1 AC6: `bake` now chains into `bake-attitude` so `just bake` produces
-# BOTH trajectory AND attitude VTRJ binaries (single command for the full bake).
+# Story 3.1 AC6: `bake` chains into `bake-attitude` so `just bake` produces
+# BOTH trajectory AND attitude VTRJ binaries.
+# Story 3.3 AC2: `bake` ALSO chains into `bake-glb` so the spacecraft GLB
+# LOD chain is regenerated as part of the full bake. The order matters
+# only via the manifest fragment: `bake-glb` writes
+# `bake/out/models-manifest-fragment.json`, which `bake-attitude` reads
+# when emitting the master manifest (so the `models[]` section is
+# populated). `bake-glb` runs FIRST in the chain so its fragment is on
+# disk by the time `ck_sample.py` runs.
 [working-directory("bake")]
-bake: bake-attitude
+bake: bake-glb bake-attitude
 
 # Bake the trajectory half only (Story 1.4 baseline; rarely needed standalone).
 [working-directory("bake")]
@@ -34,6 +41,18 @@ bake-trajectories:
 [working-directory("bake")]
 bake-attitude: bake-trajectories
     uv run python -m src.ck_sample
+
+# Story 3.3 AC2 — bake the Voyager spacecraft GLB LOD chain.
+# Runs `web/scripts/build_glb.ts` (gltf-transform + meshopt + toktx KTX2)
+# which reads `bake/inputs/models/voyager-raw.glb` + the mesh-mapping JSON,
+# produces 4 content-hashed LOD GLBs at `web/public/models/`, and emits
+# `bake/out/models-manifest-fragment.json` (consumed by `bake-attitude` /
+# `bake-trajectories` to merge into the master manifest's `models[]`).
+# REQUIRES `toktx` (Khronos KTX-Software) on PATH — see
+# `web/public/models/README.md` § Prerequisites.
+[working-directory("web")]
+bake-glb:
+    npm run build-glb
 
 # Run the Layer-1 Python validation harness against baked VTRJ files (Story 1.4 AC4).
 [working-directory("bake")]

@@ -295,16 +295,29 @@ const bootstrap = (): void => {
     };
   }
 
-  // Story 1.12 — spacecraft + trajectory rendering. SpacecraftModels is
-  // constructed up-front so the scene-graph structure is stable; its GLB
-  // load is async and adds the body mesh once it lands. TrajectoryLines
-  // construction is deferred until the EphemerisService is available (it
-  // samples the polyline at construction).
+  // Story 1.12 / Story 3.3 — spacecraft + trajectory rendering.
+  // SpacecraftModels is constructed up-front so the scene-graph structure is
+  // stable; its GLB load is async and adds the body LOD chain (4 LODs per
+  // AC3) once it lands. The load is kicked off AFTER the manifest resolves
+  // (below) so the manifest-driven LOD URLs flow through. Until then the
+  // spacecraft group exists but contains only the label sprite.
+  // TrajectoryLines construction is deferred until the EphemerisService is
+  // available (it samples the polyline at construction).
   const spacecraftModels = new SpacecraftModels();
   engine.worldGroup.add(spacecraftModels.root);
-  spacecraftModels.load().catch((err: unknown) => {
-    console.error('[main] spacecraft GLB load failed:', err);
-  });
+
+  // Story 3.3 AC9 — DEV debug surface for the lead-driven Chrome DevTools MCP
+  // smoke. Exposes the SpacecraftModels instance so the smoke probe can
+  // resolve `__voyagerDebug.spacecraftModels.getHandle('voyager-1').{group,lod}`.
+  // Stripped from production builds by Vite's `import.meta.env.DEV` constant
+  // folding.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+    w.__voyagerDebug = {
+      ...(w.__voyagerDebug ?? {}),
+      spacecraftModels,
+    };
+  }
   let trajectoryLines: TrajectoryLines | null = null;
 
   // Story 1.13 — celestial bodies + Milky Way skybox. Constructed before
@@ -348,6 +361,25 @@ const bootstrap = (): void => {
           attitudeService,
         };
       }
+
+      // Story 3.3 — kick off the spacecraft LOD-chain load with the manifest
+      // now that it's resolved. The load is fire-and-forget; per-frame
+      // tick() handles the load-pending state via hold-previous + visible
+      // gates so we can register the tick callback below before the load
+      // promise resolves.
+      //
+      // ADR-0006 § Decision step 3 — pass the WebGLRenderer so the
+      // `KTX2Loader` registered inside SpacecraftModels can call
+      // `detectSupport(renderer)` and choose a GPU-compatible transcode
+      // format for the Basis-Universal-encoded textures. Without this the
+      // loader throws a "Missing initialization with `detectSupport`"
+      // error on the first KTX2 texture inside the LOD GLBs.
+      const renderer = engine.getRenderer();
+      spacecraftModels
+        .load({ manifest, renderer: renderer ?? undefined })
+        .catch((err: unknown) => {
+          console.error('[main] spacecraft GLB chain load failed:', err);
+        });
 
       // Hook spacecraft + celestial-body updates onto the render loop
       // immediately. All three modules handle null returns via

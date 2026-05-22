@@ -431,3 +431,49 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 - **[3.2 / LOW]** `AttitudeService.decodedByUrl` (Map<chunkUrl, DecodedAttitude>) has no eviction policy or capacity bound, while the upstream `ChunkLoader` LRU is sized at `DEFAULT_LRU_CAPACITY = 12`. Story 3.1's bake produces 14 encounter attitude files (7 windows × 2 spacecraft, with V1-PBD-platform skipped), so a scrubbing session that touches every encounter window can exceed the LRU capacity. When chunk-loader evicts a chunk, AttitudeService's decoded entry (the typed knotEts Float64Array + knotQuats THREE.Quaternion[]) remains in `decodedByUrl`, holding memory the LRU intended to release. **Why deferred:** each decoded entry is small — a single encounter file at 5-sec uniform cadence × 4 days = ~69k samples × (8 bytes ET + 4 × 8 bytes quaternion) ≈ ~2.7 MB worst case; the full 14-file decoded cache caps at ~38 MB. NFR-P5 (≤150 MB full bundle) is unconstrained at this scale. No correctness issue — re-decode is idempotent because the chunk-loader's brotli decode is deterministic. **Suggested resolution:** Story 3.4 (per-frame attitude application) or a future Epic 6 perf-pass story can either (a) match the `decodedByUrl` capacity to the chunk-loader's LRU and evict in lockstep via a `chunkLoader.subscribe(onEvict)` hook, or (b) drop the cache entirely and re-decode on every chunk-load (decode is ~1 ms per encounter file per the dev's perf assumption — acceptable for the once-per-load amortization). Option (b) is simpler; option (a) is more defensible if `decodedByUrl`'s working-set scales beyond 14 entries (e.g., Story 5.2's PBD choreography adds more files). Routed to Story 3.4 review or Epic 6.
 
+## Deferred from: code review of 3-3-articulated-spacecraft-glb-with-scan-platform-node (2026-05-21)
+
+- **[3.3 / LOW]** AC7 integration test step-7 weaker than AC spec wording. The AC7 step 7 commit reads: *"Asserts the platform's world-position child (e.g., the NA-camera mesh's `matrixWorld`) has changed relative to the BUS's world-position child (e.g., the HGA mesh's `matrixWorld`) by the angular delta predicted by the platform quaternion — within 1e-12 absolute."* The actual test 1 in `web/tests/spacecraft-models-attitude-integration.test.ts:341-344` asserts only that `platform.quaternion.{x,y,z,w}` equals what was copied in (1e-12 abs) — not the world-position angular delta. **Why deferred:** test 2 in the same file ("rotating SCAN_PLATFORM after attitude application does not deform HGA world matrix") + QA gap 3 in `web/tests/spacecraft-models-qa-gaps.test.ts` ("BUS quaternion propagates to HGA + SCAN_PLATFORM children" with `getWorldQuaternion` composition assertion at 1e-12) collectively cover the load-bearing contract more thoroughly than the AC7 step-7 wording. No correctness gap; just a test-wording-vs-implementation gap. **Suggested resolution:** Story 3.4's per-frame integration test naturally exercises the angular-delta path (each frame, AttitudeService → BUS/SCAN_PLATFORM quaternion → world matrix). Add an explicit angular-delta assertion in the Story 3.4 integration test to retire this deferral.
+
+- **[3.3 / LOW]** Story 3.4 must verify scan-platform pivot composes correctly with FK kernel articulation axis. `bake/inputs/voyager-mesh-mapping.json` sets `scan_platform_pivot_meters = [0, -0.567, 0]` in mesh-local (glTF Y-up) coordinates. The `scan_platform_pivot_rationale` block explicitly acknowledges a coordinate-frame discontinuity: glTF Y-up (Blender export) puts SCAN_PLATFORM on the bus's -Y face; FK kernel frames -31100/-32100 specify the articulation axis in SPICE coordinates. The rationale defers composition to Story 3.4: *"the per-frame attitude application in Story 3.4 will compose the FK rotation onto the named hierarchy's local quaternion, so this offset only needs to be the geometric hinge point in the GLB's own frame."* **Why deferred:** Story 3.3's scope is the named-hierarchy contract; the SPICE-frame ↔ glTF-frame composition is Story 3.4's per-frame application path. **Suggested resolution:** Story 3.4's integration test should verify that for a known ET inside V1 Jupiter platform CK coverage, the world-space orientation of a SCAN_PLATFORM child (e.g., NA-camera boresight) matches the SPICE-frame target orientation under the composed `(busQuat ∘ platformQuat ∘ pivot_offset)` transform, within an angular tolerance (e.g., 0.1° — appropriate for the qualitative-rendering tier). If the composition is wrong, the SCAN_PLATFORM `position` in `voyager-mesh-mapping.json` may need to be amended (e.g., sign-flip Y, or re-derived from the SPICE FK ROT translation).
+
+- **[3.3 / LOW]** `SpacecraftHandle.lod` field mutation bypasses readonly modifier. `web/src/render/spacecraft-models.ts:314-315` uses `(this.v1 as { lod: LOD }).lod = v1Lod` to assign onto a field declared `readonly lod: LOD | null` in the `SpacecraftHandle` interface (line 155 `lod: LOD | null;` — actually NOT readonly in the current interface; but the interface declares `id`, `naifId`, `group` as readonly, so the field is implicitly mutable while the rest of the surface is locked). **Why deferred:** type-safety hygiene only; no functional issue. The cast is local + audited + used only inside the load path. **Suggested resolution:** future hygiene pass (Story 6.x or Epic 7) can either (a) drop the `readonly` on the other handle fields for consistency and make `lod` directly mutable, or (b) introduce a private setter helper on `SpacecraftModels` so the cast site disappears.
+
+
+---
+
+## Deferred from: Story 3.3 lead-driven smoke (2026-05-22)
+
+### [3.3 / HIGH] Chunk-loader resolves chapter-relative URLs against the active path instead of root
+
+**Severity:** HIGH (load-bearing data pipeline fails on chapter routes; pre-existing since Story 2.4)
+**Surfaced by:** Story 3.3 AC9 smoke when navigating to `/c/v1-jupiter`
+**Symptom:** ~55 console warnings of the form `ChunkIntegrityError: ... expected sha256=<file's decompressedSha256>, computed sha256=ed1c69e7b3228a2f9436a469f281bcacd8f0561b1a7f18e19427a95ca5badc94` (the latter is the SHA-256 of Vite's SPA-fallback `index.html`). Spacecraft are not visible on chapter routes because their trajectory chunks never decode.
+**Root cause:** `web/public/data/manifest.json` `bodies[].files[].url` values are RELATIVE (e.g., `data/voyager-1-seg01--704412036--704170304.bin.br`, no leading `/`). When the active page URL is `/c/v1-jupiter`, the chunk-loader's `fetch(url)` resolves to `/c/data/voyager-...bin.br` instead of `/data/voyager-...bin.br`. Vite serves the SPA-fallback `index.html` for the unmatched `/c/data/...` path; the chunk-loader hashes the HTML and reports an integrity failure.
+**Verification:** at console on `/c/v1-jupiter`:
+- `fetch('data/voyager-...bin.br').url` → `/c/data/voyager-...bin.br` (text/html, hash ed1c69e7...)
+- `fetch('/data/voyager-...bin.br').url` → `/data/voyager-...bin.br` (application/octet-stream, hash matches manifest)
+**Resolution paths (pick one):**
+- (a) Patch `bake/src/manifest_writer.py` to emit `url` values with a leading `/` (e.g., `/data/voyager-...bin.br`). One-line bake-side fix; runtime unchanged. Re-bake produces a clean manifest.
+- (b) Patch `web/src/services/chunk-loader.ts` to anchor its `fetch(url)` against the manifest's load URL (e.g., resolve against `/data/manifest.json`'s URL via `new URL(file.url, manifestUrl).pathname`). Single-file runtime fix; bake unchanged.
+- (b) is recommended because it's a runtime-side defensive fix and works against any manifest, including manifests baked before the change.
+**Routing:** target Story 3.4 (the per-frame attitude application depends on EphemerisService+trajectory chunks loading correctly on chapter routes — Story 3.4's AC2/AC3 will be unverifiable without this fix), or a separate hotfix story `3.x` if Story 3.4 gets large.
+
+### [3.3 / LOW] LOD3 size budget breach (1032 KB vs ≤100 KB target in AC2)
+
+**Severity:** LOW (visual-quality target, not a correctness gate)
+**Surfaced by:** `npm run build-glb` console output during smoke.
+**Symptom:** `voyager-lod3` outputs 1,032,680 bytes — ~10× the AC2 target of ≤100 KB. The simplify ratio of 0.05 only reduced vertex count from 17,198 → 9,212 (46% reduction, not the targeted 95%) because `gltf-transform`'s `simplify` preserves UV-seam and normal-discontinuity vertices to keep the mesh shaderable.
+**Resolution paths:**
+- (a) Tune `simplify({ ratio, error })` — increase `error` to 0.05 or 0.1 to allow more aggressive simplification; accept some visual drift at LOD3 (which is only shown beyond 1 AU where spacecraft is sub-pixel anyway).
+- (b) Author an explicit silhouette-only mesh at the LOD3 slot (procedural cube + cone — matches the spacecraft's gross silhouette without preserving details).
+- (c) Accept the breach as-is and amend AC2's LOD3 budget to "≤ 1.2 MB" with the rationale that any LOD3 quality matters less than the named-hierarchy preservation contract.
+**Recommended:** (a) at Story 4.3's polish pass — that story is the natural landing for LOD threshold tuning.
+
+### [3.3 / LOW] `web/scripts/build_glb.ts` lacks a CI WebP→PNG transcode dependency declaration
+
+**Severity:** LOW (already works; documentation hygiene)
+**Surfaced by:** Story 3.3 smoke fix.
+**Symptom:** The smoke-time fix added a runtime dependency on `sharp` (via `import('sharp')` inside `writeTexturesAsKtx2`). `sharp` is already a transitive dep via `@gltf-transform/functions` → `ndarray-pixels`, so installation works today. But the dependency is implicit; if a future gltf-transform release drops the `ndarray-pixels` chain, the WebP transcode path silently breaks.
+**Resolution:** add `sharp` as an explicit devDependency in `web/package.json`. One-line PR.
+

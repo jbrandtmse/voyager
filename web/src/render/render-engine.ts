@@ -109,6 +109,16 @@ export class RenderEngine {
     return this._depthMode;
   }
 
+  /**
+   * Story 3.3 — public read-only accessor for the underlying WebGLRenderer.
+   * Required so consumers (e.g. `SpacecraftModels`) can pass it to
+   * `KTX2Loader.detectSupport(renderer)` per ADR-0006. The renderer is
+   * `null` before `init()` has been called.
+   */
+  getRenderer(): WebGLRendererLike | null {
+    return this.renderer;
+  }
+
   init(canvas: HTMLCanvasElement | OffscreenCanvas): void {
     const useReverseZ =
       this.capabilities.supportsReverseZ && !this.options.forceLogDepth;

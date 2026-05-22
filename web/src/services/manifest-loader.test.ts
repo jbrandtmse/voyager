@@ -237,3 +237,137 @@ describe('Story 3.1 AC3 — manifest forward-compat with provenance field', () =
     expect(manifest.bodies[0].files[0].kind).toBe('trajectory');
   });
 });
+
+// === Story 3.3 AC4 — models[] schema extension ==========================
+
+describe('Story 3.3 AC4 — manifest.models[] schema', () => {
+  it('parses a manifest with no `models` field (back-compat with pre-Story-3.3)', async () => {
+    // The valid manifest above has no `models` field. The Zod schema's
+    // .default([]) means parsing succeeds with `manifest.models === []`.
+    const fetchImpl = vi.fn(async () => mockResponse(validManifest));
+    const manifest: Manifest = await ManifestLoader.load('/no-models.json', { fetchImpl });
+    expect(manifest.models).toEqual([]);
+  });
+
+  it('parses a well-formed manifest with one 4-LOD model entry', async () => {
+    const withModels = {
+      ...validManifest,
+      models: [
+        {
+          id: 'voyager',
+          lods: [
+            {
+              level: 0,
+              url: '/models/voyager-lod0.aaaaaaaa.glb',
+              sha256: 'a'.repeat(64),
+              sizeBytes: 1024,
+              maxDistanceKm: 0.001,
+            },
+            {
+              level: 1,
+              url: '/models/voyager-lod1.bbbbbbbb.glb',
+              sha256: 'b'.repeat(64),
+              sizeBytes: 512,
+              maxDistanceKm: 0.1,
+            },
+            {
+              level: 2,
+              url: '/models/voyager-lod2.cccccccc.glb',
+              sha256: 'c'.repeat(64),
+              sizeBytes: 256,
+              maxDistanceKm: 1.0,
+            },
+            {
+              level: 3,
+              url: '/models/voyager-lod3.dddddddd.glb',
+              sha256: 'd'.repeat(64),
+              sizeBytes: 128,
+              maxDistanceKm: null,
+            },
+          ],
+          pivotMeters: [0, 0, 0],
+          scaleToKm: 0.001,
+        },
+      ],
+    };
+    const fetchImpl = vi.fn(async () => mockResponse(withModels));
+    const manifest = await ManifestLoader.load('/with-models.json', { fetchImpl });
+    expect(manifest.models).toHaveLength(1);
+    const model = manifest.models[0];
+    expect(model.id).toBe('voyager');
+    expect(model.lods).toHaveLength(4);
+    expect(model.lods[3].maxDistanceKm).toBeNull();
+    expect(model.pivotMeters).toEqual([0, 0, 0]);
+    expect(model.scaleToKm).toBe(0.001);
+  });
+
+  it('rejects a malformed model entry (sha256 wrong length) with ManifestValidationError', async () => {
+    const malformed = {
+      ...validManifest,
+      models: [
+        {
+          id: 'voyager',
+          lods: [
+            {
+              level: 0,
+              url: '/models/voyager-lod0.aaaaaaaa.glb',
+              sha256: 'too-short',
+              sizeBytes: 1024,
+              maxDistanceKm: 0.001,
+            },
+          ],
+          pivotMeters: [0, 0, 0],
+          scaleToKm: 0.001,
+        },
+      ],
+    };
+    const fetchImpl = vi.fn(async () => mockResponse(malformed));
+    await expect(
+      ManifestLoader.load('/malformed-models.json', { fetchImpl }),
+    ).rejects.toBeInstanceOf(ManifestValidationError);
+  });
+
+  it('rejects a model entry with a non-positive maxDistanceKm', async () => {
+    const malformed = {
+      ...validManifest,
+      models: [
+        {
+          id: 'voyager',
+          lods: [
+            {
+              level: 0,
+              url: '/models/voyager-lod0.aaaaaaaa.glb',
+              sha256: 'a'.repeat(64),
+              sizeBytes: 1024,
+              maxDistanceKm: -1,
+            },
+          ],
+          pivotMeters: [0, 0, 0],
+          scaleToKm: 0.001,
+        },
+      ],
+    };
+    const fetchImpl = vi.fn(async () => mockResponse(malformed));
+    await expect(
+      ManifestLoader.load('/bad-distance.json', { fetchImpl }),
+    ).rejects.toBeInstanceOf(ManifestValidationError);
+  });
+
+  it('rejects a model entry whose lods array is empty', async () => {
+    const malformed = {
+      ...validManifest,
+      models: [
+        {
+          id: 'voyager',
+          lods: [],
+          pivotMeters: [0, 0, 0],
+          scaleToKm: 0.001,
+        },
+      ],
+    };
+    const fetchImpl = vi.fn(async () => mockResponse(malformed));
+    await expect(
+      ManifestLoader.load('/empty-lods.json', { fetchImpl }),
+    ).rejects.toBeInstanceOf(ManifestValidationError);
+  });
+});

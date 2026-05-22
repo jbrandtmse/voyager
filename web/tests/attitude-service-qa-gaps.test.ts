@@ -171,6 +171,7 @@ const makeManifest = (params: {
   ],
   chapters: [],
   validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+  models: [],
 });
 
 const makeFakeChunkLoader = (

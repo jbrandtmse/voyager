@@ -144,6 +144,7 @@ const buildValidManifestJson = (): Record<string, unknown> => ({
   ],
   chapters: [],
   validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+  models: [],
 });
 
 const jsonFetchResponse = (body: unknown): typeof fetch =>
@@ -288,6 +289,7 @@ describe('EphemerisService never extrapolates outside segment range (defense)', 
       ],
       chapters: [],
       validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+      models: [],
     };
     const cache = new Map<string, LoadedChunk>([['data/seg.bin.br', chunk]]);
     const chunkLoader = {
@@ -357,6 +359,7 @@ describe('Hermite interpolator is monotonic on linear data (defense)', () => {
       ],
       chapters: [],
       validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+      models: [],
     };
     const cache = new Map<string, LoadedChunk>([['data/lin.bin.br', chunk]]);
     const chunkLoader = {
@@ -438,6 +441,7 @@ describe('Hermite reproduces sample values exactly at sample boundaries (defense
       ],
       chapters: [],
       validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+      models: [],
     };
     const cache = new Map<string, LoadedChunk>([['data/exact.bin.br', chunk]]);
     const chunkLoader = {
@@ -758,6 +762,7 @@ describe('EphemerisService.getStateAt is referentially transparent (defense)', (
       ],
       chapters: [],
       validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+      models: [],
     };
     const cache = new Map<string, LoadedChunk>([['data/det.bin.br', chunk]]);
     const chunkLoader = {

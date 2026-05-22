@@ -76,6 +76,7 @@ const buildManifest = (chunkUrl: string, etStart: number, etEnd: number): Manife
     maxPositionErrorKm: 20,
     rmsPositionErrorKm: 5,
   },
+  models: [],
 });
 
 const stubChunkLoader = (chunk: LoadedChunk): ChunkLoader => {

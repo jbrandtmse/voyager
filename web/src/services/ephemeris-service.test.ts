@@ -68,6 +68,7 @@ const makeManifest = (files: { url: string; range: [number, number]; cadenceSec:
       maxPositionErrorKm: 20,
       rmsPositionErrorKm: 5,
     },
+    models: [],
   };
 };
 

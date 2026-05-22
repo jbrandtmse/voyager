@@ -133,6 +133,7 @@ const buildFixtureManifest = (): Manifest => {
     ],
     chapters: [],
     validationTolerances: { maxPositionErrorKm: 20, rmsPositionErrorKm: 5 },
+    models: [],
   };
 };
 

@@ -58,42 +58,58 @@ const walkTsFiles = (dir: string): string[] => {
 };
 
 // ---------------------------------------------------------------------------
-// 1. KTX2 deferral marker — Story 4.3 boundary.
+// 1. KTX2 deferral marker — Story 4.3 boundary (CELESTIAL textures only).
+//
+// Story 3.3 (2026-05-21) INTENTIONALLY LIFTED the KTX2 deferral FOR THE
+// SPACECRAFT GLB CHAIN per ADR-0006 § Decision step 3 (KHR_texture_basisu
+// over EXT_texture_webp) — `web/src/render/spacecraft-models.ts` now
+// registers `KTX2Loader` against `GLTFLoader`. This is the architectural
+// landing point for ADR-0006's texture commitment.
+//
+// The deferral REMAINS for celestial-body textures (Sun + 8 planets + Moon
+// in `texture-loader.ts` + `celestial-bodies.ts`) — Story 4.3 will swap
+// those from PNG → KTX2 as part of the 4k→8k texture upgrade.
+//
+// Therefore: this defense whitelists `src/render/spacecraft-models.ts`
+// (the Story 3.3 landing surface) and continues to block KTX2Loader
+// elsewhere until Story 4.3 explicitly lifts the deferral for celestial
+// textures too.
 // ---------------------------------------------------------------------------
+const STORY_3_3_KTX2_WHITELIST = new Set<string>([
+  // Story 3.3 ADR-0006 landing — KTX2Loader for the Voyager spacecraft GLB.
+  'src\\render\\spacecraft-models.ts',
+  'src/render/spacecraft-models.ts',
+]);
+
 describe('Story 1.13 defense — KTX2 deferral marker (Story 4.3 boundary)', () => {
-  it('no KTX2Loader import or executable reference appears in web/src/ (Story 1.13 is PNG-only)', () => {
+  it('no KTX2Loader import or executable reference appears in web/src/ outside the Story-3.3 spacecraft surface', () => {
     const tsFiles = walkTsFiles(srcRoot);
     const violations: string[] = [];
-    // Look for actual import / usage. Backtick-quoted prose mentions (e.g.
-    // in JSDoc explaining the future Story-4.3 swap) are explicitly exempt
-    // — `texture-loader.ts` documents the deferral and naturally mentions
-    // the symbol it WILL one day swap to. If Story 4.3 has actually
-    // landed code, `import { KTX2Loader }` or a bare reference (not inside
-    // backticks) will appear.
     const importPattern = /^\s*import.*\bKTX2Loader\b/;
     const usePattern = /\bKTX2Loader\b/;
     for (const file of tsFiles) {
+      const rel = relative(webRoot, file);
+      // Story 3.3 ADR-0006 landing — spacecraft-models.ts is the
+      // intentional KTX2 site. Skip it from this defense.
+      if (STORY_3_3_KTX2_WHITELIST.has(rel)) continue;
       const contents = readFileSync(file, 'utf-8');
       const lines = contents.split(/\r?\n/);
       lines.forEach((line, idx) => {
-        // Import line: always a violation.
         if (importPattern.test(line)) {
-          violations.push(`${relative(webRoot, file)}:${idx + 1}: ${line.trim().slice(0, 200)}`);
+          violations.push(`${rel}:${idx + 1}: ${line.trim().slice(0, 200)}`);
           return;
         }
-        // Non-import line: violation only if the reference is NOT inside
-        // a backtick pair (i.e. it's executable code, not prose).
         if (usePattern.test(line) && !/`[^`]*KTX2Loader[^`]*`/.test(line)) {
-          violations.push(`${relative(webRoot, file)}:${idx + 1}: ${line.trim().slice(0, 200)}`);
+          violations.push(`${rel}:${idx + 1}: ${line.trim().slice(0, 200)}`);
         }
       });
     }
     expect(
       violations,
-      'Story 4.3 has begun KTX2 work but Story 1.13 expected PNG-only. ' +
-        'Either revert the KTX2Loader changes, or update this defense test ' +
-        'with a note that the deferral has been intentionally lifted. ' +
-        `Violations:\n${violations.join('\n')}`,
+      'KTX2Loader usage outside the Story 3.3 whitelist. Story 4.3 has not ' +
+        'yet lifted the celestial-body texture deferral; either revert the ' +
+        'changes or update STORY_3_3_KTX2_WHITELIST in this defense test ' +
+        `if Story 4.3's lift is intentional.\nViolations:\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 
