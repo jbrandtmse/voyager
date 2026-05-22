@@ -119,9 +119,12 @@ jobs:
       - name: uv sync
         working-directory: bake
         run: uv sync --frozen
-      - name: bake — first run
+      - name: bake trajectories — first run
         working-directory: bake
         run: uv run python -m src.bake_trajectories
+      - name: bake attitude — first run (Story 3.1)
+        working-directory: bake
+        run: uv run python -m src.ck_sample
       - name: snapshot SHA-256 of first bake outputs
         run: |
           cd bake/out
@@ -129,9 +132,12 @@ jobs:
             | xargs sha256sum > ../../first-bake-shas.txt
           echo "--- first bake ---"
           cat ../../first-bake-shas.txt
-      - name: bake — re-run for determinism
+      - name: bake trajectories — re-run for determinism
         working-directory: bake
         run: uv run python -m src.bake_trajectories
+      - name: bake attitude — re-run for determinism
+        working-directory: bake
+        run: uv run python -m src.ck_sample
       - name: assert determinism (NFR-R4 byte-identical re-bake)
         run: |
           cd bake/out
@@ -140,6 +146,14 @@ jobs:
           echo "--- second bake ---"
           cat ../../second-bake-shas.txt
           diff -u first-bake-shas.txt second-bake-shas.txt
+      - name: generate L2 attitude fixture (Story 3.7 AC1)
+        working-directory: bake
+        run: uv run python -m src.l2_attitude_validation
+      - name: assert L2 fixture size cap (Story 3.7 AC4)
+        run: |
+          SIZE=$(stat -c '%s' bake/out/l2-attitude-fixture.json)
+          echo "L2 fixture size: ${SIZE} bytes"
+          test "$SIZE" -le 2097152 || (echo "L2 fixture exceeds 2 MB cap: ${SIZE}" && exit 1)
       - name: upload bake outputs
         uses: actions/upload-artifact@v4
         with:
@@ -211,6 +225,7 @@ jobs:
     name: test (web — vitest L3)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
+    needs: [bake]  # Story 3.7 — L2 fixture + attitude VTRJ files come from bake job
     steps:
       - uses: actions/checkout@v4
         with:
@@ -223,6 +238,20 @@ jobs:
       - name: npm ci
         working-directory: web
         run: npm ci
+      - name: download bake outputs (Story 3.7 — L2 fixture + attitude VTRJ files)
+        uses: actions/download-artifact@v4
+        with:
+          name: bake-out
+          path: bake/out/
+      - name: copy bake outputs to web/public/data (Story 3.7 AC3)
+        run: |
+          mkdir -p web/public/data
+          cp bake/out/manifest.json web/public/data/manifest.json
+          # Attitude + trajectory VTRJs needed by AttitudeService boot stack.
+          cp bake/out/*.bin.br web/public/data/
+          # L2 attitude fixture consumed by attitude-l2-fixture.test.ts.
+          cp bake/out/l2-attitude-fixture.json web/public/data/l2-attitude-fixture.json
+          ls -la web/public/data/ | head -40
       - name: vitest
         working-directory: web
         run: npm test

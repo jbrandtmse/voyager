@@ -507,3 +507,126 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 **Symptom:** `BoresightRenderer.readCssVar` returns the trimmed CSS variable value verbatim; `new Color(value)` then parses it. If `--v-color-accent` is ever set to a non-color string (e.g. `"junk"`), Three.js's `Color` constructor either throws or silently produces black depending on input. The fallback path only fires on EMPTY string, not on malformed string.
 **Resolution:** wrap `new Color(accentHex)` in a try/catch that falls back to `new Color(FALLBACK_ACCENT_COLOR)` on failure, or validate the hex shape with a regex before constructing. One-line defensive guard.
 
+## Deferred from: code review of story-3-7-l2-js-vs-spice-attitude-consistency-validation-in-ci (2026-05-22)
+
+### [3.7 / HIGH] Story 3.1 bake cadence insufficient for V2 Saturn peak imaging — L2 gate fires RED (Rule 5 NFR tripwire, intended outcome)
+
+**Severity:** HIGH (CI will be RED on first push; canonical Rule 5 NFR tripwire response per user decision 2026-05-22)
+**Surfaced by:** Story 3.7 lead-driven AC8 smoke (T5.2 — `local-real-data-output.txt`); Story 3.7 code review § EC-10 + AA-18 (load-bearing tripwire).
+**Symptom:** With Story 3.1's `ck_sample.CADENCE_5S = 5.0` (5-second uniform cadence calibrated against V2 Uranus peak-slew only), the L2 vitest gate fails for V2 Saturn:
+
+- Worst-case bus angular error = **3.6029 mrad** at ET = **-579086636.4** (~1981-08-26T03:43:24 TDB, V2 Saturn closest approach + several hours).
+- Window: `v2-saturn` (V2 Saturn encounter, CA 1981-08-25).
+- Spacecraft: -32 (Voyager 2).
+- Gate: NFR-P10 ≤ 1 mrad. Observed: 3.6 mrad. **3.6× over budget.**
+- Diagnostic emission from `attitude-l2-fixture.test.ts:326-333` will surface in CI as:
+  `worst-case L2 attitude error exceeds NFR-P10 1 mrad: kind=bus spacecraftId=-32 et=-579086636.4 ckWindow=v2-saturn angularError=3.6029e-03 rad (3.6029 mrad)`
+
+**Diagnosis (dev's investigation):**
+
+- L2 ground truth is correct: `pxform(J2000, VG2_SC_BUS, et)` and `ckgp(-32000, et, tol=0, J2000)` AGREE EXACTLY at the failing ET (|dot| = 1.0, angular delta = 0.0 mrad).
+- The V2 Saturn bus VTRJ at this ET has neighboring 5-sec knots with pairwise angular delta = **5.8 mrad**. SLERP between knots gives ~half that error mid-interpolation → matches the observed 3.6 mrad.
+- V2 Saturn active imaging is faster than V2 Uranus active imaging — the 5-sec cadence is below Nyquist for V2 Saturn's slew rate.
+
+**CK windows affected:** V2 Saturn (`v2-saturn`); the L2 fixture currently fails this window. V2 Uranus passes (the cadence was tuned for it). Other windows (V1 Jupiter, V1 Saturn, V1 PBD, V2 Jupiter, V2 Neptune) have lower peak slew rates and likely pass at 5-sec cadence, but should be re-verified once the amendment lands.
+
+**Cadence target:** 2-second uniform cadence reduces neighboring-knot angular delta by ~60% (linear scaling under fast slew), placing V2 Saturn worst-case mid-SLERP at ~1.0-1.5 mrad — at the gate edge. A 1-second uniform cadence over the active-imaging band gives ~0.5 mrad worst-case headroom. Recommended: **1-second cadence within ±1 hour of V2 Saturn closest approach** (effectively the original AC1 mixed-schedule design), restoring the variable-cadence pattern but tighter inside the encounter window. Estimated bake-output size impact: 2-sec cadence ≈ 2.5× current attitude VTRJ size; 1-sec ≈ 5×. Still well under NFR-P4/P5 budgets (per the dev's note).
+
+**Resolution paths (pick one):**
+
+- (a) **Uniform tighter cadence**: change `ck_sample.CADENCE_5S = 5.0` to `2.0` (or `1.0`). Simplest; impacts ALL encounters' file size. Recommended for a fast hotfix.
+- (b) **Per-encounter cadence override**: introduce `ENCOUNTER_CADENCE_OVERRIDE = {"v2-saturn": 1.0, ...}` keyed by slug. Surgical; preserves the 5-sec cadence for low-slew encounters.
+- (c) **Variable cadence around CA**: refactor `_build_window_grid` to emit at 1-sec cadence within ±1 hour of CA and 5-sec elsewhere. Closest to AC1's original mixed-schedule intent; requires the variable-cadence schema path (already supported per ADR-0004 § Body Layout per Kind explicit-ET amendment).
+- (d) Defer the gate (lower NFR-P10 from 1 mrad to e.g. 5 mrad). REJECTED by user decision 2026-05-22 — the 1 mrad gate is load-bearing per Rule 5; the canonical response is amendment of Story 3.1, not amendment of NFR-P10.
+
+**Routing:** **Story 3.1 hotfix story** (e.g., `3.1.1` or `3.7.1`). MUST land before the Story 3.7 CI step is expected to be green on `main`. **The CI build WILL BE RED until the cadence amendment lands** — this is the intended Rule 5 surfacing of the upstream Story 3.1 defect. The user has accepted this routing decision 2026-05-22 (per code-review spawn prompt).
+
+**Linked artifacts:**
+
+- Smoke evidence: `_bmad-output/implementation-artifacts/3-7-smoke-evidence/local-real-data-output.txt`
+- Smoke fixture: `_bmad-output/implementation-artifacts/3-7-smoke-evidence/sample-fixture-3000-records.json` (3000 records, 1.10 MB, SHA pinned in cycle-log; structurally validated by `bake/tests/test_l2_attitude_validation_qa_gaps.py` + `web/tests/attitude-l2-fixture-qa-gaps.test.ts`).
+- Story 3.7 Dev Agent Record § Issues Encountered #1.
+- Original cadence calibration: Story 3.1 amendment 2026-05-21 (cycle-log entry).
+
+### [3.7 / HIGH] Story 3.1 `_build_window_grid` does not emit `platform_attitude` VTRJs for type-1 PDS Rings ISS SEDR CKs
+
+**Severity:** HIGH (load-bearing — the platform gate is inactive until this lands)
+**Surfaced by:** Story 3.7 dev (Decision D4); confirmed via Story 3.7 lead's local AC8 smoke (`[L2] platform records: compared=0 synthesized-skip=3000`).
+**Symptom:** Story 3.1's `ck_sample._build_window_grid` calls `_intersect_interval(band, coverage)` which strictly filters `lo < hi`, so zero-duration `(t, t)` intervals (the canonical shape of type-1 CK records — one per ISS shutter event) are dropped. The platform coverage union appears empty → `bake_attitude` emits `"[SKIP] ... empty ET grid"` for every platform structure (`-31100`, `-32100`) → no `v*_platform_attitude.*.bin.br` files are produced.
+
+The runtime AttitudeService correctly falls back to the **synthesized HGA-Earth-pointing path** for platform attitude (per Story 3.2 § AC4), but that path is NOT the SPICE ground truth. The L2 platform gate is therefore inactive: every fixture record routes to `n_platform_synthesized` and the platform 1-mrad assertion never fires.
+
+**Diagnostic:** The vitest test at `web/tests/attitude-l2-fixture.test.ts:317-322` logs:
+`[L2] platform records: compared=<N>, synthesized-skip=<M> (synthesized-skip > 0 indicates Story 3.1 type-1-CK gap)`
+
+When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` drops to zero — the L2 gate then activates the platform comparison without test-side changes.
+
+**Resolution paths:**
+
+- (a) Amend `ck_sample._build_window_grid` (or `_intersect_interval`) to treat type-1 zero-duration intervals as discrete knot ETs. Emit a `platform_attitude` VTRJ with explicit per-sample ETs (column-0 ET storage already supported per ADR-0004 § Body Layout per Kind, Story 3.1 amendment 2026-05-21).
+- (b) Add a fallback that polls the type-1 CK record set directly via `ckgp(struct_id, et, tol=0, ref)` at each knot ET and writes the resulting (et, quat) pairs as explicit-ET VTRJ rows.
+
+**Routing:** **Same Story 3.1 hotfix as [3.7 / HIGH] #1 above.** Both findings are Story 3.1 amendments; ship them together. Without the platform VTRJs, the L2 platform gate is inactive even after the bus cadence fix.
+
+**Linked artifacts:**
+
+- Story 3.7 Dev Agent Record § Issues Encountered #2.
+- Story 3.7 Vitest test `attitude-l2-fixture.test.ts:272-302` (the provenance-gated platform comparison block).
+
+### [3.7 / MED] L1 + L2 + L3 wall-clock budget (NFR-M4 ≤ 5 min) not measured nor CI-enforced
+
+**Severity:** MED (NFR enforcement gap; the gate IS the budget per AC3 wording)
+**Surfaced by:** Story 3.7 code review § AA-7.
+**Symptom:** AC3 says "the total L1 + L2 + L3 wall-clock time stays ≤ 5 minutes (NFR-M4 budget)" and gives the auto-trim instruction ("parameterize the sample count downward (e.g., 100 per window)") if the budget is exceeded. The story implements the size cap (AC4) but does NOT measure or assert the wall-clock budget anywhere — no `time` wrapper around the CI steps, no per-step duration captured + asserted, no auto-trim trigger. The CI workflow's `timeout-minutes: 15` (bake) + `timeout-minutes: 10` (test-web) are timeouts, not budget gates. With `test-web` now needing `bake`, the critical path lengthens; if bake+test-web combined exceeds 5 min, the NFR is silently violated.
+**Resolution:** Add a CI step (post-bake, pre-`test-web`) that records the bake job's elapsed time and asserts a target (e.g., 4 min for bake, leaving 1 min headroom for test-web). OR: add a measurement step that surfaces the actual timing in the CI log so the lead can manually verify each PR. The auto-trim path (lower N) is harder to wire up reactively in CI; the simpler defense is the measurement + manual trim.
+**Routing:** Story 7.x CI-hardening pass, or fold into the Story 3.1 hotfix above (since the cadence change will also shift CI timing measurably). LOW urgency until the Story 3.1 amendment lands (because the current `bake` step is fast on the existing 5-sec cadence; the hotfix's 1-sec cadence path may push timing).
+
+### [3.7 / LOW] `l2_attitude_validation.py` carries unused runtime helpers (`_sample_uniform_in_intervals`, `_intersect_two_coverages`)
+
+**Severity:** LOW (dead code at runtime; used only in tests)
+**Surfaced by:** Story 3.7 code review § BH-1 + BH-2.
+**Symptom:** `_sample_uniform_in_intervals` (lines 303-342) and `_intersect_two_coverages` (lines 261-286) are defined + tested but never called in `generate_fixture_records`. They were drafted to support the original AC1 "uniform-on-continuous-band" sampling strategy; Decision D1 (forced by `tol=0` type-1 CK constraint) pivoted to `random.Random.sample` on a discrete knot set, leaving these helpers unused at runtime. The module docstring around line 303 documents their semantics; the unit tests still exercise them.
+**Resolution:** Either (a) drop both helpers + their unit tests (cleanest; removes ~80 lines + 8 tests), or (b) keep them as reusable interval-math primitives and add a docstring note that they're intentionally not called by the current generator (defensive future-use). Recommendation: (a) — Story 7.x kernel-drift report or a future refactor can re-introduce them if needed.
+
+### [3.7 / LOW] `_bus_quat_at` does not catch `SpiceyError`
+
+**Severity:** LOW (the in-band knot filter guarantees no out-of-coverage ETs reach this function; defensive guard only)
+**Surfaced by:** Story 3.7 code review § EC-2.
+**Symptom:** `_bus_quat_at` (lines 345-375) calls `spice.pxform(REFERENCE_FRAME, frame, et)` without a try/except. The function's contract assumes the ET lies inside bus FK frame coverage — true today because `platform_coverage ⊆ bus_coverage` for encounter windows (per the inline comment line 538). If a future kernel update breaks that subset relationship, `pxform` raises and the entire fixture generator aborts with no diagnostic context.
+**Resolution:** Mirror `_platform_quat_at`'s pattern — wrap in `try/except SpiceyError: return None` and let the caller skip the record + increment `n_dropped_bus`. One-line guard.
+
+### [3.7 / LOW] `n_dropped_bus` counter branch is unreachable today
+
+**Severity:** LOW (defensive code; counter is correctly incremented when EC-2 lands)
+**Surfaced by:** Story 3.7 code review § BH-7.
+**Symptom:** `_bus_quat_at` cannot return `None` (it raises on failure rather than returning None), so the `if bus_quat is None` branch at line 601 is dead. Pairs with EC-2: once `_bus_quat_at` is amended to return None on SpiceyError, this branch becomes live.
+**Resolution:** Land together with EC-2.
+
+### [3.7 / LOW] `chosen_ets` does not dedupe `in_band_knots`; `rng.sample` would raise on duplicates
+
+**Severity:** LOW (PDS Rings type-1 CKs do not produce duplicate-knot intervals in practice)
+**Surfaced by:** Story 3.7 code review § BH-6.
+**Symptom:** Line 588: `rng.sample(in_band_knots, k=samples_per_window)`. If `in_band_knots` ever contained duplicate ET values (theoretically possible if two CK kernels report the same shutter event timestamp), `random.sample` operates on the duplicates as distinct elements — fine. But if a future deduplication step in the kernel pipeline filtered to unique ETs, the count could drop below `samples_per_window` and the sample would raise `ValueError`.
+**Resolution:** `in_band_knots = sorted(set(...))` before the sample call. Hardens the contract; no behavioral change today.
+
+### [3.7 / LOW] `prefetchAttitudeChunks` uses `Promise.all` with no per-chunk error attribution
+
+**Severity:** LOW (CI artifacts are complete by construction; per-chunk error attribution is a diagnostic-quality improvement only)
+**Surfaced by:** Story 3.7 code review § EC-7.
+**Symptom:** `web/tests/attitude-l2-fixture.test.ts:205-218` awaits all attitude chunks via `Promise.all`. If any single chunk fails to load (404 / SHA mismatch / brotli decompression error), the rejection propagates with no per-chunk attribution — the CI log shows whichever rejection vitest happens to surface first.
+**Resolution:** Wrap each `chunkLoader.load(f)` in a try/catch that records `(file.url, error.message)` and emits a structured list before re-throwing. Diagnostic improvement only.
+
+### [3.7 / LOW] `fixturePresent` gate doesn't verify chunk-file presence
+
+**Severity:** LOW (partial-copy scenario is rare in CI; the actual `chunkLoader.load` failure surfaces at runtime)
+**Surfaced by:** Story 3.7 code review § BH-10.
+**Symptom:** `attitude-l2-fixture.test.ts:56`: `fixturePresent = existsSync(FIXTURE_PATH) && existsSync(MANIFEST_PATH)`. Doesn't verify the per-body `.bin.br` chunks. A partial-copy scenario (manifest + fixture present, chunks missing) would pass the gate and surface as a `prefetchAttitudeChunks` failure (the chunk-loader's 404 response). Failure mode is loud but late.
+**Resolution:** Optionally extend `fixturePresent` to also verify at least one attitude chunk exists on disk. Defensive only; CI never produces partial artifacts.
+
+### [3.7 / LOW] `n_platform_synthesized` is informational only — no regression gate
+
+**Severity:** LOW (the L2 gate becomes active for platform automatically once Story 3.1 platform VTRJs are emitted)
+**Surfaced by:** Story 3.7 code review § EC-9.
+**Symptom:** When Story 3.1 is amended (per `[3.7 / HIGH]` #2 above), `n_platform_synthesized` should drop to zero and `n_platform_compared` should rise to match the fixture's platform record count. There is no test-side assertion enforcing this — the diagnostic is informational. A regression in Story 3.1 that re-broke platform VTRJ emission would silently slip past Story 3.7's L2 gate (the bus assertion would still pass; platform would silently revert to `n_platform_synthesized > 0`).
+**Resolution:** After Story 3.1's platform VTRJ amendment lands, add a regression assertion in `attitude-l2-fixture.test.ts`: `expect(n_platform_synthesized).toBe(0)` (or `expect(n_platform_compared).toBeGreaterThan(0)`). One-line follow-up.
+

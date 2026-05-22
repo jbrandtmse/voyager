@@ -1,0 +1,14 @@
+
+ RUN  v4.1.6 C:/git/Voyager/web
+
+stdout | tests/attitude-l2-fixture.test.ts > Story 3.7 — L2 JS-vs-SPICE attitude consistency (NFR-P10 ≤ 1 mrad) > every fixture record: JS quaternion matches SPICE ground truth within 1 mrad
+[L2] platform records: compared=0, synthesized-skip=3000 (synthesized-skip > 0 indicates Story 3.1 type-1-CK gap)
+
+ ❯ tests/attitude-l2-fixture.test.ts (3 tests | 1 failed) 942ms
+     × every fixture record: JS quaternion matches SPICE ground truth within 1 mrad 566ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  01:19:34
+   Duration  2.76s (transform 229ms, setup 0ms, import 516ms, tests 942ms, environment 909ms)
+

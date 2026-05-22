@@ -108,3 +108,13 @@ copy-bake-to-web:
 [working-directory("bake")]
 generate-l2-fixtures:
     uv run python -m src.generate_l2_fixtures
+
+# Generate the L2 JS-vs-SPICE attitude consistency fixture (Story 3.7).
+# Produces `bake/out/l2-attitude-fixture.json`. The Vitest test at
+# `web/tests/attitude-l2-fixture.test.ts` consumes the file (after a
+# `copy-bake-to-web` mirror to `web/public/data/`); locally without
+# uv/SpiceyPy installed, the Vitest test `describe.skipIf` the suite
+# so the rest of the test sweep stays green.
+[working-directory("bake")]
+l2-attitude-fixture:
+    uv run python -m src.l2_attitude_validation
