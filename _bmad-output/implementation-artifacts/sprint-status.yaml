@@ -160,7 +160,7 @@ development_status:
   epic-2-retrospective: done
 
   # Epic 3: Attitude Reconstruction — the Differentiator
-  epic-3: in-progress
+  epic-3: done
   3-0-epic-2-deferred-cleanup: done
   3-1-ck-kernel-bake-pipeline-and-sign-flip-walk-pre-bake: done
   3-2-attitudeservice-slerp-interpolation-and-synthesized-hga-cruise-attitude: done
@@ -170,7 +170,7 @@ development_status:
   3-5-narrow-angle-camera-boresight-cone: done
   3-6-v-attitude-indicator-hud-provenance-element: done
   3-7-l2-js-vs-spice-attitude-consistency-validation-in-ci: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: Encounter Chapters — All Six Gas-Giant Flybys
   epic-4: backlog
