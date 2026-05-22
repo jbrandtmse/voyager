@@ -216,8 +216,17 @@ export const startFirstPaint = (
 
   // Story 1.11 — HUD overlay. Wired with the shared ClockManager + (optional)
   // EphemerisService; the host (main.ts) supplies them when available.
+  //
+  // Story 3.6 AC7 — propagate `embedEnabled` so the inline
+  // `<v-attitude-indicator>` (chrome) is conditionally rendered. The HUD
+  // shell itself remains mounted in embed mode (its date/distance/speed
+  // readouts are simulation content); only the attitude provenance
+  // indicator participates in the chrome-skip discipline. Pre-`<v-hud>`
+  // assignment means the first connectedCallback's render sees the flag
+  // and skips the appendChild for the indicator (no post-mount removal).
   const hud = document.createElement('v-hud') as VHud;
   hud.clockManager = clockManager;
+  hud.embedEnabled = options.embedEnabled === true;
   if (options.ephemerisService !== undefined) {
     hud.ephemerisService = options.ephemerisService;
   }

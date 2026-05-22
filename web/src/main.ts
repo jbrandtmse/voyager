@@ -351,6 +351,11 @@ const bootstrap = (): void => {
         ephemerisService,
       );
       firstPaintHandle.hud.ephemerisService = ephemerisService;
+      // Story 3.6 — wire AttitudeService into <v-hud> so the inline
+      // <v-attitude-indicator> can read getBusProvenance(activeSpacecraftId, et)
+      // on each tick. The HUD's `updated()` lifecycle hook propagates this
+      // reference down to the indicator sub-component.
+      firstPaintHandle.hud.attitudeService = attitudeService;
 
       // Story 3.4 — AttitudeApplier is constructed AFTER AttitudeService so
       // the per-frame `tick(et, attitudeService, spacecraftModels)` callback
