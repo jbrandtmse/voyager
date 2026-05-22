@@ -491,3 +491,19 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 **Symptom:** The smoke-time fix added a runtime dependency on `sharp` (via `import('sharp')` inside `writeTexturesAsKtx2`). `sharp` is already a transitive dep via `@gltf-transform/functions` → `ndarray-pixels`, so installation works today. But the dependency is implicit; if a future gltf-transform release drops the `ndarray-pixels` chain, the WebP transcode path silently breaks.
 **Resolution:** add `sharp` as an explicit devDependency in `web/package.json`. One-line PR.
 
+## Deferred from: code review of story-3-5-narrow-angle-camera-boresight-cone (2026-05-22)
+
+### [3.5 / LOW] BoresightRenderer dispose() unit test spies on EdgesGeometry.dispose only, not ConeGeometry.dispose
+
+**Severity:** LOW (coverage gap — both dispose paths ARE actually called by the renderer)
+**Surfaced by:** Story 3.5 code review (Blind Hunter BH-7).
+**Symptom:** `web/src/render/boresight-renderer.test.ts:412` spies on `coneV1.geometry.dispose` — but `coneV1.geometry` is the `EdgesGeometry`, not the underlying `ConeGeometry`. The renderer's `dispose()` calls BOTH `coneGeometrySource.dispose()` and `edgesGeometry.dispose()`; the test only verifies the latter. The `ConeGeometry.dispose()` path runs in production but is not assertion-pinned.
+**Resolution:** add a spy on the renderer's internal `coneGeometrySource` (would require exposing it via a test-only getter mirroring `__getCone`), or assert via `vi.spyOn(ConeGeometry.prototype, 'dispose')` for a one-shot prototype-level check. One-line test addition.
+
+### [3.5 / LOW] readCssVar → new Color(accentHex) does not defend against malformed CSS variable value
+
+**Severity:** LOW (production tokens stylesheet is in-repo and lint-clean; absent-var case is covered by the fallback)
+**Surfaced by:** Story 3.5 code review (Edge Case Hunter EC-8).
+**Symptom:** `BoresightRenderer.readCssVar` returns the trimmed CSS variable value verbatim; `new Color(value)` then parses it. If `--v-color-accent` is ever set to a non-color string (e.g. `"junk"`), Three.js's `Color` constructor either throws or silently produces black depending on input. The fallback path only fires on EMPTY string, not on malformed string.
+**Resolution:** wrap `new Color(accentHex)` in a try/catch that falls back to `new Color(FALLBACK_ACCENT_COLOR)` on failure, or validate the hex shape with a regex before constructing. One-line defensive guard.
+

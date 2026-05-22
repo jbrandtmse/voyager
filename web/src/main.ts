@@ -40,6 +40,7 @@ import { startFirstPaint, mountAttributionsFooter } from './boot/first-paint';
 import './components/v-about-page';
 import { SpacecraftModels } from './render/spacecraft-models';
 import { AttitudeApplier } from './render/attitude-applier';
+import { BoresightRenderer } from './render/boresight-renderer';
 import { TrajectoryLines } from './render/trajectory-lines';
 import { CelestialBodies } from './render/celestial-bodies';
 import { Skybox } from './render/skybox';
@@ -358,9 +359,19 @@ const bootstrap = (): void => {
       // ADR-0015; it is dependency-injected at the call site.
       const attitudeApplier = new AttitudeApplier();
 
-      // Story 3.2 AC8 + Story 3.4 AC8 — dev-only debug surface for the lead's
-      // Chrome DevTools MCP smoke. Exposed alongside the existing Story 2.x
-      // surfaces under `window.__voyagerDebug.{attitudeService, attitudeApplier}`.
+      // Story 3.5 — BoresightRenderer constructs ONE wireframe NA-camera
+      // cone per spacecraft and parents it to the active LOD's
+      // SCAN_PLATFORM node. The cone inherits the per-frame platform
+      // rotation via scene-graph parenting (no per-frame quaternion
+      // compose). attach() must run AFTER spacecraftModels.load() resolves
+      // so the LOD chain is populated; tick() runs in engine.onFrame AFTER
+      // attitudeApplier.tick() so the LOD-swap check sees the same level
+      // the applier resolved against.
+      const boresightRenderer = new BoresightRenderer();
+
+      // Story 3.2 AC8 + Story 3.4 AC8 + Story 3.5 AC8 — dev-only debug
+      // surface for the lead's Chrome DevTools MCP smoke. Exposed alongside
+      // the existing Story 2.x surfaces under `window.__voyagerDebug.*`.
       // Stripped from production builds by Vite's `import.meta.env.DEV`
       // constant folding.
       if (import.meta.env.DEV) {
@@ -369,6 +380,7 @@ const bootstrap = (): void => {
           ...(w.__voyagerDebug ?? {}),
           attitudeService,
           attitudeApplier,
+          boresightRenderer,
         };
       }
 
@@ -387,6 +399,14 @@ const bootstrap = (): void => {
       const renderer = engine.getRenderer();
       spacecraftModels
         .load({ manifest, renderer: renderer ?? undefined })
+        .then(() => {
+          // Story 3.5 T2.2 — attach the boresight cone once the LOD chain
+          // has populated SCAN_PLATFORM. Pre-load attach would resolve a
+          // null platform and the cone would stay un-parented until the
+          // first LOD-swap tick rescued it. Attaching post-load is the
+          // cleanest contract.
+          boresightRenderer.attach(spacecraftModels);
+        })
         .catch((err: unknown) => {
           console.error('[main] spacecraft GLB chain load failed:', err);
         });
@@ -403,12 +423,15 @@ const bootstrap = (): void => {
       //   - spacecraftModels.tick must run first so the visibility gate
       //     (handle.group.visible) is up-to-date before the applier reads
       //     it (AC2 last clause).
-      //   - Story 3.5's boresight cone (parented to SCAN_PLATFORM) will
-      //     run AFTER the applier in a later story so the cone's world
-      //     orientation is derived from the now-applied platform attitude.
+      //   - Story 3.5 — `boresightRenderer.tick(...)` runs AFTER the
+      //     applier so its LOD-swap check sees the same level the applier
+      //     just resolved against. The cone's world rotation is propagated
+      //     by Three.js scene-graph parenting (cone is a child of
+      //     SCAN_PLATFORM whose quaternion the applier just wrote).
       engine.onFrame((et: number) => {
         spacecraftModels.tick(et, ephemerisService);
         attitudeApplier.tick(et, attitudeService, spacecraftModels);
+        boresightRenderer.tick(spacecraftModels);
         if (trajectoryLines !== null) trajectoryLines.tick(et);
         if (celestialBodies !== null) celestialBodies.tick(et, ephemerisService);
       });
