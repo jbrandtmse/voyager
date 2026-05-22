@@ -444,6 +444,20 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 ## Deferred from: Story 3.3 lead-driven smoke (2026-05-22)
 
+### [3.4 / LOW] CK-window articulation visual smoke gated on bake-attitude propagation to local manifest
+
+**Severity:** LOW (smoke-evidence completeness; functional path covered by tests)
+**Surfaced by:** Story 3.4 lead-driven Chrome DevTools MCP smoke (2026-05-22)
+**Symptom:** The runtime manifest at `web/public/data/manifest.json` predates Story 3.1's `just bake-attitude` step. Without `uv` locally, the lead cannot re-run the Python bake to populate the attitude VTRJ files + manifest entries. The smoke at `/?t=1979-03-05T12:05:26Z` therefore exercises only the synthesized cruise path (no CK files in the manifest → `findAttitudeFile` returns null → fallback to synthesized). The CK-driven articulation visual gate (AC4 § "scrubbing forward 1 simulated hour at 100× speed shows the platform rotating progressively") is structurally inaccessible locally.
+**Impact:** None on Story 3.4's deliverable — the CK path is fully covered by the 5 integration tests + 13 QA gap tests against CK fixtures. The synthesized path IS verified visually + functionally. Loss is one tier of redundant evidence, not a correctness gap.
+**Resolution paths:**
+- (a) Install `uv` locally + run `just bake-attitude` to populate the manifest with `-31000 / -31100 / -32000 / -32100` bodies, then re-run the Story 3.4 smoke at the V1 Jupiter ET to capture the CK articulation visual. ~5 min of lead time.
+- (b) Pull the CI-baked artifacts from a fresh GitHub Actions run (post-merge) and run the smoke against those. Slower wallclock but no local install.
+- (c) Defer until Story 7.x post-deploy smoke against the production CDN URL — by then the bake-attitude pipeline is fully integrated and the smoke evidence is natural.
+**Recommended:** (c) — the CI / production deploy is where the bake-attitude pipeline is intended to land; doing it locally for Story 3.4 smoke is over-engineering. Tests cover the CK path at multiple tiers.
+
+---
+
 ### ✅ RESOLVED in Story 3.3.1 (2026-05-22) — [3.3 / HIGH] Chunk-loader resolves chapter-relative URLs against the active path instead of root
 
 **Severity:** HIGH (load-bearing data pipeline fails on chapter routes; pre-existing since Story 2.4)

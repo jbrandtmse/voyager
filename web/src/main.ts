@@ -39,6 +39,7 @@ import {
 import { startFirstPaint, mountAttributionsFooter } from './boot/first-paint';
 import './components/v-about-page';
 import { SpacecraftModels } from './render/spacecraft-models';
+import { AttitudeApplier } from './render/attitude-applier';
 import { TrajectoryLines } from './render/trajectory-lines';
 import { CelestialBodies } from './render/celestial-bodies';
 import { Skybox } from './render/skybox';
@@ -350,15 +351,24 @@ const bootstrap = (): void => {
       );
       firstPaintHandle.hud.ephemerisService = ephemerisService;
 
-      // Story 3.2 AC8 — dev-only debug surface for the lead's Chrome DevTools
-      // MCP smoke. Exposed alongside the existing Story 2.x surfaces under
-      // `window.__voyagerDebug.attitudeService`. Stripped from production
-      // builds by Vite's `import.meta.env.DEV` constant folding.
+      // Story 3.4 — AttitudeApplier is constructed AFTER AttitudeService so
+      // the per-frame `tick(et, attitudeService, spacecraftModels)` callback
+      // (registered below in the engine.onFrame block) has both
+      // dependencies resolved. The applier holds no global state per
+      // ADR-0015; it is dependency-injected at the call site.
+      const attitudeApplier = new AttitudeApplier();
+
+      // Story 3.2 AC8 + Story 3.4 AC8 — dev-only debug surface for the lead's
+      // Chrome DevTools MCP smoke. Exposed alongside the existing Story 2.x
+      // surfaces under `window.__voyagerDebug.{attitudeService, attitudeApplier}`.
+      // Stripped from production builds by Vite's `import.meta.env.DEV`
+      // constant folding.
       if (import.meta.env.DEV) {
         const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
         w.__voyagerDebug = {
           ...(w.__voyagerDebug ?? {}),
           attitudeService,
+          attitudeApplier,
         };
       }
 
@@ -385,8 +395,20 @@ const bootstrap = (): void => {
       // immediately. All three modules handle null returns via
       // hold-previous semantics, so it's safe to register the tick before
       // any chunks land.
+      //
+      // Story 3.4 AC1 — `attitudeApplier.tick(...)` runs BETWEEN the
+      // spacecraft position update (which sets handle.group.position +
+      // handle.group.visible) and the downstream trajectory / celestial
+      // body updates. This ordering is load-bearing:
+      //   - spacecraftModels.tick must run first so the visibility gate
+      //     (handle.group.visible) is up-to-date before the applier reads
+      //     it (AC2 last clause).
+      //   - Story 3.5's boresight cone (parented to SCAN_PLATFORM) will
+      //     run AFTER the applier in a later story so the cone's world
+      //     orientation is derived from the now-applied platform attitude.
       engine.onFrame((et: number) => {
         spacecraftModels.tick(et, ephemerisService);
+        attitudeApplier.tick(et, attitudeService, spacecraftModels);
         if (trajectoryLines !== null) trajectoryLines.tick(et);
         if (celestialBodies !== null) celestialBodies.tick(et, ephemerisService);
       });
