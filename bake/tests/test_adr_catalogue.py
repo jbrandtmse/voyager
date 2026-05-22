@@ -44,7 +44,7 @@ REQUIRED_SECTION_HEADERS = (
 ALLOWED_STATUS_VALUES = ("Proposed", "Accepted", "Deprecated")
 SUPERSEDED_PATTERN = re.compile(r"^Superseded-by-\d{4}$")
 
-EXPECTED_NUMBERED_ADRS = set(range(1, 28))  # 0001..0027 inclusive (25 catalogue + 0026 + 0027)
+EXPECTED_NUMBERED_ADRS = set(range(1, 29))  # 0001..0028 inclusive (25 catalogue + 0026, 0027, 0028); Story 4.0 AC9 closed the Story 3.5 ADR-0028 catalogue-pin gap.
 
 
 def _adr_files() -> list[Path]:
@@ -68,7 +68,7 @@ def test_madr_template_exists() -> None:
 
 
 def test_catalogue_has_expected_adr_files() -> None:
-    """AC2 / AC5 / AC6: 25 catalogue ADRs + 0026 + 0027 + 0000-template = 28 numbered files."""
+    """AC2 / AC5 / AC6: 25 catalogue ADRs + 0026 + 0027 + 0028 + 0000-template = 29 numbered files (Story 4.0 AC9 amended)."""
     files = _adr_files()
     numbers = {_parse_number(p) for p in files}
 
@@ -78,7 +78,7 @@ def test_catalogue_has_expected_adr_files() -> None:
 
     assert not missing, f"missing ADR numbers: {sorted(missing)}"
     assert not extra, f"unexpected ADR numbers: {sorted(extra)}"
-    assert len(files) == 28, f"expected 28 ADR files, got {len(files)}"
+    assert len(files) == 29, f"expected 29 ADR files, got {len(files)}"
 
 
 @pytest.mark.parametrize("path", _adr_files(), ids=lambda p: p.name)

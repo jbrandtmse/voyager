@@ -41,10 +41,8 @@ from l2_attitude_validation import (  # noqa: E402
     _bus_struct_for_spacecraft,
     _frame_name_for_bus,
     _intersect_interval,
-    _intersect_two_coverages,
     _merge_intervals,
     _platform_struct_for_spacecraft,
-    _sample_uniform_in_intervals,
     _spacecraft_naif_for_struct,
     _spice_scalar_first_to_three_scalar_last,
 )
@@ -143,45 +141,6 @@ def test_seed_determinism_different_seeds_diverge() -> None:
     assert draws_a != draws_b
 
 
-def test_sample_uniform_in_intervals_returns_exact_count() -> None:
-    """Sampler returns exactly ``n`` ETs for any non-zero-measure input."""
-    rng = random.Random(RNG_SEED)
-    ets = _sample_uniform_in_intervals([(0.0, 100.0)], 500, rng)
-    assert len(ets) == 500
-
-
-def test_sample_uniform_in_intervals_all_inside_union() -> None:
-    """Every drawn ET lands inside the input interval union."""
-    rng = random.Random(RNG_SEED)
-    intervals = [(0.0, 10.0), (50.0, 60.0)]
-    ets = _sample_uniform_in_intervals(intervals, 1000, rng)
-    for et in ets:
-        in_first = 0.0 <= et <= 10.0
-        in_second = 50.0 <= et <= 60.0
-        assert in_first or in_second, f"ET {et} outside union {intervals}"
-
-
-def test_sample_uniform_in_intervals_empty_input() -> None:
-    """Empty input or zero count returns empty list (defensive)."""
-    rng = random.Random(RNG_SEED)
-    assert _sample_uniform_in_intervals([], 100, rng) == []
-    assert _sample_uniform_in_intervals([(0.0, 10.0)], 0, rng) == []
-
-
-def test_sample_uniform_in_intervals_proportional_density() -> None:
-    """Longer intervals get proportionally more draws (uniform 1-D density).
-
-    For intervals of length 10 and 90, 1000 draws should put roughly 900
-    in the longer interval. Allow ±5% tolerance for finite-sample noise.
-    """
-    rng = random.Random(RNG_SEED)
-    intervals = [(0.0, 10.0), (100.0, 190.0)]
-    ets = _sample_uniform_in_intervals(intervals, 1000, rng)
-    in_long = sum(1 for et in ets if 100.0 <= et <= 190.0)
-    # 1000 × 90/100 = 900; tolerate ±50 for RNG variance.
-    assert 850 <= in_long <= 950, f"expected ~900 in long interval, got {in_long}"
-
-
 # === Interval helpers (mirror ck_sample) ====================================
 
 
@@ -216,34 +175,6 @@ def test_merge_intervals_unsorted_input() -> None:
 
 def test_merge_intervals_empty() -> None:
     assert _merge_intervals([]) == []
-
-
-def test_intersect_two_coverages_disjoint_returns_empty() -> None:
-    """No overlap between bus and platform → empty intersection."""
-    bus = [(0.0, 10.0), (20.0, 30.0)]
-    platform = [(50.0, 60.0)]
-    assert _intersect_two_coverages(bus, platform) == []
-
-
-def test_intersect_two_coverages_full_overlap() -> None:
-    """Platform fully inside bus → platform intervals returned as-is."""
-    bus = [(0.0, 100.0)]
-    platform = [(10.0, 20.0), (50.0, 60.0)]
-    assert _intersect_two_coverages(bus, platform) == [(10.0, 20.0), (50.0, 60.0)]
-
-
-def test_intersect_two_coverages_partial_overlap() -> None:
-    """Partial overlap → clipped to intersection."""
-    bus = [(0.0, 30.0), (50.0, 80.0)]
-    platform = [(20.0, 60.0)]
-    assert _intersect_two_coverages(bus, platform) == [(20.0, 30.0), (50.0, 60.0)]
-
-
-def test_intersect_two_coverages_empty_inputs() -> None:
-    """Empty input → empty output."""
-    assert _intersect_two_coverages([], [(0.0, 10.0)]) == []
-    assert _intersect_two_coverages([(0.0, 10.0)], []) == []
-    assert _intersect_two_coverages([], []) == []
 
 
 # === Struct ID → spacecraft NAIF mapping ====================================

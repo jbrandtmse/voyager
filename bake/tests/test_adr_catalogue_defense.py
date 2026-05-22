@@ -209,6 +209,16 @@ KNOWN_FILENAME_TITLE_DIVERGENCES: dict[str, dict[str, str]] = {
         # own header note.
         "deferred": "",
     },
+    "0028-narrow-angle-only-wide-angle-deferred-v11.md": {
+        # Story 3.5 ADR. Filename token "narrow" → H1 substring "NA"
+        # (the NAIF / mission-published abbreviation for the narrow-angle
+        # camera; the H1 reads "NA Boresight Cone Only; Wide-Angle Camera
+        # Deferred to v1.1+"). The "narrow-angle" → "NA" abbreviation is
+        # the conventional Voyager-imagery shorthand; the H1 prefers the
+        # compact form. Closed by Story 4.0 (2026-05-22) per AC9's
+        # re-evaluation of the Story 3.7 pre-existing failures.
+        "narrow": "na",
+    },
 }
 
 # Stopwords ignored in the filename→title comparison. These are common

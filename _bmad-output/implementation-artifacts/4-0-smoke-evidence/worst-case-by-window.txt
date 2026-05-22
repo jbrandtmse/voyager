@@ -1,0 +1,75 @@
+
+ RUN  v4.1.6 C:/git/Voyager/web
+
+stdout | tests/_probe_l2_worst_case.test.ts > probe L2 worst-case (smoke evidence) > emit worst-case bus + platform angular errors per window
+{
+  "gate_threshold_rad": 0.001,
+  "overall_worst": {
+    "kind": "bus",
+    "et": -579086636.401438,
+    "ckWindow": "v2-saturn",
+    "spacecraftId": -32,
+    "errRad": 0.0007485903195564952,
+    "errMrad": 0.7485903195564952
+  },
+  "worst_bus_per_window": {
+    "-32/v2-jupiter": {
+      "rad": 0.00008143120712965395,
+      "mrad": 0.08143120712965395
+    },
+    "-32/v2-saturn": {
+      "rad": 0.0007485903195564952,
+      "mrad": 0.7485903195564952
+    },
+    "-32/v2-uranus": {
+      "rad": 0.00007106219884975764,
+      "mrad": 0.07106219884975765
+    },
+    "-32/v2-neptune": {
+      "rad": 0.00009333230468993808,
+      "mrad": 0.09333230468993808
+    },
+    "-31/v1-jupiter": {
+      "rad": 0.00005289798889980762,
+      "mrad": 0.052897988899807624
+    },
+    "-31/v1-saturn": {
+      "rad": 0.00015768303448608428,
+      "mrad": 0.15768303448608428
+    }
+  },
+  "worst_platform_per_window": {
+    "-32/v2-jupiter": {
+      "rad": 2.9802322387695312e-8,
+      "mrad": 0.000029802322387695312
+    },
+    "-32/v2-saturn": {
+      "rad": 4.2146848510894035e-8,
+      "mrad": 0.00004214684851089403
+    },
+    "-32/v2-uranus": {
+      "rad": 2.9802322387695312e-8,
+      "mrad": 0.000029802322387695312
+    },
+    "-32/v2-neptune": {
+      "rad": 4.2146848510894035e-8,
+      "mrad": 0.00004214684851089403
+    },
+    "-31/v1-jupiter": {
+      "rad": 2.9802322387695312e-8,
+      "mrad": 0.000029802322387695312
+    },
+    "-31/v1-saturn": {
+      "rad": 2.9802322387695312e-8,
+      "mrad": 0.000029802322387695312
+    }
+  }
+}
+
+ ✓ tests/_probe_l2_worst_case.test.ts > probe L2 worst-case (smoke evidence) > emit worst-case bus + platform angular errors per window 731ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  14:29:17
+   Duration  2.42s (transform 196ms, setup 0ms, import 449ms, tests 734ms, environment 831ms)
+

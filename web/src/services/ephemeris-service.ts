@@ -56,7 +56,16 @@ export class EphemerisService {
   constructor(manifest: Manifest, chunkLoader: ChunkLoader) {
     this.chunkLoader = chunkLoader;
     for (const body of manifest.bodies) {
-      const sorted = body.files.slice().sort(
+      // Story 4.0 — filter to `kind === 'trajectory'` BEFORE indexing.
+      // Story 3.1 / 4.0 added `bus_attitude` + `platform_attitude` entries
+      // to the same spacecraft body (NAIF -31 / -32). Including them in the
+      // binary-search index causes `findSegmentFile` to pick an attitude
+      // file whose start ET is closer-to-but-not-covering a queried ET,
+      // returning null when a trajectory segment WAS the correct match.
+      // Attitude lookups go through AttitudeService (Story 3.2), which has
+      // its own per-body, per-kind index built on the same manifest.
+      const trajectoryFiles = body.files.filter((f) => f.kind === 'trajectory');
+      const sorted = trajectoryFiles.slice().sort(
         (a, b) => a.timeRangeEt[0] - b.timeRangeEt[0],
       );
       this.bodiesById.set(body.naifId, {

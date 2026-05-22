@@ -256,34 +256,6 @@ def _intersect_interval(
     return out
 
 
-def _intersect_two_coverages(
-    a: list[tuple[float, float]],
-    b: list[tuple[float, float]],
-) -> list[tuple[float, float]]:
-    """Return the intersection of two interval lists.
-
-    Used to compute ``(bus_coverage ∩ platform_coverage)`` — the band of
-    ETs where both ckgp queries are guaranteed to succeed.
-
-    Both inputs are assumed merged (no internal overlaps) and sorted; the
-    output is also merged + sorted.
-    """
-    out: list[tuple[float, float]] = []
-    i = 0
-    j = 0
-    while i < len(a) and j < len(b):
-        lo = max(a[i][0], b[j][0])
-        hi = min(a[i][1], b[j][1])
-        if lo < hi:
-            out.append((lo, hi))
-        # Advance the interval that ends first.
-        if a[i][1] < b[j][1]:
-            i += 1
-        else:
-            j += 1
-    return out
-
-
 def _merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
     """Sort + merge overlapping intervals. Same logic as ``ck_sample.bake_attitude``."""
     if not intervals:
@@ -298,49 +270,9 @@ def _merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, 
     return merged
 
 
-def _sample_uniform_in_intervals(
-    intervals: list[tuple[float, float]],
-    n: int,
-    rng: random.Random,
-) -> list[float]:
-    """Draw ``n`` ETs uniformly across the union of ``intervals``.
-
-    The union is treated as a single 1-D measure: pick a uniform random length
-    inside the total interval span, then map it onto the appropriate
-    sub-interval. This ensures each ET inside the union is drawn with equal
-    probability density (i.e., longer windows get proportionally more
-    samples), which matches AC1's "uniformly at random within each window's
-    coverage" wording when "window" is the merged-coverage union.
-
-    Determinism: uses ``rng.random()`` (a passed-in ``random.Random`` instance),
-    NOT the module-level ``random``, so the caller controls the seed exactly.
-    """
-    if not intervals or n <= 0:
-        return []
-    spans = [hi - lo for lo, hi in intervals]
-    total = sum(spans)
-    if total <= 0:
-        return []
-
-    out: list[float] = []
-    for _ in range(n):
-        u = rng.random() * total
-        # Find the interval that contains the cumulative position `u`.
-        cumulative = 0.0
-        for (lo, hi), span in zip(intervals, spans):
-            if u <= cumulative + span:
-                # Position within this interval: u - cumulative.
-                out.append(lo + (u - cumulative))
-                break
-            cumulative += span
-        else:
-            # Numerical edge case: u exactly hit the last cumulative — clamp.
-            lo, hi = intervals[-1]
-            out.append(hi)
-    return out
-
-
-def _bus_quat_at(spacecraft_naif: int, et: float) -> tuple[float, float, float, float]:
+def _bus_quat_at(
+    spacecraft_naif: int, et: float
+) -> tuple[float, float, float, float] | None:
     """SpiceyPy ``pxform`` → ``m2q`` → permute → Three.js scalar-last quat.
 
     Direction matters: ``pxform(REF, BODY, et)`` (J2000 → VG1_SC_BUS) gives
@@ -362,13 +294,22 @@ def _bus_quat_at(spacecraft_naif: int, et: float) -> tuple[float, float, float, 
     AC1's wording is reconciled with the runtime convention; the L1
     validator at ``bake/src/validate_l1.py`` uses ckgp directly so it
     didn't surface this defect at the bake tier.
+
+    Story 4.0 AC4: returns ``None`` on ``SpiceyError`` (mirrors
+    ``_platform_quat_at``'s pattern). Defensive guard against a future
+    kernel update that breaks the current ``platform_coverage ⊆
+    bus_coverage`` subset relationship — callers increment ``n_dropped_bus``
+    on ``None`` rather than aborting the entire fixture generator.
     """
     import spiceypy as spice
 
     frame = _frame_name_for_bus(spacecraft_naif)
     # Note frame ordering: REFERENCE_FRAME -> body_frame matches ckgp's
     # transformation direction. See block comment above for the diagnosis.
-    cmat = spice.pxform(REFERENCE_FRAME, frame, float(et))
+    try:
+        cmat = spice.pxform(REFERENCE_FRAME, frame, float(et))
+    except spice.utils.exceptions.SpiceyError:
+        return None
     q_spice = spice.m2q(cmat)  # scalar-first [w, x, y, z]
     return _spice_scalar_first_to_three_scalar_last(q_spice)
 
@@ -564,9 +505,16 @@ def generate_fixture_records(
             # against in `ck_sample.py`.
             platform_knot_ets = [a for (a, b) in platform_coverage]
             # Filter to the CA ± 2-day encounter band.
-            in_band_knots = [
+            # Story 4.0 AC4 — defensive dedup: `sorted(set(...))` hardens
+            # against future kernel-pipeline dedup steps that might filter
+            # to unique ETs and leave fewer-than-samples_per_window
+            # candidates, in which case `random.sample(...)` on duplicates
+            # would raise `ValueError`. PDS Rings type-1 CKs do not produce
+            # duplicate-knot intervals in practice today; the dedup is a
+            # one-line hardening.
+            in_band_knots = sorted({
                 et for et in platform_knot_ets if band[0] <= et <= band[1]
-            ]
+            })
             if not in_band_knots:
                 print(
                     f"[SKIP]   {slug} sc={spacecraft_naif}: no platform CK "

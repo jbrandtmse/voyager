@@ -88,9 +88,15 @@ describe('ManifestLoader.load — happy path', () => {
       { fetchImpl },
     );
     // Story 1.13 extended the body set: 7 V1 segments + 11 V2 + 10
-    // celestial single-files = 28 total.
+    // celestial single-files = 28 trajectory files.
+    // Story 3.1 added attitude entries (bus_attitude × spacecraft × window,
+    // platform_attitude × spacecraft × window for windows with CK platform
+    // coverage). Story 4.0 AC2 fixed the type-1 platform-VTRJ gap so the
+    // platform count rises to 6 (V1 PBD remains skipped — no platform CK).
+    // Total Story-4.0-post: 28 trajectory + 7 bus_attitude + 6 platform_attitude
+    // = 41 files.
     const total = manifest.bodies.reduce((acc, b) => acc + b.files.length, 0);
-    expect(total).toBe(28);
+    expect(total).toBe(41);
     expect(manifest.bodies.map((b) => b.naifId).sort((a, b) => a - b)).toEqual([
       -32, -31, 1, 2, 3, 4, 5, 6, 7, 8, 10, 301,
     ]);

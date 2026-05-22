@@ -18,15 +18,20 @@ sys.path.insert(0, str(BAKE_SRC))
 
 from ck_inventory import ENCOUNTERS  # noqa: E402
 from ck_sample import (  # noqa: E402
+    CADENCE_1S,
+    CADENCE_5S,
     CADENCE_10S,
     CADENCE_1MIN,
     CADENCE_DAILY,
+    HALF_WIDTH_1S,
     HALF_WIDTH_10S,
     HALF_WIDTH_1MIN,
     SLUG_BY_LABEL,
     _build_window_grid,
     _et_grid_for_interval,
+    _extract_knot_ets_in_band,
     _intersect_interval,
+    _is_type1_coverage,
     _kind_label,
     _kind_short,
     _spacecraft_tag,
@@ -142,16 +147,16 @@ def test_et_grid_negative_span_empty() -> None:
 
 
 def test_build_window_grid_no_coverage_returns_empty() -> None:
-    """Empty coverage → empty grid + default 5-sec cadence.
+    """Empty coverage → empty grid + default 1-sec cadence (Story 4.0).
 
-    Story 3.1 amendment 2026-05-21 (final, post-AC8 NFR-P10 slow-tier calibration):
-    encounter files use a single 5-sec uniform cadence band across closest
-    approach ±2 days. Earlier iterations at 10-sec breached at V2 Uranus's
-    Miranda imaging peak by ~36%; halving cadence (SLERP error ∝ cadence²)
-    drops worst case under the 1 mrad gate with margin. Empty-coverage default
-    is CADENCE_5S.
+    Story 4.0 amendment 2026-05-22 (path (c) variable cadence — supersedes
+    Story 3.1's uniform 5-sec calibration after Story 3.7's L2 gate
+    surfaced V2 Saturn at 3.6 mrad against NFR-P10's 1 mrad gate). The
+    variable schedule places a 1-sec inner band at ±1 hour around CA, with
+    a 5-sec outer band across the rest of the ±2-day encounter window.
+    Empty-coverage default reports CADENCE_1S since the inner band is the
+    intended-finest cadence (matches the documented contract).
     """
-    from ck_sample import CADENCE_5S
     grid, cadence = _build_window_grid(
         coverage=[],
         encounter_start_et=0.0,
@@ -159,43 +164,62 @@ def test_build_window_grid_no_coverage_returns_empty() -> None:
         closest_approach_et=50.0,
     )
     assert grid.size == 0
-    assert cadence == CADENCE_5S
+    assert cadence == CADENCE_1S
 
 
-def test_build_window_grid_uniform_5sec_cadence_across_window() -> None:
-    """Story 3.1 amended 2026-05-21: 5-sec uniform across closest_approach ±2 days.
-
-    Earlier mixed-cadence schedules (10-sec ±1hr inside 1-min ±2-day) breached
-    NFR-P10 at V2 Uranus Miranda imaging. Single 5-sec uniform cadence keeps
-    SLERP error under 1 mrad gate with margin.
-    """
-    from ck_sample import CADENCE_5S
+def test_build_window_grid_inner_band_is_1sec():
+    """Inner ±1hr CA band samples at 1-sec cadence (Story 4.0 amendment)."""
     closest = 43200.0
     # Coverage entirely covers the closest_approach ±2-day band
     coverage = [(closest - 300000.0, closest + 300000.0)]
     grid, effective_cadence = _build_window_grid(
         coverage=coverage,
-        encounter_start_et=closest - 1000.0,  # unused since 2026-05-21 amendment
-        encounter_end_et=closest + 1000.0,    # unused since 2026-05-21 amendment
+        encounter_start_et=closest - 1000.0,
+        encounter_end_et=closest + 1000.0,
         closest_approach_et=closest,
     )
-    # Effective cadence is now 5-sec uniform.
-    assert effective_cadence == CADENCE_5S
-    # Span = ±2 days = HALF_WIDTH_1MIN seconds either side; expected sample count.
-    expected_min = int(2 * HALF_WIDTH_1MIN / CADENCE_5S)
-    assert grid.size >= expected_min
-    # Every consecutive pair should be exactly 5 seconds apart (no mixed cadence).
-    diffs = np.diff(grid)
-    assert np.allclose(diffs, CADENCE_5S, atol=1e-9), (
-        f"non-uniform cadence detected: unique diffs = {np.unique(diffs)[:10]}"
+    assert effective_cadence == CADENCE_1S
+    # Inspect the inner band: every consecutive pair inside CA ± 1 hour must
+    # be ≤ CADENCE_1S apart (allow float tolerance for the linspace fixup).
+    in_inner = (grid >= closest - HALF_WIDTH_1S) & (grid <= closest + HALF_WIDTH_1S)
+    inner_grid = grid[in_inner]
+    inner_diffs = np.diff(inner_grid)
+    assert inner_diffs.size > 0
+    # Inner diffs should be ~1 sec (allow up to 1 sec tolerance for the
+    # linspace endpoint fix-up at the band edges).
+    assert np.all(inner_diffs <= CADENCE_1S + 1e-6), (
+        f"inner band cadence exceeds 1-sec: max diff = {inner_diffs.max():.3f}"
     )
+
+
+def test_build_window_grid_outer_band_is_5sec_and_no_overlap_with_inner():
+    """Outer ±2-day band samples at 5-sec; inner+outer don't double-sample (Story 4.0)."""
+    closest = 43200.0
+    coverage = [(closest - 300000.0, closest + 300000.0)]
+    grid, _ = _build_window_grid(
+        coverage=coverage,
+        encounter_start_et=closest - 1000.0,
+        encounter_end_et=closest + 1000.0,
+        closest_approach_et=closest,
+    )
+    # Look at the outer band (outside ±1hr CA, within ±2 days).
+    in_outer_lo = (grid >= closest - HALF_WIDTH_1MIN) & (grid < closest - HALF_WIDTH_1S)
+    outer_lo = grid[in_outer_lo]
+    if outer_lo.size > 1:
+        outer_diffs = np.diff(outer_lo)
+        # Outer diffs should be ~5 sec, allowing up to 5 sec tolerance for the
+        # boundary fixup.
+        assert np.all(outer_diffs <= CADENCE_5S + 1e-6), (
+            f"outer band cadence exceeds 5-sec: max diff = {outer_diffs.max():.3f}"
+        )
+    # The combined grid must be strictly sorted unique (no overlap doubles).
+    assert np.all(np.diff(grid) > 0), "grid has duplicate or non-monotonic entries"
 
 
 def test_build_window_grid_clipped_to_ck_coverage() -> None:
-    """5-sec band is intersected with `coverage` so we never sample outside CK data."""
-    from ck_sample import CADENCE_5S
+    """Band is intersected with `coverage` so we never sample outside CK data."""
     closest = 1000.0
-    # Coverage is narrower than the ±2-day band — only ±100s around closest.
+    # Coverage is narrower than the ±1hr inner band — only ±100s around closest.
     coverage = [(closest - 100.0, closest + 100.0)]
     grid, _ = _build_window_grid(
         coverage=coverage,
@@ -206,13 +230,13 @@ def test_build_window_grid_clipped_to_ck_coverage() -> None:
     # Grid must lie entirely within the coverage interval.
     assert float(grid.min()) >= coverage[0][0]
     assert float(grid.max()) <= coverage[0][1]
-    # 200-second span at 5-sec cadence = ~41 samples.
-    expected = int(200.0 / CADENCE_5S) + 1
+    # 200-second span at 1-sec cadence = ~201 samples.
+    expected = int(200.0 / CADENCE_1S) + 1
     assert grid.size in (expected - 1, expected, expected + 1)
 
 
 def test_build_window_grid_no_overlap_between_bands() -> None:
-    """The three bands together produce a strictly sorted unique grid (no doubles)."""
+    """The bands together produce a strictly sorted unique grid (no doubles)."""
     encounter_start = 0.0
     encounter_end = 86400.0
     closest = 43200.0
@@ -227,6 +251,22 @@ def test_build_window_grid_no_overlap_between_bands() -> None:
     assert np.all(np.diff(grid) > 0), "grid has duplicate or non-monotonic entries"
 
 
+def test_build_window_grid_only_outer_band_when_no_inner_overlap():
+    """Coverage that overlaps ONLY the outer band (no ±1hr inner overlap) → 5-sec only."""
+    # Coverage well outside ±1hr but inside ±2-day band — only the outer band fires.
+    closest = 0.0
+    coverage = [(closest - 100000.0, closest - 90000.0)]  # ~25-27hr before CA
+    grid, effective_cadence = _build_window_grid(
+        coverage=coverage,
+        encounter_start_et=closest - 1000.0,
+        encounter_end_et=closest + 1000.0,
+        closest_approach_et=closest,
+    )
+    assert grid.size > 0
+    # Only outer band contributed → effective cadence = 5-sec.
+    assert effective_cadence == CADENCE_5S
+
+
 def test_build_window_grid_deterministic_repeat() -> None:
     """AC4 (NFR-R4): same inputs → identical grid output."""
     args = dict(
@@ -239,6 +279,89 @@ def test_build_window_grid_deterministic_repeat() -> None:
     grid_b, cad_b = _build_window_grid(**args)
     np.testing.assert_array_equal(grid_a, grid_b)
     assert cad_a == cad_b
+
+
+# === Type-1 CK handling (Story 4.0 AC2) =====================================
+
+
+def test_is_type1_coverage_detects_zero_duration_intervals():
+    """Zero-duration `(t, t)` intervals identify type-1 (discrete) CK shape."""
+    type1 = [(100.0, 100.0), (200.0, 200.0), (300.0, 300.0)]
+    assert _is_type1_coverage(type1) is True
+
+
+def test_is_type1_coverage_negative_for_continuous():
+    """Continuous type-3/type-6 coverage with positive-duration intervals is NOT type-1."""
+    type3 = [(0.0, 86400.0), (90000.0, 180000.0)]
+    assert _is_type1_coverage(type3) is False
+
+
+def test_is_type1_coverage_mixed_records_true():
+    """Mixed coverage with any zero-duration interval is treated as type-1."""
+    mixed = [(0.0, 100.0), (150.0, 150.0)]
+    assert _is_type1_coverage(mixed) is True
+
+
+def test_extract_knot_ets_in_band_filters_to_band():
+    """Knots outside the encounter ±2-day band are filtered out."""
+    closest = 1000.0
+    band = (closest - 100.0, closest + 100.0)
+    type1 = [(800.0, 800.0), (950.0, 950.0), (1050.0, 1050.0), (1200.0, 1200.0)]
+    knots = _extract_knot_ets_in_band(type1, band)
+    np.testing.assert_array_equal(knots, np.array([950.0, 1050.0], dtype=np.float64))
+
+
+def test_extract_knot_ets_in_band_sorted_and_deduped():
+    """Knots are returned sorted + deduped (np.unique)."""
+    band = (0.0, 1000.0)
+    type1 = [(500.0, 500.0), (100.0, 100.0), (500.0, 500.0), (900.0, 900.0)]
+    knots = _extract_knot_ets_in_band(type1, band)
+    np.testing.assert_array_equal(knots, np.array([100.0, 500.0, 900.0], dtype=np.float64))
+
+
+def test_extract_knot_ets_in_band_empty_when_no_in_band_knots():
+    """No knots inside band → empty ndarray."""
+    band = (0.0, 100.0)
+    type1 = [(500.0, 500.0)]
+    knots = _extract_knot_ets_in_band(type1, band)
+    assert knots.size == 0
+
+
+def test_type1_synthetic_fixture_simulates_pds_iss_sedr_shape():
+    """Synthetic adversarial fixture mirrors PDS Rings ISS SEDR CK shape.
+
+    Real PDS Rings ISS SEDR CKs report tens of thousands of zero-duration
+    `(t, t)` intervals per encounter (one per ISS shutter event for the
+    platform structures `-31100` / `-32100`). Pre-Story-4.0, the bake
+    pipeline strict-filtered `lo < hi` in `_intersect_interval`, dropping
+    every type-1 interval → empty coverage union → `[SKIP] empty ET grid` →
+    no `platform_attitude` VTRJ produced.
+
+    This test pins the Story 4.0 AC2 contract: a coverage shape with the
+    canonical type-1 zero-duration shape is detected via `_is_type1_coverage`
+    AND `_extract_knot_ets_in_band` produces the expected knot count in the
+    encounter ±2-day band.
+
+    LFS-gated real CKs are NOT required for this test (per ADR-0011 + Story
+    4.0's fast-tier preference); the synthetic shape covers the
+    `_build_window_grid` strict-filter trap exactly.
+    """
+    # Simulate ~100 type-1 shutter events at 1-hr spacing around CA.
+    closest = 100000.0
+    knot_ets = [(closest - 1800.0 + 60.0 * i, closest - 1800.0 + 60.0 * i)
+                for i in range(60)]  # 60 shutter events at 60-sec spacing
+    # Wrap with a couple of out-of-band knots that must be filtered out.
+    knot_ets.append((closest - 500000.0, closest - 500000.0))  # 5+ days before
+    knot_ets.append((closest + 500000.0, closest + 500000.0))  # 5+ days after
+
+    assert _is_type1_coverage(knot_ets) is True
+
+    band_2day = (closest - HALF_WIDTH_1MIN, closest + HALF_WIDTH_1MIN)
+    knots = _extract_knot_ets_in_band(knot_ets, band_2day)
+    # All 60 in-band events should be present; the 2 out-of-band should be filtered.
+    assert knots.size == 60
+    # Sorted strictly ascending.
+    assert np.all(np.diff(knots) > 0)
 
 
 # === Spacecraft / kind helpers =============================================

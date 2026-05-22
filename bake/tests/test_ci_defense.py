@@ -45,6 +45,9 @@ EXPECTED_JOBS = (
     "validate-l1",
     "test-bake",
     "test-web",
+    "build-glb",  # Story 3.3 (added by AC2 Voyager GLB LOD chain bake job);
+                  # Story 4.0 AC9 closed the stale-test-expectation tripwire
+                  # surfaced in Story 3.7's cycle log.
     "build",
     "deploy-cloudflare",
 )

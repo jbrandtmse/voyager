@@ -605,8 +605,29 @@ describe('Runtime manifest.json lockfile contract (defense)', () => {
     const v2 = manifest.bodies.find((b) => b.naifId === -32);
     expect(v1, 'V1 (NAIF -31) missing from runtime manifest').toBeDefined();
     expect(v2, 'V2 (NAIF -32) missing from runtime manifest').toBeDefined();
-    expect(v1!.files.length).toBe(7);
-    expect(v2!.files.length).toBe(11);
+    // Story 3.1 + Story 4.0 AC2: each spacecraft also carries attitude
+    // entries. V1 has 7 trajectory + 3 bus_attitude (V1J, V1S, PBD)
+    // + 2 platform_attitude (V1J, V1S — V1 PBD has no platform CK
+    // coverage per docs/kernels/ckbrief-inventory.md, by design) = 12.
+    // V2 has 11 trajectory + 4 bus_attitude (V2J, V2S, V2U, V2N)
+    // + 4 platform_attitude (V2J, V2S, V2U, V2N) = 19. Verify the
+    // trajectory + attitude split independently so a regression in
+    // either pipeline surfaces with the right diagnostic.
+    const v1Trajectory = v1!.files.filter((f) => f.kind === 'trajectory').length;
+    const v1BusAttitude = v1!.files.filter((f) => f.kind === 'bus_attitude').length;
+    const v1PlatformAttitude = v1!.files.filter((f) => f.kind === 'platform_attitude').length;
+    expect(v1Trajectory, 'V1 trajectory file count').toBe(7);
+    expect(v1BusAttitude, 'V1 bus_attitude file count').toBe(3);
+    expect(v1PlatformAttitude, 'V1 platform_attitude file count (V1 PBD platform CK absent by design)').toBe(2);
+    expect(v1!.files.length).toBe(12);
+
+    const v2Trajectory = v2!.files.filter((f) => f.kind === 'trajectory').length;
+    const v2BusAttitude = v2!.files.filter((f) => f.kind === 'bus_attitude').length;
+    const v2PlatformAttitude = v2!.files.filter((f) => f.kind === 'platform_attitude').length;
+    expect(v2Trajectory, 'V2 trajectory file count').toBe(11);
+    expect(v2BusAttitude, 'V2 bus_attitude file count').toBe(4);
+    expect(v2PlatformAttitude, 'V2 platform_attitude file count').toBe(4);
+    expect(v2!.files.length).toBe(19);
 
     // Each of the 10 celestial bodies has exactly one VTRJ file (DE440 is
     // continuous; no per-segment chunking).
@@ -617,9 +638,9 @@ describe('Runtime manifest.json lockfile contract (defense)', () => {
       expect(body!.files.length).toBe(1);
     }
 
-    // Total files = 7 V1 + 11 V2 + 10 celestial = 28.
+    // Total files: 12 V1 + 19 V2 + 10 celestial = 41 (post Story 4.0 AC2).
     const total = manifest.bodies.reduce((acc, b) => acc + b.files.length, 0);
-    expect(total).toBe(28);
+    expect(total).toBe(41);
   });
 });
 
