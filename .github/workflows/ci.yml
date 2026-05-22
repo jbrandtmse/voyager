@@ -119,9 +119,12 @@ jobs:
       - name: uv sync
         working-directory: bake
         run: uv sync --frozen
-      - name: bake — first run
+      - name: bake trajectories — first run
         working-directory: bake
         run: uv run python -m src.bake_trajectories
+      - name: bake attitude — first run (Story 3.1)
+        working-directory: bake
+        run: uv run python -m src.ck_sample
       - name: snapshot SHA-256 of first bake outputs
         run: |
           cd bake/out
@@ -129,9 +132,12 @@ jobs:
             | xargs sha256sum > ../../first-bake-shas.txt
           echo "--- first bake ---"
           cat ../../first-bake-shas.txt
-      - name: bake — re-run for determinism
+      - name: bake trajectories — re-run for determinism
         working-directory: bake
         run: uv run python -m src.bake_trajectories
+      - name: bake attitude — re-run for determinism
+        working-directory: bake
+        run: uv run python -m src.ck_sample
       - name: assert determinism (NFR-R4 byte-identical re-bake)
         run: |
           cd bake/out
@@ -140,6 +146,14 @@ jobs:
           echo "--- second bake ---"
           cat ../../second-bake-shas.txt
           diff -u first-bake-shas.txt second-bake-shas.txt
+      - name: generate L2 attitude fixture (Story 3.7 AC1)
+        working-directory: bake
+        run: uv run python -m src.l2_attitude_validation
+      - name: assert L2 fixture size cap (Story 3.7 AC4)
+        run: |
+          SIZE=$(stat -c '%s' bake/out/l2-attitude-fixture.json)
+          echo "L2 fixture size: ${SIZE} bytes"
+          test "$SIZE" -le 2097152 || (echo "L2 fixture exceeds 2 MB cap: ${SIZE}" && exit 1)
       - name: upload bake outputs
         uses: actions/upload-artifact@v4
         with:
@@ -211,6 +225,7 @@ jobs:
     name: test (web — vitest L3)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
+    needs: [bake]  # Story 3.7 — L2 fixture + attitude VTRJ files come from bake job
     steps:
       - uses: actions/checkout@v4
         with:
@@ -223,16 +238,84 @@ jobs:
       - name: npm ci
         working-directory: web
         run: npm ci
+      - name: download bake outputs (Story 3.7 — L2 fixture + attitude VTRJ files)
+        uses: actions/download-artifact@v4
+        with:
+          name: bake-out
+          path: bake/out/
+      - name: copy bake outputs to web/public/data (Story 3.7 AC3)
+        run: |
+          mkdir -p web/public/data
+          cp bake/out/manifest.json web/public/data/manifest.json
+          # Attitude + trajectory VTRJs needed by AttitudeService boot stack.
+          cp bake/out/*.bin.br web/public/data/
+          # L2 attitude fixture consumed by attitude-l2-fixture.test.ts.
+          cp bake/out/l2-attitude-fixture.json web/public/data/l2-attitude-fixture.json
+          ls -la web/public/data/ | head -40
       - name: vitest
         working-directory: web
         run: npm test
+
+  # --- Story 3.3 AC2 — Voyager GLB LOD chain (gltf-transform + meshopt + KTX2)
+  #
+  # Runs `just bake-glb` (= `npm run build-glb`) inside `web/`. Produces
+  # `web/public/models/voyager-lod{0..3}.<hash>.glb` + `bake/out/models-
+  # manifest-fragment.json`. Requires `toktx` (Khronos KTX-Software CLI) on
+  # PATH per ADR-0006 § Decision step 3 — UASTC baseColor + ETC1S AO.
+  #
+  # Install path on ubuntu-22.04: the official Khronos release is a .deb
+  # under https://github.com/KhronosGroup/KTX-Software/releases. We pin a
+  # specific version so CI is reproducible.
+  build-glb:
+    name: build-glb (Voyager LOD chain — Story 3.3 AC2)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true  # required to hydrate bake/inputs/models/voyager-raw.glb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: install toktx (Khronos KTX-Software v4.3.2)
+        run: |
+          KTX_VER=4.3.2
+          curl -L -o /tmp/ktx.deb \
+            "https://github.com/KhronosGroup/KTX-Software/releases/download/v${KTX_VER}/KTX-Software-${KTX_VER}-Linux-x86_64.deb"
+          sudo apt-get update -qq
+          sudo apt-get install -y /tmp/ktx.deb
+          toktx --version
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: bake-glb (npm run build-glb)
+        working-directory: web
+        run: npm run build-glb
+      - name: assert 4 LOD outputs landed
+        run: |
+          ls -la web/public/models/
+          test $(ls web/public/models/voyager-lod0.*.glb 2>/dev/null | wc -l) -eq 1
+          test $(ls web/public/models/voyager-lod1.*.glb 2>/dev/null | wc -l) -eq 1
+          test $(ls web/public/models/voyager-lod2.*.glb 2>/dev/null | wc -l) -eq 1
+          test $(ls web/public/models/voyager-lod3.*.glb 2>/dev/null | wc -l) -eq 1
+          test -f bake/out/models-manifest-fragment.json
+      - name: upload LOD outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: voyager-lods
+          path: |
+            web/public/models/voyager-lod*.glb
+            bake/out/models-manifest-fragment.json
+          retention-days: 7
 
   # --- Vite build (content-hashed assets) -----------------------------------
   build:
     name: build (web — vite)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    needs: [typecheck-web, test-web]
+    needs: [typecheck-web, test-web, build-glb]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -245,6 +328,11 @@ jobs:
       - name: npm ci
         working-directory: web
         run: npm ci
+      - name: download LOD outputs (from build-glb job)
+        uses: actions/download-artifact@v4
+        with:
+          name: voyager-lods
+          path: .
       - name: vite build
         working-directory: web
         run: npm run build
@@ -266,7 +354,7 @@ jobs:
     name: deploy (Cloudflare Pages)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    needs: [lint-bake, lint-web, typecheck-web, bake, validate-l1, test-bake, test-web, build]
+    needs: [lint-bake, lint-web, typecheck-web, bake, validate-l1, test-bake, test-web, build-glb, build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production

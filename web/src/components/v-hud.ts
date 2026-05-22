@@ -6,12 +6,15 @@ import './v-hud-distance';
 import './v-hud-speed';
 import './v-hud-chapter-title';
 import './v-hud-instruments';
+import './v-attitude-indicator';
 import type { VHudDate } from './v-hud-date';
 import type { VHudDistance } from './v-hud-distance';
 import type { VHudSpeed } from './v-hud-speed';
 import type { VHudInstruments } from './v-hud-instruments';
+import type { VAttitudeIndicator } from './v-attitude-indicator';
 import type { ClockManager } from '../services/clock-manager';
 import type { EphemerisService } from '../services/ephemeris-service';
+import type { AttitudeService } from '../services/attitude-service';
 
 /**
  * `<v-hud>` — quiet instrument-panel HUD overlay (Story 1.11 AC1, AC2, AC6, AC7).
@@ -135,9 +138,44 @@ export class VHud extends BaseElement {
     `,
   ];
 
+  static override properties = {
+    // Story 3.6 — reflect `embedEnabled` so the conditional render of
+    // `<v-attitude-indicator>` re-evaluates when first-paint wires the
+    // flag (mirrors the pattern used by `static properties` Lit 3 decls
+    // throughout this repo per ADR-0013 — no decorators).
+    embedEnabled: { type: Boolean },
+  };
+
   /** Wired by the host (first-paint.ts). */
   clockManager: ClockManager | null = null;
   ephemerisService: EphemerisService | null = null;
+  /**
+   * Story 3.6 — `AttitudeService` is constructed POST-manifest-load (main.ts),
+   * AFTER the HUD has mounted. The host (first-paint → main.ts) assigns this
+   * once the service is ready; the HUD propagates the reference to the
+   * inline `<v-attitude-indicator>` in `updated()`.
+   */
+  attitudeService: AttitudeService | null = null;
+  /**
+   * Story 3.6 AC7 — when true, the inline `<v-attitude-indicator>` is NOT
+   * rendered (the chrome-skip discipline from Story 2.5; mirrors
+   * `<v-help-overlay>` / `<v-chapter-index>` / `<v-attribution-panel>`
+   * conditional mounting in first-paint). The indicator is the only HUD
+   * sub-component that participates in the embed chrome split — the date,
+   * distance, speed, and instrument readouts are simulation content.
+   *
+   * Declared via `declare` (no class-field initializer) so the `static
+   * properties` reactive-property accessor isn't shadowed (per Lit 3
+   * class-field-shadowing rule). Defaulted to `false` in the constructor
+   * below so existing test mounts (which never set the flag) preserve the
+   * pre-Story-3.6 mounting behavior.
+   */
+  declare embedEnabled: boolean;
+
+  constructor() {
+    super();
+    this.embedEnabled = false;
+  }
 
   /** Sub-component handles for direct per-frame tick() invocation. */
   get hudDate(): VHudDate | null {
@@ -159,6 +197,15 @@ export class VHud extends BaseElement {
     );
   }
 
+  /** Story 3.6 — sub-component handle for the inline attitude indicator. */
+  get attitudeIndicator(): VAttitudeIndicator | null {
+    return (
+      this.shadowRoot?.querySelector<VAttitudeIndicator>(
+        'v-attitude-indicator',
+      ) ?? null
+    );
+  }
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     // Propagate wiring down to children after Lit has rendered them.
@@ -177,6 +224,12 @@ export class VHud extends BaseElement {
     // keeps the strikethrough state in sync.
     const inst = this.hudInstruments;
     if (inst !== null) inst.clockManager = this.clockManager;
+    // Story 3.6 — propagate AttitudeService reference so the indicator can
+    // call getBusProvenance(activeSpacecraftId, et) on each tick. The service
+    // is null until main.ts's ManifestLoader.then() chain constructs it post-
+    // manifest-load, at which point the next updated() call wires it through.
+    const att = this.attitudeIndicator;
+    if (att !== null) att.attitudeService = this.attitudeService;
   }
 
   /**
@@ -189,6 +242,26 @@ export class VHud extends BaseElement {
     this.hudDistance?.tick(et);
     // Story 2.9 — instrument-shutoff strikethrough state is driven by ET.
     this.hudInstruments?.tick(et);
+    // Story 3.6 — propagate the per-frame ET to the inline attitude indicator
+    // so it can read AttitudeService.getBusProvenance and gate re-render on
+    // actual change (the indicator pins its prev-provenance and only triggers
+    // a Lit update when the regime flips, so the 60 Hz call rate is fine).
+    //
+    // Smoke-time HIGH fix (Story 3.6 smoke): `attitudeService` is a plain
+    // class field on `<v-hud>` (not in `static properties`), so assigning to
+    // it from `main.ts` post-manifest-load does NOT trigger Lit's `updated()`
+    // and the propagation in `updated()` only fires for `embedEnabled`
+    // reactive-property changes. Tests passed because they set the service
+    // before first render; production sets it after first render, and the
+    // indicator stayed stuck on the placeholder. Propagate every tick — the
+    // child's reactive-property setter compares identity, so this is a
+    // no-op once propagated. Identity-gated to avoid pointless writes once
+    // wired.
+    const att = this.attitudeIndicator;
+    if (att !== null && att.attitudeService !== this.attitudeService) {
+      att.attitudeService = this.attitudeService;
+    }
+    att?.tick(et);
   }
 
   override render(): TemplateResult {
@@ -199,6 +272,9 @@ export class VHud extends BaseElement {
         </div>
         <div class="corner top-right">
           <v-hud-date></v-hud-date>
+          ${this.embedEnabled
+            ? null
+            : html`<v-attitude-indicator></v-attitude-indicator>`}
           <v-hud-distance></v-hud-distance>
         </div>
         <div class="corner bottom-left">

@@ -183,3 +183,268 @@ def test_bake_commit_present_or_unknown(tmp_path: Path) -> None:
     if commit != "unknown":
         assert len(commit) == 40
         int(commit, 16)  # parses as hex
+
+
+# --- Story 3.1 AC3: provenance field for attitude entries ------------------
+
+
+def _attitude_bodies() -> list[BodyEntry]:
+    """Mixed body record: V1 has both trajectory + attitude entries."""
+    return [
+        BodyEntry(
+            naifId=-31,
+            name="Voyager 1",
+            files=[
+                FileEntry(
+                    timeRangeEt=(0.0, 100.0),
+                    cadenceSec=60.0,
+                    kind="trajectory",
+                    url="data/voyager-1-seg01-X-Y.bin.br",
+                    sha256="a" * 64,
+                    sizeBytes=1024,
+                    # provenance defaults to None — trajectory entries don't emit it
+                ),
+                FileEntry(
+                    timeRangeEt=(200.0, 300.0),
+                    cadenceSec=60.0,
+                    kind="bus_attitude",
+                    url="data/v1-bus-attitude-jupiter.bin.br",
+                    sha256="b" * 64,
+                    sizeBytes=2048,
+                    provenance="ck",
+                ),
+                FileEntry(
+                    timeRangeEt=(200.0, 300.0),
+                    cadenceSec=10.0,
+                    kind="platform_attitude",
+                    url="data/v1-platform-attitude-jupiter.bin.br",
+                    sha256="c" * 64,
+                    sizeBytes=3072,
+                    provenance="ck",
+                ),
+            ],
+        )
+    ]
+
+
+def test_emit_manifest_with_attitude_files(tmp_path: Path) -> None:
+    """AC3: attitude entries carry `provenance: "ck"`; trajectory entries do NOT.
+
+    Verifies the on-disk JSON has `provenance` only on the attitude rows and
+    that the field value is exactly the literal "ck". Round-trip parity with
+    Story 1.4 manifest tests: trajectory rows preserve their pre-Story-3.1
+    shape (no new key surface).
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_attitude_bodies(), _sample_kernels(), out, tmp_path)
+    doc = load_manifest(out)
+    files = doc["bodies"][0]["files"]
+    assert len(files) == 3
+
+    # Sort by kind so test is order-independent
+    by_kind = {fe["kind"]: fe for fe in files}
+    assert "trajectory" in by_kind and "bus_attitude" in by_kind and "platform_attitude" in by_kind
+
+    # Trajectory: NO provenance key
+    traj = by_kind["trajectory"]
+    assert "provenance" not in traj, (
+        "trajectory entries must NOT emit `provenance` (forward-compat with Story 1.4)"
+    )
+
+    # Attitude: provenance == "ck"
+    for kind in ("bus_attitude", "platform_attitude"):
+        entry = by_kind[kind]
+        assert entry["provenance"] == "ck", (
+            f"{kind}: expected provenance='ck', got {entry.get('provenance')!r}"
+        )
+
+
+def test_trajectory_only_manifest_has_no_provenance_keys(tmp_path: Path) -> None:
+    """AC3 byte-stability: a trajectory-only manifest produces the same JSON
+    structure pre- and post-Story-3.1.
+
+    Story 1.4's existing tests pin the trajectory FileEntry shape; this is the
+    explicit "no surprises" guard ensuring `provenance` doesn't leak into
+    trajectory rows even by accident.
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path)
+    doc = load_manifest(out)
+    for body in doc["bodies"]:
+        for fe in body["files"]:
+            assert "provenance" not in fe, (
+                f"{fe['url']}: trajectory entry leaked `provenance` key — "
+                f"breaks Story 1.4 byte-stability"
+            )
+
+
+def test_provenance_field_serialization_round_trips(tmp_path: Path) -> None:
+    """AC3: an attitude FileEntry's provenance survives JSON round-trip verbatim."""
+    bodies = _attitude_bodies()
+    out = tmp_path / "manifest.json"
+    emit_manifest(bodies, _sample_kernels(), out, tmp_path)
+    raw_text = out.read_text(encoding="utf-8")
+    # The literal pair `"provenance": "ck"` must appear in the JSON text
+    assert '"provenance": "ck"' in raw_text, (
+        f"expected literal `\"provenance\": \"ck\"` in manifest JSON; got:\n{raw_text}"
+    )
+
+
+def test_attitude_files_preserve_sorted_keys(tmp_path: Path) -> None:
+    """AC3 (NFR-R4): with the new `provenance` key, sort_keys=True still applies.
+
+    The serializer must place `provenance` alphabetically between `kind` and
+    `sha256` — JSON keys at every level remain sorted.
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_attitude_bodies(), _sample_kernels(), out, tmp_path)
+    text = out.read_text(encoding="utf-8")
+    reloaded = json.loads(text)
+    canonical = json.dumps(reloaded, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    assert text == canonical, "manifest JSON keys are not in sorted order"
+
+
+# --- Story 3.3 AC4: `models` parameter ----------------------------------------
+
+
+def _sample_models_fragment() -> list[dict]:
+    """Minimal valid 4-LOD models fragment matching the AC4 schema."""
+    return [
+        {
+            "id": "voyager",
+            "lods": [
+                {
+                    "level": 0,
+                    "url": "/models/voyager-lod0.aaaaaaaa.glb",
+                    "sha256": "a" * 64,
+                    "sizeBytes": 2048000,
+                    "maxDistanceKm": 0.001,
+                },
+                {
+                    "level": 1,
+                    "url": "/models/voyager-lod1.bbbbbbbb.glb",
+                    "sha256": "b" * 64,
+                    "sizeBytes": 1024000,
+                    "maxDistanceKm": 0.1,
+                },
+                {
+                    "level": 2,
+                    "url": "/models/voyager-lod2.cccccccc.glb",
+                    "sha256": "c" * 64,
+                    "sizeBytes": 256000,
+                    "maxDistanceKm": 1.0,
+                },
+                {
+                    "level": 3,
+                    "url": "/models/voyager-lod3.dddddddd.glb",
+                    "sha256": "d" * 64,
+                    "sizeBytes": 64000,
+                    "maxDistanceKm": None,
+                },
+            ],
+            "pivotMeters": [0, 0, 0],
+            "scaleToKm": 0.001,
+        }
+    ]
+
+
+def test_emit_manifest_without_models_omits_field(tmp_path: Path) -> None:
+    """AC4 byte-stability: when `models` is None (or absent), the manifest
+    JSON does NOT contain a `models` key — preserves the pre-Story-3.3 shape
+    so trajectory-only / attitude-only bakes don't introduce diff churn.
+    """
+    out = tmp_path / "manifest.json"
+    emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path)
+    doc = load_manifest(out)
+    assert "models" not in doc, (
+        "models field should be omitted entirely when not provided (byte-stability)"
+    )
+
+
+def test_emit_manifest_with_models_round_trips(tmp_path: Path) -> None:
+    """AC4: a manifest emitted with `models=...` round-trips through JSON
+    with the model entries intact.
+    """
+    out = tmp_path / "manifest.json"
+    models = _sample_models_fragment()
+    emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path, models=models)
+    doc = load_manifest(out)
+    assert "models" in doc
+    assert len(doc["models"]) == 1
+    model = doc["models"][0]
+    assert model["id"] == "voyager"
+    assert len(model["lods"]) == 4
+    # Last LOD's maxDistanceKm is null/None.
+    assert model["lods"][3]["maxDistanceKm"] is None
+    assert model["pivotMeters"] == [0, 0, 0]
+    assert model["scaleToKm"] == 0.001
+
+
+def test_emit_manifest_with_models_byte_stable_across_reruns(tmp_path: Path) -> None:
+    """AC4: re-emitting with the same models fragment produces byte-identical
+    output (modulo bakeTimestamp / bakeCommit). This is the determinism
+    contract that lets `just bake-glb` + `just bake` be idempotent.
+    """
+    out_a = tmp_path / "a.json"
+    out_b = tmp_path / "b.json"
+    fixed_ts = datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc)
+    models = _sample_models_fragment()
+    emit_manifest(_sample_bodies(), _sample_kernels(), out_a, tmp_path,
+                  bake_timestamp=fixed_ts, models=models)
+    emit_manifest(_sample_bodies(), _sample_kernels(), out_b, tmp_path,
+                  bake_timestamp=fixed_ts, models=models)
+    assert out_a.read_bytes() == out_b.read_bytes()
+
+
+def test_emit_manifest_rejects_malformed_models_before_write(tmp_path: Path) -> None:
+    """AC4: a malformed models fragment is rejected with a ValueError BEFORE
+    any file is written. The defensive pre-write check exists so a bad
+    `web/scripts/build_glb.ts` doesn't surface as a Zod validation error at
+    runtime (blocking first paint on every contributor's machine).
+    """
+    out = tmp_path / "manifest.json"
+    # Bad sha256 (not 64 hex chars).
+    bad_models = [
+        {
+            "id": "voyager",
+            "lods": [
+                {
+                    "level": 0,
+                    "url": "/models/voyager-lod0.x.glb",
+                    "sha256": "deadbeef",  # too short
+                    "sizeBytes": 1024,
+                    "maxDistanceKm": 0.001,
+                },
+            ],
+            "pivotMeters": [0, 0, 0],
+            "scaleToKm": 0.001,
+        }
+    ]
+    try:
+        emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path, models=bad_models)
+        raise AssertionError("emit_manifest should have raised on bad sha256")
+    except ValueError as exc:
+        assert "sha256" in str(exc)
+    # Manifest file must NOT have been written.
+    assert not out.exists(), (
+        "manifest file should not be written when models fragment validation fails"
+    )
+
+
+def test_emit_manifest_rejects_models_with_empty_lods(tmp_path: Path) -> None:
+    """AC4: a model entry whose lods is empty is rejected — the Zod schema
+    requires .min(1)."""
+    out = tmp_path / "manifest.json"
+    bad = [
+        {
+            "id": "voyager",
+            "lods": [],
+            "pivotMeters": [0, 0, 0],
+            "scaleToKm": 0.001,
+        }
+    ]
+    try:
+        emit_manifest(_sample_bodies(), _sample_kernels(), out, tmp_path, models=bad)
+        raise AssertionError("emit_manifest should have raised on empty lods")
+    except ValueError as exc:
+        assert "lods" in str(exc)

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.6 C:/git/Voyager/web
+
+
+ Test Files  1 skipped (1)
+      Tests  3 skipped (3)
+   Start at  01:00:21
+   Duration  1.82s (transform 244ms, setup 0ms, import 499ms, tests 0ms, environment 926ms)
+

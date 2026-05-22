@@ -39,3 +39,4 @@ New ADRs use the template at [`0000-template.md`](0000-template.md).
 | 0025 | [ADR 0025 — First-Party WAI-ARIA APG Patterns over Radix / Headless UI](0025-first-party-wai-aria-apg-patterns-over-radix-headless-ui.md) | Accepted | `docs/adr/0025-first-party-wai-aria-apg-patterns-over-radix-headless-ui.md` |
 | 0026 | [ADR 0026 — TypeScript 6.x Ratification over 5.x](0026-typescript-6-ratification-over-5x.md) | Accepted | `docs/adr/0026-typescript-6-ratification-over-5x.md` |
 | 0027 | [ADR 0027 — Line-Ending Normalization Policy](0027-line-ending-normalization-policy.md) | Accepted | `docs/adr/0027-line-ending-normalization-policy.md` |
+| 0028 | [ADR 0028 — NA Boresight Cone Only; Wide-Angle Camera Deferred to v1.1+](0028-narrow-angle-only-wide-angle-deferred-v11.md) | Accepted | `docs/adr/0028-narrow-angle-only-wide-angle-deferred-v11.md` |

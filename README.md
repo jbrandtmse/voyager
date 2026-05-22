@@ -194,7 +194,8 @@ Most workflows are scripted as `just` recipes at the repo root (`justfile`). Ins
 just                  # list available recipes
 just fetch-kernels    # acquire/verify NAIF + PDS kernels (Story 1.3)
 just verify-kernels   # SHA-256 audit of the on-disk kernels
-just bake             # produce VTRJ trajectory binaries + bake/out/manifest.json
+just bake             # produce VTRJ trajectory + attitude binaries + 4-LOD voyager GLBs + bake/out/manifest.json
+just bake-glb         # rebuild only the 4-LOD voyager GLB chain (Story 3.3; requires toktx — see below)
 just validate         # run the Layer-1 Python validation harness (NFR-P9)
 just adr-index        # regenerate docs/adr/README.md
 just test-bake        # fast bake tests (excludes @pytest.mark.slow)
@@ -203,6 +204,18 @@ just test-web         # web vitest suite
 ```
 
 The python-direct invocations (e.g. `python bake/src/acquire_kernels.py`) are documented below as **fallbacks** for contributors who don't have `just` installed.
+
+### Build-time tooling prerequisites
+
+All tools listed here are required at **build / development time only** — for running `just bake-glb` (or any recipe that chains into it, like `just bake`). The runtime browser does NOT need any of these; visitors to the deployed site consume the pre-baked content-hashed assets via the static CDN.
+
+| Tool | Required by | Install (Windows / macOS / Linux) | Notes |
+| --- | --- | --- | --- |
+| `just` | every recipe in the `justfile` | `winget install --id Casey.Just` / `brew install just` / `cargo install just` | Command runner. |
+| Python 3.13 + `uv` | bake half (`bake/`) | [Astral uv install docs](https://docs.astral.sh/uv/getting-started/installation/) | `.python-version` pins to 3.13; `uv sync` resolves SpiceyPy 8.1.0 + scipy + numpy. |
+| Node.js (≥ 20) + npm | web half (`web/`) including `just bake-glb` | [nodejs.org](https://nodejs.org/) or `nvm` | Drives Vite + the gltf-transform pipeline. |
+| `toktx` ([Khronos KTX-Software](https://github.com/KhronosGroup/KTX-Software/releases)) | `just bake-glb` (Story 3.3 LOD pipeline) | Windows: install the `KTX-Software-<version>-Windows-x64.exe`. macOS: `KTX-Software-<version>-Darwin-*.pkg`. Linux: `apt install ./KTX-Software-<version>-Linux-x86_64.deb` (or your distro's equivalent). | Used to transcode baseColor textures to KTX2 UASTC and AO textures to ETC1S per [ADR 0006](docs/adr/0006-ext-meshopt-compression-over-draco.md). The build script checks for `toktx` on PATH at start; if absent, fails fast with a pointer to this README. CI installs v4.3.2 from the Khronos `.deb` (see `.github/workflows/ci.yml`). |
+| Git LFS | both halves (kernels + spacecraft model) | `git lfs install` once per machine | Pulls binary kernels (`kernels/*`) and the upstream Voyager GLB (`bake/inputs/models/voyager-raw.glb`) on clone. |
 
 **Validation thresholds (NFR-P9, per SPK segment):** `just validate` exits non-zero if any baked VTRJ exceeds `max_position_error_km > 20` or `rms_position_error_km > 5` against a 10x-denser SPICE reference grid. Per-segment chunking is load-bearing here — the Voyager merged SPKs contain segment-boundary discontinuities that no single-VTRJ-per-body bake can satisfy.
 
@@ -218,7 +231,7 @@ Both Voyager spacecraft are rendered (Story 1.12; FR8, FR9, FR10, UX-DR33). The 
 
 Each spacecraft also owns two `Line2` trajectory polylines (past + future) drawn with `LineMaterial` from `three/examples/jsm/lines/`. The past line is solid, ~1.5 px screen-space, and uses `var(--v-color-trajectory-past)`; the future line is dashed, ~1.0 px, and uses `var(--v-color-trajectory-future)`. The full polyline is sampled once at construction at ~500 vertices per spacecraft from launch (V1 1977-09-05, V2 1977-08-20) to `MISSION_END_ET` (2030-12-31), and `tick(et)` only updates the split-point between past and future. Per AC6 / NFR-P2, `BufferGeometry.dispose()` is **never** called inside the per-frame path — `web/tests/trajectory-no-dispose.test.ts` is the load-bearing tripwire. Backward scrubbing (non-monotonic `et` jumps) is handled by the same idempotent `tick()` — the past line shrinks rather than grows.
 
-`web/public/models/voyager.glb` is LFS-tracked via the `*.glb` line in `.gitattributes`; SHA-256 and acquisition steps in [`THIRD_PARTY.md`](THIRD_PARTY.md) and [`web/public/models/README.md`](web/public/models/README.md). Full 4-level LOD chain via `acquire_models.py` is deferred to Story 4.3.
+**4-LOD chain via `just bake-glb` (Story 3.3).** The upstream NASA Voyager Probe (B) GLB lives at `bake/inputs/models/voyager-raw.glb` (LFS-tracked); `web/scripts/build_glb.ts` reads it, restructures the flat mesh tree into the named `BUS / SCAN_PLATFORM / HGA` hierarchy per `bake/inputs/voyager-mesh-mapping.json`, transcodes textures to KTX2 via `toktx`, applies `EXT_meshopt_compression` (per [ADR 0006](docs/adr/0006-ext-meshopt-compression-over-draco.md)), and emits 4 content-hashed LOD GLBs (`voyager-lod0.<hash>.glb` … `voyager-lod3.<hash>.glb`) to `web/public/models/`. At runtime, `SpacecraftModels` wraps the four LODs in a `THREE.LOD` per spacecraft with distance thresholds resolved from the manifest's `models[]` section; `MeshoptDecoder` + `KTX2Loader` (Basis Universal transcoder at `web/public/basis/`) are registered on `GLTFLoader`. SHA-256 and acquisition steps in [`THIRD_PARTY.md`](THIRD_PARTY.md) and [`web/public/models/README.md`](web/public/models/README.md).
 
 ### First-Paint Sequence
 

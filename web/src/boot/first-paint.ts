@@ -216,8 +216,17 @@ export const startFirstPaint = (
 
   // Story 1.11 — HUD overlay. Wired with the shared ClockManager + (optional)
   // EphemerisService; the host (main.ts) supplies them when available.
+  //
+  // Story 3.6 AC7 — propagate `embedEnabled` so the inline
+  // `<v-attitude-indicator>` (chrome) is conditionally rendered. The HUD
+  // shell itself remains mounted in embed mode (its date/distance/speed
+  // readouts are simulation content); only the attitude provenance
+  // indicator participates in the chrome-skip discipline. Pre-`<v-hud>`
+  // assignment means the first connectedCallback's render sees the flag
+  // and skips the appendChild for the indicator (no post-mount removal).
   const hud = document.createElement('v-hud') as VHud;
   hud.clockManager = clockManager;
+  hud.embedEnabled = options.embedEnabled === true;
   if (options.ephemerisService !== undefined) {
     hud.ephemerisService = options.ephemerisService;
   }
@@ -310,6 +319,22 @@ export const startFirstPaint = (
       detachFrame();
       detachFrame = null;
     }
+    // Story 3.0 AC6 — remove all mounted elements from the host DOM so a
+    // caller invoking dispose() then re-running startFirstPaint() does not
+    // leave stale elements accumulating. titleCard is removed by the
+    // onComplete listener after the dissolve, so guard with isConnected.
+    // chapterIndex / helpOverlay are null in embed mode (not appended);
+    // chapterCopy is null when no ChapterDirector is wired (test mounts).
+    if (titleCard.isConnected) {
+      titleCard.remove();
+    }
+    scrubber.remove();
+    playButton.remove();
+    speedMultiplier.remove();
+    hud.remove();
+    chapterIndex?.remove();
+    helpOverlay?.remove();
+    chapterCopy?.remove();
     if (ownsClock) {
       clockManager.dispose();
     }

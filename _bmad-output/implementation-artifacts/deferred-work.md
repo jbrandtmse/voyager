@@ -2,6 +2,24 @@
 
 This file aggregates LOW-severity / nice-to-have findings from code reviews that were deliberately deferred rather than fixed in the originating story. Each entry includes the originating story, severity, issue summary, deferral rationale, and suggested resolution.
 
+## Story 3.0 Closure Summary (2026-05-20)
+
+Story 3.0 (Epic 2 Deferred Cleanup) closed the 8 items listed under "Story 3.0 Routing" below. Closures are visible in-place via `~~strike-through~~` plus a `**CLOSED by Story 3.0 (2026-05-20): <one-line>**` annotation on each entry — the historical text is preserved so future contributors can see what the original LOW finding was and why the closure path was chosen.
+
+**Scope summary:**
+
+- **Bake-side pre-Epic-3 hygiene:** `bake/src/ck_inventory.py` ENCOUNTERS gained an explicit `bus_id` field (AC1); `bake/src/validate_l1.py:_furnish_kernels` narrowed to match `bake_trajectories.py`'s kind set (AC2); `bake/tests/test_bake_defense.py:REQUIRED_RECIPES` widened to include `ck-inventory` + `fk-inventory` (AC3). All four are pre-emptive groundwork for Story 3.1 (CK kernel bake pipeline) and Story 3.7 (L2 attitude consistency in CI).
+- **ADR-0025 baseline drift resolved:** path (a) selected — `web/src/primitives/slider-keyboard.ts` and `web/src/primitives/listbox-keyboard.ts` extracted as paired handler-factory primitives (AC4). `<v-timeline-scrubber>` and `<v-chapter-index>` now delegate per ADR-0025's "Obligations on downstream stories" clause. `voyager-skill-rules.md` Rule 9 records the durable obligation.
+- **Planning-artifact amendment:** Story 2.0 AC7 wording reconciled with the as-implemented `ALLOWED_BODY_IDS` symbol (AC5) per voyager-skill-rules.md Rule 5; original literal-set wording preserved in an amendment block.
+- **Web-side dispose hardening:** `first-paint.ts:dispose()` now removes ALL mounted elements (was 4, now 8 across Stories 1.11/2.3/2.5/2.8/2.9) with `isConnected` / optional-chain guards (AC6). New regression test `web/tests/first-paint-dispose-cleanup.test.ts` covers both embed and non-embed modes.
+- **Close-and-strike-through verified deferrals:** `[1.11 / LOW] <v-hud-instruments> empty shadow tree` closed implicitly by Story 2.9; `[2.4 / LOW] URLSync drops ?embed=true` closed implicitly by Story 2.5's `appendEmbedIfEnabled` helper (AC7).
+
+**Items closed in this pass:** AC1 (1.3 / LOW ck_inventory), AC2 (1.4 / LOW validate_l1), AC3 (1.4 / LOW REQUIRED_RECIPES), AC4 (2.3 / LOW ADR-0025 baseline — path (a)), AC5 (2.0 / LOW AC7 wording), AC6 (1.10 / LOW first-paint dispose), AC7 (1.11 / LOW empty hud-instruments + 2.4 / LOW embed-drop).
+
+The remaining un-struck-through items below stay deferred and will be re-triaged at the end of Epic 3 against Epic 3's deferrals (Story 4.0 if needed per the X.0 pattern).
+
+---
+
 ## Story 2.0 Closure Summary (2026-05-19)
 
 Story 2.0 (Epic 1 Deferred Cleanup) closed the 11 items listed under "Story 2.0 Routing" below. Closures are visible in-place via `~~strike-through~~` plus a `**CLOSED by Story 2.0 (2026-05-19): <one-line>**` annotation on each entry — the historical text is preserved so future contributors can see what the original LOW finding was and why the closure path was chosen.
@@ -48,6 +66,109 @@ All other un-struck-through items below this section. Most are bundled into Stor
 
 ---
 
+## Story 3.0 Routing (locked in by Epic 2 retrospective on 2026-05-20)
+
+The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cleanup) covering the items below. The triage was performed during the Epic 2 retrospective + the `/epic-cycle` v2 workflow design pass (commit `cf08ac0`); see `_bmad-output/implementation-artifacts/epic-2-retro-2026-05-20.md` § 4 (Action Items C1/C2/C3) and the Story 3.0 file's § "Triage Table" for the full inventory.
+
+**Items closed by Story 3.0:** _(all 8 items below CLOSED by Story 3.0 on 2026-05-20 — see Closure Summary above)_
+
+1. ~~**[1.3 / LOW]** `ck_inventory.py` fragile encounter-label string-match~~ — **CLOSED by Story 3.0 (2026-05-20) via AC1:** ENCOUNTERS gained an explicit `bus_id` field; substring fallback removed; `just ck-inventory` regenerates byte-identical inventory; new `test_ck_inventory_bus_id.py` regression test.
+2. ~~**[1.4 / LOW]** `validate_l1.py:_furnish_kernels` re-furnishes `ck` (asymmetric to `bake_trajectories.py`)~~ — **CLOSED by Story 3.0 (2026-05-20) via AC2:** priority dict no longer carries `"ck": 5`; furnish set now matches `bake_trajectories.py:217`'s `("lsk", "pck", "fk", "sclk", "spk")`. Epic 3 Story 3.7 will own L2 attitude validator's separate ck-furnishing path.
+3. ~~**[1.4 / LOW]** `justfile` recipes `ck-inventory` / `fk-inventory` not in `REQUIRED_RECIPES`~~ — **CLOSED by Story 3.0 (2026-05-20) via AC3:** both recipes added; load-bearing for Story 3.1.
+4. ~~**[2.3 / LOW (ADR-0025 baseline)]** inline APG Listbox keyboard handler in `<v-chapter-index>` (paired with inline APG Slider keyboard handler in `<v-timeline-scrubber>`)~~ — **CLOSED by Story 3.0 (2026-05-20) via AC4 path (a):** extracted `web/src/primitives/slider-keyboard.ts` + `web/src/primitives/listbox-keyboard.ts` as paired handler-factory primitives following the existing `pointer-events.ts` / `debounce.ts` convention. Both consumers refactored to delegate. Unit tests for each primitive added (12 + 16). `voyager-skill-rules.md` Rule 9 records the durable obligation.
+5. ~~**[2.0 / LOW]** Story 2.0 AC7 literal wording `body_id ∉ {-31, -32}` vs as-implemented `ALLOWED_BODY_IDS`~~ — **CLOSED by Story 3.0 (2026-05-20) via AC5:** `2-0-epic-1-deferred-cleanup.md` AC7 amended in place per voyager-skill-rules.md Rule 5; original literal-set wording preserved in an "Amended by Story 3.0" callout block.
+6. ~~**[1.10 / LOW]** `first-paint.ts:dispose()` does not remove mounted elements~~ — **CLOSED by Story 3.0 (2026-05-20) via AC6** (element list grew to ~8 across Stories 1.11 hud / 2.3 chapterIndex / 2.5 embed-mode / 2.8 helpOverlay / 2.9 chapterCopy): `dispose()` now removes ALL mounted elements with `isConnected` / optional-chain guards. New regression test `web/tests/first-paint-dispose-cleanup.test.ts` (9 cases, embed + non-embed + cross-mode).
+7. ~~**[1.11 / LOW]** `<v-hud-instruments>` renders an empty shadow tree~~ — **CLOSED by Story 3.0 (2026-05-20), pointing at Story 2.9:** Story 2.9 populated the shadow tree with V1/V2 ISS·UVS·PLS·LECP rows + per-frame `tick()`; strikethrough-on-shutoff via `--v-color-fg-quiet`. Bookkeeping closure — Story 3.0 made no code change for this item.
+8. ~~**[2.4 / LOW]** `URLSync` drops `?embed=true` on writeback~~ — **CLOSED by Story 3.0 (2026-05-20), pointing at Story 2.5 (`appendEmbedIfEnabled` at `web/src/services/url-sync.ts:247`):** Story 2.5 added `embedEnabled` on `UrlSyncOptions` + the `appendEmbedIfEnabled` helper that appends `&embed=true` (or `?embed=true`) to every writeback URL when boot-time `?embed=true` was set. Bookkeeping closure — Story 3.0 made no code change for this item.
+
+**Items deferred forward (carry per each item's existing "Suggested resolution"):**
+
+- **[1.1 / LOW]** README .gitignore narrative summary mismatch — DEFER to next README touch.
+- **[1.1 / LOW]** spiceypy pin test doesn't handle PEP 508 extras — DEFER (future-proofing only).
+- **[1.1 / LOW]** `web/index.html` `<title>web</title>` default — DEFER to Story 6.x UI polish.
+- **[1.3 / LOW]** `acquire_kernels` retry budget tuning — DEFER (wait for outage signal).
+- **[1.3 / LOW]** `kernels/` path-traversal validation — DEFER to Story 7.1 (drift report tooling).
+- **[1.3 / LOW]** `_kernel_io.repo_root()` fallback to `/etc` — DEFER (latent only).
+- **[1.3 / LOW]** `fk_inventory.py` silently skips non-matching lines — DEFER to next FK kernel update.
+- **[1.4 / LOW]** `vtrj_writer.write_vtrj` re-hash from disk — DEFER (consistency-only; no MITM threat).
+- **[1.4 / LOW]** `manifest_writer._git_head_sha` silent timeout — DEFER (observability only).
+- **[1.4 / LOW]** `manifest_writer.emit_manifest` non-UTC datetime — DEFER (no caller exposes).
+- **[1.4 / LOW]** `boundary_inset` ULP corner case — DEFER (not exercisable by pinned kernels).
+- **[1.4 / LOW]** `test_segments_do_not_overlap` pre-sorts — DEFER (belt-and-braces).
+- **[1.5 / LOW]** `RenderEngine.setCameraPosition` borrow vs copy — DEFER (no aliasing caller).
+- **[1.5 / LOW]** `RenderEngine.tick()` per-frame Float32Array allocation — DEFER to Story 7.6 (perf pass).
+- **[1.5 / LOW]** `GPUCapabilityProbe.supportsFloatDepth` misleading — DEFER (no consumer).
+- **[1.5 / LOW]** `precision-smoke` geometry/material disposal — DEFER (single-page dev session).
+- **[1.5 / LOW]** `main.ts` `ensureCanvas` clears all children — DEFER to Story 6.x layout work.
+- **[1.6 / LOW]** `ManifestSchema.chapters` `z.unknown()` — DEFER (chapter authoring is in TS per ADR-0021; manifest carries no chapter data; vestigial field).
+- **[1.6 / LOW]** `manifest-loader` schemaVersion error message — DEFER until schemaVersion=2 introduction.
+- **[1.6 / LOW]** `ephemeris-perf.ts` dead ternary — DEFER (test scaffolding).
+- **[1.6 / LOW]** `ephemeris-perf` percentile off-by-one — DEFER to Story 7.6.
+- **[1.6 / LOW]** `copy_bake_to_web.py` symlink check — DEFER (trusted CI).
+- **[1.6 / LOW]** `main.ts` discards ChunkLoader — DEFER (closed implicitly by 1.10+ wire-up; not worth strike-through cycle).
+- **[1.6 / LOW]** `EphemerisService.isChunkCachedFor` LRU bump — DEFER (test-only).
+- **[1.7 / LOW]** `tokens.css` `--v-bp-*` media-query comment — DEFER (one-line doc; batch next tokens touch).
+- **[1.7 / LOW]** `index.html` / `fonts.css` root-absolute paths — DEFER to Story 7.4 (deploy).
+- **[1.7 / LOW]** `font-subset.py` dead code — DEFER (one-off script).
+- **[1.7 / LOW]** `global.css` universal margin/padding reset — DEFER to Story 6.4 (BaseElement doc).
+- **[1.8 / LOW]** font preloads before FEATURE_PROBE — DEFER (architectural trade-off).
+- **[1.8 / LOW]** `vite.config` replace vs replaceAll — DEFER until 5th marker.
+- **[1.8 / LOW]** `resolveMainEntry` silent `/src/main.ts` fallback — DEFER to Story 7.x build hygiene.
+- **[1.10 / LOW]** `ClockManager.tick` reclamping at mission end — DEFER (HUD-driven cleanup).
+- **[1.10 / LOW]** `stepDecade` rounding from mid-decade — DEFER to Story 6.5 (qualitative testing).
+- **[1.10 / LOW]** Last-10% chunk prefetch not wired — DEFER to Story 4.3 (explicit handoff per Story 1.10 dev notes).
+- **[1.11 / LOW]** HUD `ephemerisService` field vs accessor asymmetry — DEFER (no consumer needs subscribe).
+- **[1.11 / LOW]** `<v-hud-date>.tick` non-finite ET guard — DEFER (latent).
+- **[1.11 / LOW]** `<v-hud>` querySelector caching — DEFER to Story 7.6.
+- **[1.11 / LOW]** `<v-hud-speed>` subscribes to all events — DEFER (no granular events).
+- **[1.11 / LOW]** `hud-defense` BG_REGEX semicolon requirement — DEFER (sufficient threat model).
+- **[1.11 / LOW]** `<v-hud>.updated()` unconditional propagation — DEFER (identity check guards spam).
+- **[1.12 / LOW]** `TrajectoryLines.updateSet` allocation per tick — DEFER to Story 7.6.
+- **[1.12 / LOW]** `SpacecraftModels` HMR teardown — DEFER (HMR unreachable in practice).
+- **[1.12 / LOW]** `trajectory-lines.ts` import line split — DEFER (cosmetic).
+- **[1.12 / LOW]** Story 1.12 file bake test count drift — DEFER (doc drift only).
+- **[2.0 / LOW]** `chunk-loader.test.ts` missing order assertion — DEFER (count-based assertion is functionally sufficient).
+- **[2.1 / LOW]** `chapter-director.ts` unused `from`/`forward` params — DEFER to Epic 5 (hysteresis).
+- **[2.1 / LOW]** `Object.freeze(ALL_CHAPTERS)` shallow — DEFER to Epic 8 (chapter packs).
+- **[2.1 / OBSERVATION]** Subscriber reentrancy risk — DEFER (no consumer).
+- **[2.2 / LOW]** `v-timeline-scrubber` `renderChapterMarker` closure-per-render — DEFER to Story 7.6.
+- **[2.2 / LOW]** `v-timeline-scrubber` `connectedCallback` post-mount binding — DEFER (paired with 2.3 sibling).
+- **[2.3 / LOW]** `clickOutsideTarget` vs `keyboardTarget` inconsistency — DEFER (latent).
+- **[2.3 / LOW]** `v-chapter-index` `connectedCallback` post-mount binding — DEFER (paired with 2.2 sibling).
+- **[2.4 / LOW]** `writeHomeReplaceState` idempotent repeated calls — DEFER (idempotent on browser side).
+- **[2.4 / LOW]** `URLRouter.dispose` `pendingWaveSettle` race — DEFER to Epic 7 (hot-reload).
+- **[2.4 / LOW]** `URLSync` empty pathname normalization — DEFER (defensive only).
+- **[2.5 / LOW]** embed-mode-first-paint test mis-titled — DEFER (cosmetic test hygiene).
+- **[2.6 / LOW]** `og-cards.ts` standalone runner OG stacking bug — DEFER to Story 4.9 (Playwright capture).
+- **[2.6 / LOW]** FEATURE_PROBE comment text contains literal `<script>` — DEFER (cosmetic).
+- **[2.6 / LOW]** `ogCardsPlugin` duplicated `resolveMainEntry` helper — DEFER (vite hygiene).
+- **[2.7 / LOW]** `main.ts` ClockManager constructed before `/about` return — DEFER to Story 6.1 (audio surface restructure).
+- **[2.7 / LOW]** `main.ts` `ensureCanvas` before URL parse — DEFER (paired with above).
+- **[2.7 / LOW]** `mountAboutSurface` mutates `document.body.style.overflow` — DEFER to Story 6.4 (global.css revisit).
+- **[2.7 / LOW]** `about.css` mixes `--v-size-about-*` and `--v-font-size-*` — DEFER to Story 7.6 (token sweep).
+- **[2.7 / LOW]** `URLRouter.dispose` listeners-array iteration race — DEFER (paired with 2.4 `pendingWaveSettle`).
+- **[2.7 / LOW]** `mountAttributionsFooter` host attachment fragility — DEFER to Epic 6 (layout).
+- **[2.8 / LOW]** `v-help-overlay` focus-trap silent catches — DEFER to Story 6.4 (a11y; paired with v-chapter-index sibling — `primitives/dialog.ts` extraction is the natural sibling to Story 3.0's AC4 work).
+- **[2.8 / LOW]** `v-help-overlay` `.shortcut-keys` 100px literal — DEFER to Story 7.6 (tokens hygiene).
+- **[2.9 / LOW]** `v-chapter-copy` `pointer-events: none` prevents copy-paste — DEFER to Epic 4 (encounter chapters).
+- **[2.9 / LOW]** `v-chapter-copy` short-viewport collision risk — DEFER to Story 6.2 (HUD compaction).
+
+**Items dropped (explicitly rejected with rationale):**
+
+- **[1.1 / LOW]** `web/.gitignore` duplicates root patterns — DROP: idiomatic Vite layout; removing would surprise future contributors expecting standard Vite project shape; Git handles nested `.gitignore` correctly. Leave as-is.
+- **Epic 2 retro § Story 2.7 cross-surface reload trade-off** — DROP: design-intent accepted as the URL contract v1; reload-on-cross-surface is the documented behavior. Not a deferrable; close as accepted.
+
+**Epic 2 retro action items:**
+
+- **C1 — `/epic-cycle` v2 design pass** — CLOSED in this `/epic-cycle 3` session by commit `cf08ac0` (chore: epic-cycle v2 workflow design pass + sprint-status 2.9 done). The pass introduced Lessons 9–11 (Pattern-2 silence mitigation, sprint-status-comment lineage, structured-completion handshake moved from `persistent_facts` to `on_complete`) and the Rule 6 (ADR violations are HIGH) addition.
+- **C2 — Story 3.0 triage** — CLOSED: this story IS the triage execution. The full Triage Table in `_bmad-output/implementation-artifacts/3-0-epic-2-deferred-cleanup.md` § "Triage Table" is the authoritative inclusion contract; every open `deferred-work.md` item as of 2026-05-20 plus the Epic 2 retro action items appear in it.
+- **C3 — OG real PNG capture (Story 2.6 placeholder)** — DEFER: routed to Story 4.9 (L4 Playwright visual regression at six encounter scenes; Playwright headless-Chromium real PNG capture as part of the wider Playwright wiring) or Story 7.x build hygiene per the original Story 2.6 dev-notes deferral. Not in scope for Story 3.0.
+- **Pattern 2 — Agent silence (observation)** — CLOSED: the v2 design pass moved the structured-completion handshake from `persistent_facts` to `on_complete` per Lesson 11; expected silence rate trending to ≤5% from current ~7%; further observation needed in Epic 3.
+- **Decision A — Chrome-vs-editorial split (observation)**, **Decision B — no-pushState pattern (observation)**, **Decision C — editorial stays in embed (observation)** — DEFER: promoted-to-voyager-skill-rule candidates; carry to `/epic-cycle` v3 design pass at Epic 3 close.
+- **Deferred-work load at 81 entries** — CLOSED: this triage table is the response (8 closed + 56 deferred forward + 2 dropped + 4 closed-via-other-action = 70 items accounted; balance vs the 81 raw count is the routing-table lines + closure-summary lines).
+
+---
+
 ## Deferred from: code review of 1-1-initialize-monorepo-with-web-and-bake-halves (2026-05-18)
 
 - ~~**[1.1 / LOW]** `.gitattributes` lacks `text=auto` / EOL normalization. Git is emitting "LF will be replaced by CRLF" warnings on `.gitignore` and `README.md` during the Story 1.1 commit on Windows. **Why deferred:** Story 1.1's ACs only require LFS patterns for NAIF kernel extensions; an EOL-normalization policy is a separate, repo-wide convention that warrants its own discussion (and likely an ADR) about whether the project locks to LF-only or `text=auto`. **Suggested resolution:** add `* text=auto eol=lf` (or equivalent) to `.gitattributes` as part of Story 1.2's ADR work or as a small targeted PR before contributor onboarding.~~ **CLOSED by Story 1.2 (2026-05-18):** ADR 0027 (Line-Ending Normalization Policy) authored; `.gitattributes` now contains `* text=auto eol=lf` above the LFS patterns.
@@ -78,7 +199,7 @@ All other un-struck-through items below this section. Most are bundled into Stor
 
 - **[1.3 / LOW]** `bake/src/fk_inventory.py` silently skips FK lines that don't match its regexes (e.g. comments, free-form prose, unrecognized keys). The frame-ID table in `kernels/frame-ids.md` is therefore not driven by the FK content but by a hardcoded markdown block; the parsed dict only fills the per-spacecraft tables. **Why deferred:** the FK files are SHA-pinned in the manifest, so undetected drift would surface as a SHA mismatch in `verify_kernels.py`. The hardcoded subsystem table is the authoritative listing per Story 1.5+ rendering needs. **Suggested resolution:** at next FK-kernel update, switch to `spiceypy.fkrlb`/`bodvrd` to query the kernel pool directly instead of regex parsing.
 
-- **[1.3 / LOW]** `bake/src/ck_inventory.py` selects bus structure ID via fragile string-match on the encounter label (`" V1 " in f" {label} " or label.startswith("V1")`). The current ENCOUNTERS list works, but a future encounter labeled differently could mis-route. **Why deferred:** the ENCOUNTERS list is local to this module and stable. **Suggested resolution:** carry an explicit `bus_id` field in each ENCOUNTERS tuple alongside `scan_id`.
+- ~~**[1.3 / LOW]** `bake/src/ck_inventory.py` selects bus structure ID via fragile string-match on the encounter label (`" V1 " in f" {label} " or label.startswith("V1")`). The current ENCOUNTERS list works, but a future encounter labeled differently could mis-route. **Why deferred:** the ENCOUNTERS list is local to this module and stable. **Suggested resolution:** carry an explicit `bus_id` field in each ENCOUNTERS tuple alongside `scan_id`.~~ **CLOSED by Story 3.0 (2026-05-20) via AC1:** the ENCOUNTERS tuple gained an explicit `bus_id` fifth positional field (V1_BUS=-31000 for V1 + PBD, V2_BUS=-32000 for V2 encounters); the substring/startswith fallback removed; `just ck-inventory` regenerates `docs/kernels/ckbrief-inventory.md` byte-identical to the pre-change output; new regression test `bake/tests/test_ck_inventory_bus_id.py` locks the mapping.
 
 ## Deferred from: code review of 1-4-bake-pipeline-scaffold-and-l1-python-validation-harness (2026-05-18)
 
@@ -88,7 +209,7 @@ All other un-struck-through items below this section. Most are bundled into Stor
 
 - **[1.4 / LOW]** `bake/src/vtrj_writer.py:write_vtrj` computes the recorded SHA-256 on the in-memory `compressed` buffer (line 151), not by re-reading the just-written `.part` file. Story 1.3's `acquire_kernels.py` deliberately re-reads from disk before atomic-renaming so MITM bytes never appear at the canonical path. The bake's `write_vtrj` writes the bytes it generated locally (no network), so the threat model is different — but the consistency contract differs from Story 1.3. **Why deferred:** Storage-layer corruption between `write_bytes` and `replace` is rare; the line-147 size check is a partial guard. **Suggested resolution:** re-hash the `.part` file via `hashlib.sha256(part_path.read_bytes()).hexdigest()` and assert equality with the in-memory hash before `replace`.
 
-- **[1.4 / LOW]** `bake/src/validate_l1.py:_furnish_kernels` re-furnishes the full kernel set including `ck` kernels (priority dict line 84 has `"ck": 5`), whereas `bake_trajectories.py:217` explicitly excludes `ck` via `kinds=("lsk", "pck", "fk", "sclk", "spk")`. The asymmetry is harmless (CKs aren't queried by `spkgeo`) but slows validator startup marginally and disagrees with the bake-side furnish set. **Why deferred:** CK kernels load fast (~tens of MB total); functionally inert. **Suggested resolution:** narrow the validator's furnish set to match the bake's: skip `ck` in `_furnish_kernels`.
+- ~~**[1.4 / LOW]** `bake/src/validate_l1.py:_furnish_kernels` re-furnishes the full kernel set including `ck` kernels (priority dict line 84 has `"ck": 5`), whereas `bake_trajectories.py:217` explicitly excludes `ck` via `kinds=("lsk", "pck", "fk", "sclk", "spk")`. The asymmetry is harmless (CKs aren't queried by `spkgeo`) but slows validator startup marginally and disagrees with the bake-side furnish set. **Why deferred:** CK kernels load fast (~tens of MB total); functionally inert. **Suggested resolution:** narrow the validator's furnish set to match the bake's: skip `ck` in `_furnish_kernels`.~~ **CLOSED by Story 3.0 (2026-05-20) via AC2:** `_furnish_kernels` priority dict no longer carries `"ck": 5`; the furnish set now mirrors `bake_trajectories.py:217`'s `("lsk", "pck", "fk", "sclk", "spk")`. Bake fast suite remains green (266 passed). Epic 3 Story 3.7 will own L2 attitude validation's separate ck-furnishing path.
 
 - ~~**[1.4 / LOW]** `bake/src/bake_trajectories.py:226` matches each spacecraft's SPK kernel by substring (`f"Voyager_{name[-1]}" in k.target_path`), which would match a hypothetical `Voyager_12.bsp` kernel. **Why deferred:** kernels-manifest.json is version-controlled; no such kernel exists. **Suggested resolution:** add an explicit `spk_match` field to the `BODIES` tuple or match on the kernel's `kind == "spk"` plus an exact-prefix check on `target_path`.~~ **CLOSED by Story 2.0 (2026-05-19):** substring match replaced with `kind == "spk"` + `Path(k.target_path).name.startswith(f"Voyager_{name[-1]}.")` (period boundary on the actual `Voyager_1.<...>.bsp` / `Voyager_2.<...>.bsp` filenames). VTRJ chunk SHAs unchanged.
 
@@ -100,7 +221,7 @@ All other un-struck-through items below this section. Most are bundled into Stor
 
 - **[1.4 / LOW]** Test `bake/tests/test_bake_defense.py:test_segments_do_not_overlap` sorts ranges before asserting non-overlap, which passes even if the manifest emits segments in a non-canonical order. The bake always emits in start-ET order, so this is belt-and-braces only. **Why deferred:** The bake's emission order is already deterministic. **Suggested resolution:** assert the manifest's per-body `files[]` is already sorted by `timeRangeEt[0]` *before* the overlap check.
 
-- **[1.4 / LOW]** `justfile` recipes `ck-inventory` and `fk-inventory` (Story 1.3 helper wrappers) are not enumerated in `test_bake_defense.py:REQUIRED_RECIPES`. A future refactor could drop them without the test catching it. **Why deferred:** AC6's required-recipe list doesn't mention them; they're convenience wrappers. **Suggested resolution:** add them to `REQUIRED_RECIPES` when Story 1.13 wires up the planet kernels (where the FK inventory becomes load-bearing again).
+- ~~**[1.4 / LOW]** `justfile` recipes `ck-inventory` and `fk-inventory` (Story 1.3 helper wrappers) are not enumerated in `test_bake_defense.py:REQUIRED_RECIPES`. A future refactor could drop them without the test catching it. **Why deferred:** AC6's required-recipe list doesn't mention them; they're convenience wrappers. **Suggested resolution:** add them to `REQUIRED_RECIPES` when Story 1.13 wires up the planet kernels (where the FK inventory becomes load-bearing again).~~ **CLOSED by Story 3.0 (2026-05-20) via AC3:** `ck-inventory` and `fk-inventory` are now enumerated in `bake/tests/test_bake_defense.py:REQUIRED_RECIPES`. `ck-inventory` becomes load-bearing in Story 3.1 (CK kernel bake pipeline regenerates `docs/kernels/ckbrief-inventory.md` as part of the pre-bake workflow); `fk-inventory` is its sibling for `kernels/frame-ids.md`. Pre-Epic-3 hygiene.
 
 ## Deferred from: code review of 1-5-three-js-renderer-foundation-with-reverse-z-and-floating-origin (2026-05-18)
 
@@ -160,7 +281,7 @@ All other un-struck-through items below this section. Most are bundled into Stor
 
 - **[1.10 / LOW]** `<v-speed-multiplier>.stepDecade(+1)` from an in-between value (e.g. rate=50, log=1.699) rounds to the nearest decade then adds 1, so `+` jumps 50× → 1000× (skipping 100×). The AC5 spec only requires "one decade-stop" advance and the snap-tolerance band means mid-decade values are normally inaccessible by drag; however a power user could land at 50 via the Shift-keys then press `+`. **Why deferred:** AC5 ambiguous on rounding direction; the dev's choice is internally consistent. **Suggested resolution:** if user feedback in Story 6.5 (qualitative testing) flags the 50→1000 jump, switch `nearest` to `floor` so `+` always lands on the next-greater decade.
 
-- **[1.10 / LOW]** `first-paint.ts:dispose()` detaches the keyboard listener and disposes the `ClockManager`, but does not remove the four mounted custom elements (`<v-title-card>`, `<v-timeline-scrubber>`, `<v-play-button>`, `<v-speed-multiplier>`) from the host DOM. Tests that re-mount via `document.body.innerHTML = ''` are unaffected; a non-test caller invoking `dispose()` then re-running `startFirstPaint()` would accumulate stale elements. **Why deferred:** No non-test caller exists; the `dispose()` contract is currently used only by integration tests that wipe the body. **Suggested resolution:** when Story 1.11 introduces real HUD-mount/unmount cycles, extend `dispose()` to `titleCard.remove(); scrubber.remove(); playButton.remove(); speedMultiplier.remove();` and add a regression test that `startFirstPaint() → dispose() → startFirstPaint()` leaves exactly one set of mounted elements.
+- ~~**[1.10 / LOW]** `first-paint.ts:dispose()` detaches the keyboard listener and disposes the `ClockManager`, but does not remove the four mounted custom elements (`<v-title-card>`, `<v-timeline-scrubber>`, `<v-play-button>`, `<v-speed-multiplier>`) from the host DOM. Tests that re-mount via `document.body.innerHTML = ''` are unaffected; a non-test caller invoking `dispose()` then re-running `startFirstPaint()` would accumulate stale elements. **Why deferred:** No non-test caller exists; the `dispose()` contract is currently used only by integration tests that wipe the body. **Suggested resolution:** when Story 1.11 introduces real HUD-mount/unmount cycles, extend `dispose()` to `titleCard.remove(); scrubber.remove(); playButton.remove(); speedMultiplier.remove();` and add a regression test that `startFirstPaint() → dispose() → startFirstPaint()` leaves exactly one set of mounted elements.~~ **CLOSED by Story 3.0 (2026-05-20) via AC6** (element list grew to ~8 across Stories 1.11/2.3/2.5/2.8/2.9; the new `dispose()` removes ALL mounted elements with `isConnected` / optional-chain guards): `first-paint.ts:dispose()` now calls `titleCard.remove()` (guarded by `isConnected` since the `onComplete` listener auto-removes it after the title-card dissolve), `scrubber.remove()`, `playButton.remove()`, `speedMultiplier.remove()`, `hud.remove()`, `chapterIndex?.remove()`, `helpOverlay?.remove()`, `chapterCopy?.remove()`. New test `web/tests/first-paint-dispose-cleanup.test.ts` (9 cases) asserts post-init / post-dispose / post-init-dispose-init invariants in BOTH embed-mode (no chapterIndex/helpOverlay) and non-embed-mode, plus the cross-mode boot→embed regression case.
 
 - **[1.10 / LOW]** Last-10% chunk prefetch (AC6 wording) is explicitly **not** wired in this story; only the cap-on-cache-miss path is implemented. **Why deferred:** Task 7 carries an explicit handoff to Story 4.3 (cadence-shift trajectory chunks) on the rationale that chunk boundaries are only user-visible at encounter cadence. **Suggested resolution:** Story 4.3 wires `ClockManager.tick()` to call `chunkLoader.prefetch(nextFile)` when `simTimeEt` enters the last 10% of the currently-playing chunk window.
 
@@ -182,7 +303,7 @@ All other un-struck-through items below this section. Most are bundled into Stor
 
 - ~~**[1.11 / LOW]** AC3 spec wording ("the date string is computed via `formatForHud(et)`") conflicts with the rest of AC3 ("the label 'UT' precedes the value… at a slightly smaller `--v-size-hud-mono-sm` token"). The dev resolved by introducing `dateForHud(et)` as a sibling helper that returns the bare value form, preserving Story 1.9's `formatForHud` contract for the scrubber's `aria-valuetext`. **Why deferred:** Implementation is internally consistent and well-documented in dev notes lines 263-269; spec wording is the issue. **Suggested resolution:** next planning-doc maintenance pass: rephrase AC3 to "the date string is computed via `dateForHud(et)` (the bare-value sibling of `formatForHud`, kept distinct so the scrubber's `aria-valuetext` form with inline 'UT' is preserved)".~~ **CLOSED by Story 2.0 (2026-05-19):** `epics.md` Story 1.11 `<v-hud-date>` AC amended in place with the canonical `dateForHud(et)` clarification (verbatim as suggested above).
 
-- **[1.11 / LOW]** `<v-hud-instruments>` renders an empty shadow tree (`html``) during Epic 1. The bottom-left corner is functionally empty until Story 2.9 (or wherever instrument-shutoff legend lands) populates the component. The `<v-hud>` `.corner.bottom-left` div still renders, but contains no visible content. **Why deferred:** Working as specified per Task 8 ("renders nothing visible in this story"). **Suggested resolution:** Story 2.9 fills the instrument-shutoff legend; until then, the stub is intentional.
+- ~~**[1.11 / LOW]** `<v-hud-instruments>` renders an empty shadow tree (`html``) during Epic 1. The bottom-left corner is functionally empty until Story 2.9 (or wherever instrument-shutoff legend lands) populates the component. The `<v-hud>` `.corner.bottom-left` div still renders, but contains no visible content. **Why deferred:** Working as specified per Task 8 ("renders nothing visible in this story"). **Suggested resolution:** Story 2.9 fills the instrument-shutoff legend; until then, the stub is intentional.~~ **CLOSED by Story 3.0 (2026-05-20), pointing at Story 2.9:** `<v-hud-instruments>` was populated with V1/V2 ISS·UVS·PLS·LECP rows + per-frame `tick()` forwarding from `<v-hud>` in Story 2.9 (commit `6fffaf8`). The shadow tree is no longer empty; the instrument-shutoff strikethrough behavior uses `--v-color-fg-quiet` per the original deferral suggestion.
 
 ## Deferred from: code review of 1-12-both-voyager-spacecraft-with-past-solid-future-dashed-trajectory-lines (2026-05-19)
 
@@ -210,9 +331,9 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 - **[2.0 / LOW]** `web/src/services/chunk-loader.test.ts` AC10 defense test counts subscriber invocations but does not assert the _order_ of invocation. `Set` iteration in JS is insertion-order, so the "throwing subscriber doesn't silence the LATER subscribers in the Set" contract holds by language guarantee — but the test only verifies "all 3 fire 2× each" rather than "the counter-sub fires AFTER the throwing-sub". **Why deferred:** the existing count-based assertion is functionally sufficient: if the throwing subscriber short-circuited, subsequent invocations would be missing entirely (count=0, not order-shifted). Order-of-invocation is implied by count parity. Pure defense-in-depth concern. **Suggested resolution:** when Story 2.1's ChapterDirector lands as the first real subscriber, add an order-aware sentinel array assertion (e.g., `expect(sentinel.indexOf('counter-sub-called')).toBeGreaterThan(sentinel.indexOf('throwing-sub-called'))`).
 
-- **[2.0 / LOW]** Story 2.0 AC7 literal wording (`body_id ∉ {-31, -32}`) is narrower than the actual implementation's `ALLOWED_BODY_IDS` symbol (`{-31, -32, 10, 1..8, 301}` — extended in Story 1.13 to cover Sun + planet barycenters + Moon for celestial-body bake products). The dev correctly used `ALLOWED_BODY_IDS` rather than the literal narrow set from the AC, restoring full write/read symmetry on the actual data contract; if the AC literal had been taken at face value, Story 1.13's celestial body VTRJ files would have failed `read_vtrj` validation. **Why deferred:** the implementation is correct; this is a story-file documentation drift (AC7 wording predates or missed the Story 1.13 extension). The closure summary in deferred-work.md correctly names `ALLOWED_BODY_IDS`. **Suggested resolution:** next planning-doc maintenance pass: amend Story 2.0 AC7 wording in `2-0-epic-1-deferred-cleanup.md` to say "`body_id ∉ ALLOWED_BODY_IDS` (the canonical set per ADR-0004 + Story 1.13 extension)" — bringing AC literal into alignment with the implementation symbol per voyager-skill-rules.md Rule 5 (planning artifacts are the source of truth; amend in place when reality diverges).
+- ~~**[2.0 / LOW]** Story 2.0 AC7 literal wording (`body_id ∉ {-31, -32}`) is narrower than the actual implementation's `ALLOWED_BODY_IDS` symbol (`{-31, -32, 10, 1..8, 301}` — extended in Story 1.13 to cover Sun + planet barycenters + Moon for celestial-body bake products). The dev correctly used `ALLOWED_BODY_IDS` rather than the literal narrow set from the AC, restoring full write/read symmetry on the actual data contract; if the AC literal had been taken at face value, Story 1.13's celestial body VTRJ files would have failed `read_vtrj` validation. **Why deferred:** the implementation is correct; this is a story-file documentation drift (AC7 wording predates or missed the Story 1.13 extension). The closure summary in deferred-work.md correctly names `ALLOWED_BODY_IDS`. **Suggested resolution:** next planning-doc maintenance pass: amend Story 2.0 AC7 wording in `2-0-epic-1-deferred-cleanup.md` to say "`body_id ∉ ALLOWED_BODY_IDS` (the canonical set per ADR-0004 + Story 1.13 extension)" — bringing AC literal into alignment with the implementation symbol per voyager-skill-rules.md Rule 5 (planning artifacts are the source of truth; amend in place when reality diverges).~~ **CLOSED by Story 3.0 (2026-05-20) via AC5:** `_bmad-output/implementation-artifacts/2-0-epic-1-deferred-cleanup.md` AC7 wording amended in place from `body_id ∉ {-31, -32}` to `body_id ∉ ALLOWED_BODY_IDS (the canonical set per ADR-0004 + Story 1.13 extension covering Sun, planet barycenters, and Moon)`. The original literal-set wording is preserved in an "Amended by Story 3.0" callout above the amended AC so the lineage stays visible. No code change — the implementation in `vtrj_writer.py:read_vtrj` was already correct.
 
-- **[2.0 / LOW]** Windows working-tree CRLF/LF drift on `docs/kernels/ckbrief-inventory.md` and `kernels/frame-ids.md`. `git status` shows both files as modified (CRLF working-tree vs. LF HEAD), but `git diff` returns zero content differences — only Git's "CRLF will be replaced by LF the next time Git touches it" warning. `bake/tests/test_ck_inventory.py` regenerates these files during the suite run; on a Windows checkout with `core.autocrlf=true` (Git default on Windows) the regeneration writes LF (matching repo policy via `.gitattributes` `* text=auto eol=lf`), but the comparison against the index believes the files are modified because the working tree still carries CRLF from the original checkout. **Why deferred:** `.gitattributes` (ADR 0027) already mandates `* text=auto eol=lf` so the repo state is correct. Tests pass cleanly when run (verified 2026-05-20: `tests/test_ck_inventory.py` → 15 passed). This is purely a Windows-developer-environment drift, not a regression. The dev's `git stash` + re-test workflow was misled into recording this as a "pre-existing failure" in the Story 2.0 file when the failures were actually intermittent CRLF-drift artifacts. **Suggested resolution:** Windows developers should run `git add --renormalize .` and commit any newly-LF-normalized files in a one-off maintenance pass. Alternatively, contributors can set `git config core.autocrlf input` on their Windows clones to match the repo's `eol=lf` policy at checkout time.
+- ~~**[2.0 / LOW]** Windows working-tree CRLF/LF drift on `docs/kernels/ckbrief-inventory.md` and `kernels/frame-ids.md`. `git status` shows both files as modified (CRLF working-tree vs. LF HEAD), but `git diff` returns zero content differences — only Git's "CRLF will be replaced by LF the next time Git touches it" warning. `bake/tests/test_ck_inventory.py` regenerates these files during the suite run; on a Windows checkout with `core.autocrlf=true` (Git default on Windows) the regeneration writes LF (matching repo policy via `.gitattributes` `* text=auto eol=lf`), but the comparison against the index believes the files are modified because the working tree still carries CRLF from the original checkout. **Why deferred:** `.gitattributes` (ADR 0027) already mandates `* text=auto eol=lf` so the repo state is correct. Tests pass cleanly when run (verified 2026-05-20: `tests/test_ck_inventory.py` → 15 passed). This is purely a Windows-developer-environment drift, not a regression. The dev's `git stash` + re-test workflow was misled into recording this as a "pre-existing failure" in the Story 2.0 file when the failures were actually intermittent CRLF-drift artifacts. **Suggested resolution:** Windows developers should run `git add --renormalize .` and commit any newly-LF-normalized files in a one-off maintenance pass. Alternatively, contributors can set `git config core.autocrlf input` on their Windows clones to match the repo's `eol=lf` policy at checkout time.~~ **CLOSED by post-Epic-2 cleanup (2026-05-20):** ran `git add --renormalize .` on `epic3` branch immediately after the Epic 2 merge to main; working tree now matches index (no `M` rows for the two files in `git status`). Recommendation for Windows contributors stands: set `git config core.autocrlf input` on fresh clones.
 
 ## Deferred from: code review of 2-1-chapterdirector-fsm-and-11-declarative-chapter-specs (2026-05-20)
 
@@ -230,7 +351,7 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 ## Deferred from: code review of 2-3-v-chapter-index-listbox-and-chapter-jump-keyboard-shortcuts (2026-05-20)
 
-- **[2.3 / LOW (ADR-0025 baseline)]** `web/src/components/v-chapter-index.ts` embeds the APG Listbox keyboard handler (`onListboxKeyDown` + `moveFocus`) inline rather than delegating to a `primitives/listbox-keyboard.ts` module as ADR-0025's "Obligations on downstream stories" prescribes ("Components compose primitives via mixin or delegation — no APG keyboard logic embedded directly in component code"). **Why deferred:** this is a project-wide ADR-0025 baseline drift, not a Story-2.3 regression. Story 2.2's `<v-timeline-scrubber>` already does the same thing — its APG Slider keyboard handling (`Home`/`End`/`ArrowLeft`/`ArrowRight`/`PageUp`/`PageDown`) lives inline in the component, not in the ADR-prescribed `primitives/slider-keyboard.ts`. Auto-resolving only on 2.3 (extracting listbox-keyboard.ts while slider-keyboard.ts stays inlined) would create an inconsistency worse than the current state. The right resolution is epic-level — extract BOTH primitives in one pass, or amend ADR-0025 to allow inline implementation until a second consumer appears (YAGNI argument). **Suggested resolution:** during the next Epic 2 retrospective, decide between (a) extracting `slider-keyboard.ts` + `listbox-keyboard.ts` as a paired refactor with unit tests for each primitive, or (b) authoring an ADR-0025 amendment that relaxes the "no APG keyboard logic embedded directly in component code" clause to "extract when a second consumer arises". Until that decision, leave the inline implementations consistent across the two components.
+- ~~**[2.3 / LOW (ADR-0025 baseline)]** `web/src/components/v-chapter-index.ts` embeds the APG Listbox keyboard handler (`onListboxKeyDown` + `moveFocus`) inline rather than delegating to a `primitives/listbox-keyboard.ts` module as ADR-0025's "Obligations on downstream stories" prescribes ("Components compose primitives via mixin or delegation — no APG keyboard logic embedded directly in component code"). **Why deferred:** this is a project-wide ADR-0025 baseline drift, not a Story-2.3 regression. Story 2.2's `<v-timeline-scrubber>` already does the same thing — its APG Slider keyboard handling (`Home`/`End`/`ArrowLeft`/`ArrowRight`/`PageUp`/`PageDown`) lives inline in the component, not in the ADR-prescribed `primitives/slider-keyboard.ts`. Auto-resolving only on 2.3 (extracting listbox-keyboard.ts while slider-keyboard.ts stays inlined) would create an inconsistency worse than the current state. The right resolution is epic-level — extract BOTH primitives in one pass, or amend ADR-0025 to allow inline implementation until a second consumer appears (YAGNI argument). **Suggested resolution:** during the next Epic 2 retrospective, decide between (a) extracting `slider-keyboard.ts` + `listbox-keyboard.ts` as a paired refactor with unit tests for each primitive, or (b) authoring an ADR-0025 amendment that relaxes the "no APG keyboard logic embedded directly in component code" clause to "extract when a second consumer arises". Until that decision, leave the inline implementations consistent across the two components.~~ **CLOSED by Story 3.0 (2026-05-20) via AC4 path (a):** extracted `web/src/primitives/slider-keyboard.ts` and `web/src/primitives/listbox-keyboard.ts` as paired handler-factory primitives following the existing `pointer-events.ts` / `debounce.ts` primitive convention. `<v-timeline-scrubber>` now uses `createSliderKeyboardHandler({...})`; `<v-chapter-index>` uses `createListboxKeyboardHandler({...})`. Each primitive has its own unit-test file (`primitives/slider-keyboard.test.ts` 12 tests; `primitives/listbox-keyboard.test.ts` 16 tests) covering the APG contract independent of consumers. Existing scrubber + chapter-index tests (114 total) pass unchanged. `voyager-skill-rules.md` Rule 9 records the durable obligation for future APG components.
 
 - **[2.3 / LOW]** `web/src/components/v-chapter-index.ts` `installClickOutside` attaches its `pointerdown` listener directly to `document` (line 402) while `installGlobalShortcuts` honours the `keyboardTarget` field (default `document`, overridable for tests). The inconsistency means a test that passes a different `keyboardTarget` would isolate keydown listeners but NOT the click-outside listener. **Why deferred:** no current test exercises a non-document keyboard target, so the inconsistency is latent. The click-outside listener uses `composedPath` + `includes(this)` so it's correctly scoped to "outside this host" regardless of attachment surface; the only impact is that tests theoretically sharing a body across files could observe cross-test pointerdown leakage. The afterEach cleanup in `v-chapter-index.test.ts` removes every `<v-chapter-index>` from the DOM, which triggers `disconnectedCallback` → `closePanel` → `uninstallClickOutside`, so leaks are bounded per-test. **Suggested resolution:** add a `clickOutsideTarget: Document = document` field mirroring `keyboardTarget`, and pass it through `installClickOutside`. Touch only when a test isolation case actually demands it.
 
@@ -240,7 +361,7 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 - **[2.4 / LOW]** `web/src/services/url-sync.ts` `writeHomeReplaceState(et)` always calls `history.replaceState` even when `currentPath` is already `/` — e.g. a free-scrub that crosses out of a chapter window into a cruise gap, then immediately back into another chapter, then back out, writes `/?t=<et>` repeatedly to the same path. **Why deferred:** `replaceState` to the SAME path is idempotent on the browser side (no new history entry, identical URL), so the only cost is one `history.replaceState` call per cruise transition — not measurable in practice. Adding a `if (this.currentPath === '/') return` guard would also need to handle the `?t=` divergence (the query DOES change) so the optimisation is more subtle than it appears. **Suggested resolution:** when implementing the Story 2.5 `?embed=true` preservation work (which already needs to rewrite `writeNow` / `writeHomeReplaceState` to preserve additional params), fold in a "skip-if-truly-identical-URL" guard at the same time so the URL writeback rate during cruise → chapter → cruise scrubs drops to the throttle floor.
 
-- **[2.4 / LOW]** `web/src/services/url-sync.ts` `writeChapterPushState` / `writeChapterReplaceState` / `writeHomeReplaceState` all DROP every query parameter except `?t=` on writeback. `?embed=true` is the canonical example (pinned by `web/tests/url-router-qa-gaps.test.ts` § "CURRENT BEHAVIOR: chapter pushState DROPS `?embed=true`"). **Why deferred:** Story 2.5 is the owner of `?embed=true`'s round-trip contract; `docs/url-contract.md` § "embed — boolean (reserved, Story 2.5)" reserves the parameter. Story 2.4's job is to land the slug + `?t=` shape and document the placeholder — not to preserve a parameter whose semantics aren't yet defined. **Suggested resolution:** Story 2.5 widens `writeNow` / `writeChapterPushState` / `writeChapterReplaceState` / `writeHomeReplaceState` to preserve `?embed=true` (and any other Story-2.5-introduced params) by reading `this.win.location.search` at write time and appending unrecognized keys; the existing regression test will then need its expectation flipped from `expect(params.get('embed')).toBeNull()` to `expect(params.get('embed')).toBe('true')` (or whatever shape Story 2.5 settles on).
+- ~~**[2.4 / LOW]** `web/src/services/url-sync.ts` `writeChapterPushState` / `writeChapterReplaceState` / `writeHomeReplaceState` all DROP every query parameter except `?t=` on writeback. `?embed=true` is the canonical example (pinned by `web/tests/url-router-qa-gaps.test.ts` § "CURRENT BEHAVIOR: chapter pushState DROPS `?embed=true`"). **Why deferred:** Story 2.5 is the owner of `?embed=true`'s round-trip contract; `docs/url-contract.md` § "embed — boolean (reserved, Story 2.5)" reserves the parameter. Story 2.4's job is to land the slug + `?t=` shape and document the placeholder — not to preserve a parameter whose semantics aren't yet defined. **Suggested resolution:** Story 2.5 widens `writeNow` / `writeChapterPushState` / `writeChapterReplaceState` / `writeHomeReplaceState` to preserve `?embed=true` (and any other Story-2.5-introduced params) by reading `this.win.location.search` at write time and appending unrecognized keys; the existing regression test will then need its expectation flipped from `expect(params.get('embed')).toBeNull()` to `expect(params.get('embed')).toBe('true')` (or whatever shape Story 2.5 settles on).~~ **CLOSED by Story 3.0 (2026-05-20), pointing at Story 2.5 (`appendEmbedIfEnabled` at `web/src/services/url-sync.ts:247`):** Story 2.5 added the `embedEnabled` option on `UrlSyncOptions` and the `appendEmbedIfEnabled` helper that appends `&embed=true` (or `?embed=true`) to every writeback URL when boot-time `?embed=true` was set, widening `writeNow` / `writeChapterPushState` / `writeChapterReplaceState` / `writeHomeReplaceState` accordingly. The original test expectation has been flipped per the suggested resolution.
 
 - **[2.4 / LOW]** `web/src/services/url-router.ts` `dispose()` clears the suppression sentinels but does NOT reset `pendingWaveSettle`. If `dispose()` is called between `scheduleWaveSettle()` and the queued microtask running, the microtask will still execute and invoke `settleWave` against the disposed-but-not-null `urlSync` reference — which can fire one trailing `replaceState` write after the router is supposedly torn down. **Why deferred:** in production, `URLRouter.dispose()` is only called by `__voyagerDebug.dispose()` (manual) and theoretically by a future hot-reload path; neither calls dispose synchronously in the middle of a director.update wave. The afterEach cleanup in unit tests calls dispose AFTER `flushMicrotasks()`, so the microtask has already drained. No in-tree consumer triggers the race. **Suggested resolution:** in `dispose()`, set a `disposed: boolean = true` field and guard `settleWave()` with `if (this.disposed) return` so the queued microtask becomes a no-op after dispose. Touch only when a hot-reload (Vite HMR-driven) path lands in Epic 7.
 
@@ -283,4 +404,229 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 - **[2.9 / LOW]** `web/src/styles/chapter-copy.css:14` — `v-chapter-copy` host declares `pointer-events: none` so the editorial copy panel cannot be text-selected for copy-paste. The dev's intent is documented inline ("editorial copy — not interactive") and the canvas-pass-through behavior is desirable for an immersive scrub-driven UX. The trade-off is that users who want to quote the heliopause prose (e.g., to share on social media) must retype it or use the URL. **Why deferred:** legitimate design trade-off, not a regression. Reasonable for a Three.js-canvas-first visualization where mouse-down likely orbits the camera or scrubs the timeline. The chapter copy is short (~110 words per panel) and reproduced in MISSION_FACTS.md / heliopause-copy.ts for citation purposes. **Suggested resolution:** when Epic 4 introduces encounter chapters with longer-form copy, revisit whether `pointer-events: auto` + a transparent click-pass-through layer (e.g., a child `<div pointer-events: auto>` containing only the text, sibling-positioned over the canvas) would offer both behaviors. Until then, leave the immersive-canvas posture intact.
 
 - **[2.9 / LOW]** `web/src/styles/chapter-copy.css:7-13` — the `<v-chapter-copy>` panel is positioned `right: var(--v-edge-margin); top: 50%; transform: translateY(-50%)` with width `min(36ch, 40vw)`. On very short viewports (<600px height) or narrow viewports below the Story 1.7 tablet breakpoint, the vertically-centered panel could visually collide with the HUD's top-right `<v-hud-date>` / `<v-hud-distance>` cluster or the bottom-right `<v-hud-speed>` readout. The unit-tier tests do not exercise short-viewport layouts; the lead-driven Chrome DevTools MCP smoke (Probe 1 + Probe 2 in the qa-gaps inline plan) captures screenshots at the default ~1280×720 viewport. **Why deferred:** the panel sizing already uses `min(36ch, 40vw)` so it scales down on narrow viewports, and `--v-edge-margin` provides edge breathing room. No visual collision has been demonstrated in the existing screenshots, and the responsive treatment for the chapter-copy panel below the tablet breakpoint is a Story 6.2 / Epic 6 polish concern (the same story that owns the HUD compaction toggle). **Suggested resolution:** when Story 6.2 (HUD compaction below 1024px) lands, extend the same media-query block in `chapter-copy.css` to either re-position the panel below the HUD column or collapse it to a bottom-anchored drawer with an open/close affordance. Touch when the breakpoint responsive story arrives.
+
+## Deferred from: lead-driven MCP smoke of 3-0-epic-2-deferred-cleanup (2026-05-20)
+
+- **[3.0 / LOW]** No `window.__voyagerDebug.dispose` debug surface published by `first-paint.ts`, blocking real-browser execution of Probe 3 in the QA-authored MCP smoke plan (`tests/test-summary-3-0.md` § Probe 3). The probe falls back to test-pyramid coverage (9 dev + 4 QA happy-dom tests) which is sufficient because AC6's `.remove()` semantics have no real-browser-only blind spot. **Why deferred:** publishing the surface now is out-of-scope for Story 3.0's cleanup remit, and the AC6 implementation has no captured-closure event-handler pattern that would leak element references past `.remove()` — the realistic threat model is covered by the happy-dom tier. **Suggested resolution:** Story 6.x or 7.x dev-mode hygiene pass adds `__voyagerDebug.dispose = () => firstPaintHandle.dispose()` (similarly `__voyagerDebug.reinit = () => startFirstPaint(...)` if hot-reload semantics ever land) so subsequent stories that touch first-paint lifecycle can run Probe 3 directly. Until then, document the divergence in any per-story smoke report that references AC6's lineage.
+
+- **[3.0 / LOW]** Dev server (`npm run dev`) emits `ChunkIntegrityError` for every `voyager-{1,2}-seg*.bin.br` chunk at boot — all chunks return the same SHA-256 (`ed1c69e7b3228a2f9436a469f281bcacd8f0561b1a7f18e19427a95ca5badc94`) indicating Vite's SPA index.html fallback is being served in place of the missing brotli payloads. The chunks are not under `web/public/data/` on a fresh checkout; they're produced by the bake → `scripts/copy_bake_to_web.py` pipeline which Story 3.0 did not exercise. **Why deferred:** dev-environment-only; pre-existing across all Epic-1 and Epic-2 stories (any clean checkout of `epic3` branch shows the same warnings). Not a Story 3.0 regression. The MCP smoke probes Story 3.0 cares about (keyboard handling) don't depend on the chunks; the trajectory lines simply hold their previous segment as `console.warn` documents (`polyline will hold previous segment`). **Suggested resolution:** Story 7.1 (drift report + path-filtered kernel-update workflow) or Story 1.16's follow-on hygiene — document the prerequisite `just bake-fast` (or equivalent) step in the README's `cd web && npm run dev` quickstart, OR have the dev server emit a clearer error pointing at the missing prerequisite. Filing here so future contributors hitting the same warnings know the cause.
+
+## Deferred from: code review of 3-1-ck-kernel-bake-pipeline-and-sign-flip-walk-pre-bake (2026-05-20)
+
+- ~~**[3.1 / LOW]** `bake/src/ck_sample.py:550` writes `cadence_for_header = effective_cadence` … the linspace knot-reconstruction is accurate enough.~~ **CLOSED by Story 3.1 lead-driven smoke fix (2026-05-21):** the linspace-reconstruction premise rested on fast-tier MOCKED `spice.ckgp` returns. Real slow-tier smoke proved up to π-radian SLERP errors. ADR-0004 § Body Layout per Kind (Story 3.1 amendment) resolves: attitude VTRJs now store explicit per-sample ETs in column 0 of the (N,5) body; `cadenceSec` header field is now informational BY DESIGN, not as a compromise.
+
+- ~~**[3.1 / LOW]** ADR-0004 § Decision (lines 24-39) documents a VTRJ header layout that does NOT match the implementation … pre-existing inheritance from Story 1.4 …~~ **CLOSED by Story 3.1 lead-driven smoke fix (2026-05-21):** ADR-0004 § Body Layout per Kind explicitly documents (a) the actual 40-byte header struct `<4sHiddId2s` as the canonical contract, (b) the body-shape discrimination by `body_id` namespace, (c) the original "Decision" pseudocode is acknowledged as never-implemented aspirational text. Suggested-resolution path (a) was taken — planning artifacts amended in place per voyager-skill-rules.md Rule 5.
+
+## Deferred from: lead-driven smoke of 3-2 (2026-05-21)
+
+- **[3.1→3.2 / HIGH (deployment gap)]** Story 3.1's bake-attitude pipeline produces attitude VTRJ files + manifest entries at `bake/out/`, but the deployment commands (`just bake-attitude && just copy-bake-to-web`, or `bake/.venv/Scripts/python.exe -m src.ck_sample` + `scripts/copy_bake_to_web.py`) were never executed since Story 3.1 shipped (sha `1a4804e`). The committed `web/public/data/manifest.json` carries only Story 1.13's trajectory entries (12 bodies, 0 attitude entries). Story 3.2's lead-driven MCP smoke confirmed: `__voyagerDebug.attitudeService` is published correctly; the synthesized HGA-Earth-pointing path works end-to-end (Probe 3 — both V1 and V2 return unit-length quaternions with provenance `'synthesized'`); but Probe 2 (V1 Jupiter CK provenance) cannot be runtime-verified — `getBusProvenance(-31, V1_JUPITER_CLOSEST_APPROACH_ET)` correctly returns `'synthesized'` because the manifest has no `bus_attitude` entry for V1, so the AttitudeService falls through to the synthesized path. **Why deferred:** AttitudeService code is correct (unit + integration tests prove the CK SLERP path with hand-crafted fixtures; AC7's `attitude-service-integration.test.ts` exercises it through the full boot stack). The deployment gap is a separate carry-forward concern. Running the deployment is ~10-15 minutes and was deemed out-of-scope for the Story 3.2 commit boundary. **Routed to Story 3.4 ("Apply Attitude Per Frame to Both Spacecraft") as a prerequisite:** Story 3.4 cannot land without deployed attitude data; its first task should be (a) run `bake/.venv/Scripts/python.exe -m src.ck_sample`, (b) run `bake/.venv/Scripts/python.exe scripts/copy_bake_to_web.py`, (c) commit the updated `web/public/data/manifest.json`. After step (c), re-run the Story 3.2 smoke Probe 2 and confirm `provenance: 'ck'`. Optionally, Story 3.4's PR can add a CI check asserting `web/public/data/manifest.json` has `bus_attitude` + `platform_attitude` entries for both spacecraft, preventing future deployment-gap regressions. See `_bmad-output/implementation-artifacts/3-2-smoke-evidence/mcp-session-log.md` for the full probe results + lessons.
+
+## Deferred from: lead-driven smoke iteration of 3-1 (2026-05-21)
+
+- **[3.1 / LOW]** Story 3.1 `vgr*_super_v2.bc` only — V1 PBD scan-platform attitude is **synthesized** at Story 5.2 (not baked from CK; the V1 super CK has no scan-platform coverage at the 1990-02-14 family-portrait window per `docs/kernels/ckbrief-inventory.md`). Story 3.1's bake correctly skips emitting `v1_platform_attitude.pale-blue-dot.bin.br` (the "no-CK-coverage" skip path). The PBD bus attitude IS baked (V1 super CK has continuous bus coverage). The "what to render at PBD" question is owned by Story 5.2 + Story 3.2 (synthesized HGA / synthesized choreographed-turn for the scan platform). **Why noted here:** future contributors looking for `v1_platform_attitude.pale-blue-dot.bin.br` will find it doesn't exist; this is by design. **Suggested resolution:** Story 5.2 documentation can reference this entry. No code action.
+
+- **[3.1 / LOW]** The slow-tier `test_l1_validator_reads_attitude_bake_and_passes_nfr_p10` runs the full bake-attitude pipeline (~7-9 minutes on dev hardware). CI runs the slow tier per Story 1.14's bake-determinism job. **Why deferred:** the slow tier is gated on LFS-pulled kernels (`@pytest.mark.skipif(not _ck_kernels_present())`); on a fresh clone without `git lfs pull` it correctly skips. The per-iteration cost during development is real but expected (the lead iterated 4 times across the 2026-05-21 design pivot — each iteration ~7 min). **Suggested resolution:** Story 3.7 (L2 JS-vs-SPICE attitude validation in CI) can add a "fast slow-tier smoke" subset of the AC8 Integration AC that exercises only ONE encounter (e.g., V2 Uranus — the historical worst case) in ~1 minute, leaving the full 7-window pass to nightly. Routed to Story 3.7.
+
+## Deferred from: code review of 3-2-attitudeservice-slerp-interpolation-and-synthesized-hga-cruise-attitude (2026-05-21)
+
+- **[3.2 / LOW]** `AttitudeService.decodedByUrl` (Map<chunkUrl, DecodedAttitude>) has no eviction policy or capacity bound, while the upstream `ChunkLoader` LRU is sized at `DEFAULT_LRU_CAPACITY = 12`. Story 3.1's bake produces 14 encounter attitude files (7 windows × 2 spacecraft, with V1-PBD-platform skipped), so a scrubbing session that touches every encounter window can exceed the LRU capacity. When chunk-loader evicts a chunk, AttitudeService's decoded entry (the typed knotEts Float64Array + knotQuats THREE.Quaternion[]) remains in `decodedByUrl`, holding memory the LRU intended to release. **Why deferred:** each decoded entry is small — a single encounter file at 5-sec uniform cadence × 4 days = ~69k samples × (8 bytes ET + 4 × 8 bytes quaternion) ≈ ~2.7 MB worst case; the full 14-file decoded cache caps at ~38 MB. NFR-P5 (≤150 MB full bundle) is unconstrained at this scale. No correctness issue — re-decode is idempotent because the chunk-loader's brotli decode is deterministic. **Suggested resolution:** Story 3.4 (per-frame attitude application) or a future Epic 6 perf-pass story can either (a) match the `decodedByUrl` capacity to the chunk-loader's LRU and evict in lockstep via a `chunkLoader.subscribe(onEvict)` hook, or (b) drop the cache entirely and re-decode on every chunk-load (decode is ~1 ms per encounter file per the dev's perf assumption — acceptable for the once-per-load amortization). Option (b) is simpler; option (a) is more defensible if `decodedByUrl`'s working-set scales beyond 14 entries (e.g., Story 5.2's PBD choreography adds more files). Routed to Story 3.4 review or Epic 6.
+
+## Deferred from: code review of 3-3-articulated-spacecraft-glb-with-scan-platform-node (2026-05-21)
+
+- **[3.3 / LOW]** AC7 integration test step-7 weaker than AC spec wording. The AC7 step 7 commit reads: *"Asserts the platform's world-position child (e.g., the NA-camera mesh's `matrixWorld`) has changed relative to the BUS's world-position child (e.g., the HGA mesh's `matrixWorld`) by the angular delta predicted by the platform quaternion — within 1e-12 absolute."* The actual test 1 in `web/tests/spacecraft-models-attitude-integration.test.ts:341-344` asserts only that `platform.quaternion.{x,y,z,w}` equals what was copied in (1e-12 abs) — not the world-position angular delta. **Why deferred:** test 2 in the same file ("rotating SCAN_PLATFORM after attitude application does not deform HGA world matrix") + QA gap 3 in `web/tests/spacecraft-models-qa-gaps.test.ts` ("BUS quaternion propagates to HGA + SCAN_PLATFORM children" with `getWorldQuaternion` composition assertion at 1e-12) collectively cover the load-bearing contract more thoroughly than the AC7 step-7 wording. No correctness gap; just a test-wording-vs-implementation gap. **Suggested resolution:** Story 3.4's per-frame integration test naturally exercises the angular-delta path (each frame, AttitudeService → BUS/SCAN_PLATFORM quaternion → world matrix). Add an explicit angular-delta assertion in the Story 3.4 integration test to retire this deferral.
+
+- **[3.3 / LOW]** Story 3.4 must verify scan-platform pivot composes correctly with FK kernel articulation axis. `bake/inputs/voyager-mesh-mapping.json` sets `scan_platform_pivot_meters = [0, -0.567, 0]` in mesh-local (glTF Y-up) coordinates. The `scan_platform_pivot_rationale` block explicitly acknowledges a coordinate-frame discontinuity: glTF Y-up (Blender export) puts SCAN_PLATFORM on the bus's -Y face; FK kernel frames -31100/-32100 specify the articulation axis in SPICE coordinates. The rationale defers composition to Story 3.4: *"the per-frame attitude application in Story 3.4 will compose the FK rotation onto the named hierarchy's local quaternion, so this offset only needs to be the geometric hinge point in the GLB's own frame."* **Why deferred:** Story 3.3's scope is the named-hierarchy contract; the SPICE-frame ↔ glTF-frame composition is Story 3.4's per-frame application path. **Suggested resolution:** Story 3.4's integration test should verify that for a known ET inside V1 Jupiter platform CK coverage, the world-space orientation of a SCAN_PLATFORM child (e.g., NA-camera boresight) matches the SPICE-frame target orientation under the composed `(busQuat ∘ platformQuat ∘ pivot_offset)` transform, within an angular tolerance (e.g., 0.1° — appropriate for the qualitative-rendering tier). If the composition is wrong, the SCAN_PLATFORM `position` in `voyager-mesh-mapping.json` may need to be amended (e.g., sign-flip Y, or re-derived from the SPICE FK ROT translation).
+
+- **[3.3 / LOW]** `SpacecraftHandle.lod` field mutation bypasses readonly modifier. `web/src/render/spacecraft-models.ts:314-315` uses `(this.v1 as { lod: LOD }).lod = v1Lod` to assign onto a field declared `readonly lod: LOD | null` in the `SpacecraftHandle` interface (line 155 `lod: LOD | null;` — actually NOT readonly in the current interface; but the interface declares `id`, `naifId`, `group` as readonly, so the field is implicitly mutable while the rest of the surface is locked). **Why deferred:** type-safety hygiene only; no functional issue. The cast is local + audited + used only inside the load path. **Suggested resolution:** future hygiene pass (Story 6.x or Epic 7) can either (a) drop the `readonly` on the other handle fields for consistency and make `lod` directly mutable, or (b) introduce a private setter helper on `SpacecraftModels` so the cast site disappears.
+
+
+---
+
+## Deferred from: Story 3.3 lead-driven smoke (2026-05-22)
+
+### [3.4 / LOW] CK-window articulation visual smoke gated on bake-attitude propagation to local manifest
+
+**Severity:** LOW (smoke-evidence completeness; functional path covered by tests)
+**Surfaced by:** Story 3.4 lead-driven Chrome DevTools MCP smoke (2026-05-22)
+**Symptom:** The runtime manifest at `web/public/data/manifest.json` predates Story 3.1's `just bake-attitude` step. Without `uv` locally, the lead cannot re-run the Python bake to populate the attitude VTRJ files + manifest entries. The smoke at `/?t=1979-03-05T12:05:26Z` therefore exercises only the synthesized cruise path (no CK files in the manifest → `findAttitudeFile` returns null → fallback to synthesized). The CK-driven articulation visual gate (AC4 § "scrubbing forward 1 simulated hour at 100× speed shows the platform rotating progressively") is structurally inaccessible locally.
+**Impact:** None on Story 3.4's deliverable — the CK path is fully covered by the 5 integration tests + 13 QA gap tests against CK fixtures. The synthesized path IS verified visually + functionally. Loss is one tier of redundant evidence, not a correctness gap.
+**Resolution paths:**
+- (a) Install `uv` locally + run `just bake-attitude` to populate the manifest with `-31000 / -31100 / -32000 / -32100` bodies, then re-run the Story 3.4 smoke at the V1 Jupiter ET to capture the CK articulation visual. ~5 min of lead time.
+- (b) Pull the CI-baked artifacts from a fresh GitHub Actions run (post-merge) and run the smoke against those. Slower wallclock but no local install.
+- (c) Defer until Story 7.x post-deploy smoke against the production CDN URL — by then the bake-attitude pipeline is fully integrated and the smoke evidence is natural.
+**Recommended:** (c) — the CI / production deploy is where the bake-attitude pipeline is intended to land; doing it locally for Story 3.4 smoke is over-engineering. Tests cover the CK path at multiple tiers.
+
+---
+
+### ✅ RESOLVED in Story 3.3.1 (2026-05-22) — [3.3 / HIGH] Chunk-loader resolves chapter-relative URLs against the active path instead of root
+
+**Severity:** HIGH (load-bearing data pipeline fails on chapter routes; pre-existing since Story 2.4)
+**Surfaced by:** Story 3.3 AC9 smoke when navigating to `/c/v1-jupiter`
+**Symptom:** ~55 console warnings of the form `ChunkIntegrityError: ... expected sha256=<file's decompressedSha256>, computed sha256=ed1c69e7b3228a2f9436a469f281bcacd8f0561b1a7f18e19427a95ca5badc94` (the latter is the SHA-256 of Vite's SPA-fallback `index.html`). Spacecraft are not visible on chapter routes because their trajectory chunks never decode.
+**Root cause:** `web/public/data/manifest.json` `bodies[].files[].url` values are RELATIVE (e.g., `data/voyager-1-seg01--704412036--704170304.bin.br`, no leading `/`). When the active page URL is `/c/v1-jupiter`, the chunk-loader's `fetch(url)` resolves to `/c/data/voyager-...bin.br` instead of `/data/voyager-...bin.br`. Vite serves the SPA-fallback `index.html` for the unmatched `/c/data/...` path; the chunk-loader hashes the HTML and reports an integrity failure.
+**Verification:** at console on `/c/v1-jupiter`:
+- `fetch('data/voyager-...bin.br').url` → `/c/data/voyager-...bin.br` (text/html, hash ed1c69e7...)
+- `fetch('/data/voyager-...bin.br').url` → `/data/voyager-...bin.br` (application/octet-stream, hash matches manifest)
+**Resolution paths (pick one):**
+- (a) Patch `bake/src/manifest_writer.py` to emit `url` values with a leading `/` (e.g., `/data/voyager-...bin.br`). One-line bake-side fix; runtime unchanged. Re-bake produces a clean manifest.
+- (b) Patch `web/src/services/chunk-loader.ts` to anchor its `fetch(url)` against the manifest's load URL (e.g., resolve against `/data/manifest.json`'s URL via `new URL(file.url, manifestUrl).pathname`). Single-file runtime fix; bake unchanged.
+- (b) is recommended because it's a runtime-side defensive fix and works against any manifest, including manifests baked before the change.
+**Routing:** target Story 3.4 (the per-frame attitude application depends on EphemerisService+trajectory chunks loading correctly on chapter routes — Story 3.4's AC2/AC3 will be unverifiable without this fix), or a separate hotfix story `3.x` if Story 3.4 gets large.
+
+### [3.3 / LOW] LOD3 size budget breach (1032 KB vs ≤100 KB target in AC2)
+
+**Severity:** LOW (visual-quality target, not a correctness gate)
+**Surfaced by:** `npm run build-glb` console output during smoke.
+**Symptom:** `voyager-lod3` outputs 1,032,680 bytes — ~10× the AC2 target of ≤100 KB. The simplify ratio of 0.05 only reduced vertex count from 17,198 → 9,212 (46% reduction, not the targeted 95%) because `gltf-transform`'s `simplify` preserves UV-seam and normal-discontinuity vertices to keep the mesh shaderable.
+**Resolution paths:**
+- (a) Tune `simplify({ ratio, error })` — increase `error` to 0.05 or 0.1 to allow more aggressive simplification; accept some visual drift at LOD3 (which is only shown beyond 1 AU where spacecraft is sub-pixel anyway).
+- (b) Author an explicit silhouette-only mesh at the LOD3 slot (procedural cube + cone — matches the spacecraft's gross silhouette without preserving details).
+- (c) Accept the breach as-is and amend AC2's LOD3 budget to "≤ 1.2 MB" with the rationale that any LOD3 quality matters less than the named-hierarchy preservation contract.
+**Recommended:** (a) at Story 4.3's polish pass — that story is the natural landing for LOD threshold tuning.
+
+### [3.3 / LOW] `web/scripts/build_glb.ts` lacks a CI WebP→PNG transcode dependency declaration
+
+**Severity:** LOW (already works; documentation hygiene)
+**Surfaced by:** Story 3.3 smoke fix.
+**Symptom:** The smoke-time fix added a runtime dependency on `sharp` (via `import('sharp')` inside `writeTexturesAsKtx2`). `sharp` is already a transitive dep via `@gltf-transform/functions` → `ndarray-pixels`, so installation works today. But the dependency is implicit; if a future gltf-transform release drops the `ndarray-pixels` chain, the WebP transcode path silently breaks.
+**Resolution:** add `sharp` as an explicit devDependency in `web/package.json`. One-line PR.
+
+## Deferred from: code review of story-3-5-narrow-angle-camera-boresight-cone (2026-05-22)
+
+### [3.5 / LOW] BoresightRenderer dispose() unit test spies on EdgesGeometry.dispose only, not ConeGeometry.dispose
+
+**Severity:** LOW (coverage gap — both dispose paths ARE actually called by the renderer)
+**Surfaced by:** Story 3.5 code review (Blind Hunter BH-7).
+**Symptom:** `web/src/render/boresight-renderer.test.ts:412` spies on `coneV1.geometry.dispose` — but `coneV1.geometry` is the `EdgesGeometry`, not the underlying `ConeGeometry`. The renderer's `dispose()` calls BOTH `coneGeometrySource.dispose()` and `edgesGeometry.dispose()`; the test only verifies the latter. The `ConeGeometry.dispose()` path runs in production but is not assertion-pinned.
+**Resolution:** add a spy on the renderer's internal `coneGeometrySource` (would require exposing it via a test-only getter mirroring `__getCone`), or assert via `vi.spyOn(ConeGeometry.prototype, 'dispose')` for a one-shot prototype-level check. One-line test addition.
+
+### [3.5 / LOW] readCssVar → new Color(accentHex) does not defend against malformed CSS variable value
+
+**Severity:** LOW (production tokens stylesheet is in-repo and lint-clean; absent-var case is covered by the fallback)
+**Surfaced by:** Story 3.5 code review (Edge Case Hunter EC-8).
+**Symptom:** `BoresightRenderer.readCssVar` returns the trimmed CSS variable value verbatim; `new Color(value)` then parses it. If `--v-color-accent` is ever set to a non-color string (e.g. `"junk"`), Three.js's `Color` constructor either throws or silently produces black depending on input. The fallback path only fires on EMPTY string, not on malformed string.
+**Resolution:** wrap `new Color(accentHex)` in a try/catch that falls back to `new Color(FALLBACK_ACCENT_COLOR)` on failure, or validate the hex shape with a regex before constructing. One-line defensive guard.
+
+## Deferred from: code review of story-3-7-l2-js-vs-spice-attitude-consistency-validation-in-ci (2026-05-22)
+
+### [3.7 / HIGH] Story 3.1 bake cadence insufficient for V2 Saturn peak imaging — L2 gate fires RED (Rule 5 NFR tripwire, intended outcome)
+
+**Severity:** HIGH (CI will be RED on first push; canonical Rule 5 NFR tripwire response per user decision 2026-05-22)
+**Surfaced by:** Story 3.7 lead-driven AC8 smoke (T5.2 — `local-real-data-output.txt`); Story 3.7 code review § EC-10 + AA-18 (load-bearing tripwire).
+**Symptom:** With Story 3.1's `ck_sample.CADENCE_5S = 5.0` (5-second uniform cadence calibrated against V2 Uranus peak-slew only), the L2 vitest gate fails for V2 Saturn:
+
+- Worst-case bus angular error = **3.6029 mrad** at ET = **-579086636.4** (~1981-08-26T03:43:24 TDB, V2 Saturn closest approach + several hours).
+- Window: `v2-saturn` (V2 Saturn encounter, CA 1981-08-25).
+- Spacecraft: -32 (Voyager 2).
+- Gate: NFR-P10 ≤ 1 mrad. Observed: 3.6 mrad. **3.6× over budget.**
+- Diagnostic emission from `attitude-l2-fixture.test.ts:326-333` will surface in CI as:
+  `worst-case L2 attitude error exceeds NFR-P10 1 mrad: kind=bus spacecraftId=-32 et=-579086636.4 ckWindow=v2-saturn angularError=3.6029e-03 rad (3.6029 mrad)`
+
+**Diagnosis (dev's investigation):**
+
+- L2 ground truth is correct: `pxform(J2000, VG2_SC_BUS, et)` and `ckgp(-32000, et, tol=0, J2000)` AGREE EXACTLY at the failing ET (|dot| = 1.0, angular delta = 0.0 mrad).
+- The V2 Saturn bus VTRJ at this ET has neighboring 5-sec knots with pairwise angular delta = **5.8 mrad**. SLERP between knots gives ~half that error mid-interpolation → matches the observed 3.6 mrad.
+- V2 Saturn active imaging is faster than V2 Uranus active imaging — the 5-sec cadence is below Nyquist for V2 Saturn's slew rate.
+
+**CK windows affected:** V2 Saturn (`v2-saturn`); the L2 fixture currently fails this window. V2 Uranus passes (the cadence was tuned for it). Other windows (V1 Jupiter, V1 Saturn, V1 PBD, V2 Jupiter, V2 Neptune) have lower peak slew rates and likely pass at 5-sec cadence, but should be re-verified once the amendment lands.
+
+**Cadence target:** 2-second uniform cadence reduces neighboring-knot angular delta by ~60% (linear scaling under fast slew), placing V2 Saturn worst-case mid-SLERP at ~1.0-1.5 mrad — at the gate edge. A 1-second uniform cadence over the active-imaging band gives ~0.5 mrad worst-case headroom. Recommended: **1-second cadence within ±1 hour of V2 Saturn closest approach** (effectively the original AC1 mixed-schedule design), restoring the variable-cadence pattern but tighter inside the encounter window. Estimated bake-output size impact: 2-sec cadence ≈ 2.5× current attitude VTRJ size; 1-sec ≈ 5×. Still well under NFR-P4/P5 budgets (per the dev's note).
+
+**Resolution paths (pick one):**
+
+- (a) **Uniform tighter cadence**: change `ck_sample.CADENCE_5S = 5.0` to `2.0` (or `1.0`). Simplest; impacts ALL encounters' file size. Recommended for a fast hotfix.
+- (b) **Per-encounter cadence override**: introduce `ENCOUNTER_CADENCE_OVERRIDE = {"v2-saturn": 1.0, ...}` keyed by slug. Surgical; preserves the 5-sec cadence for low-slew encounters.
+- (c) **Variable cadence around CA**: refactor `_build_window_grid` to emit at 1-sec cadence within ±1 hour of CA and 5-sec elsewhere. Closest to AC1's original mixed-schedule intent; requires the variable-cadence schema path (already supported per ADR-0004 § Body Layout per Kind explicit-ET amendment).
+- (d) Defer the gate (lower NFR-P10 from 1 mrad to e.g. 5 mrad). REJECTED by user decision 2026-05-22 — the 1 mrad gate is load-bearing per Rule 5; the canonical response is amendment of Story 3.1, not amendment of NFR-P10.
+
+**Routing:** **Story 3.1 hotfix story** (e.g., `3.1.1` or `3.7.1`). MUST land before the Story 3.7 CI step is expected to be green on `main`. **The CI build WILL BE RED until the cadence amendment lands** — this is the intended Rule 5 surfacing of the upstream Story 3.1 defect. The user has accepted this routing decision 2026-05-22 (per code-review spawn prompt).
+
+**Linked artifacts:**
+
+- Smoke evidence: `_bmad-output/implementation-artifacts/3-7-smoke-evidence/local-real-data-output.txt`
+- Smoke fixture: `_bmad-output/implementation-artifacts/3-7-smoke-evidence/sample-fixture-3000-records.json` (3000 records, 1.10 MB, SHA pinned in cycle-log; structurally validated by `bake/tests/test_l2_attitude_validation_qa_gaps.py` + `web/tests/attitude-l2-fixture-qa-gaps.test.ts`).
+- Story 3.7 Dev Agent Record § Issues Encountered #1.
+- Original cadence calibration: Story 3.1 amendment 2026-05-21 (cycle-log entry).
+
+### [3.7 / HIGH] Story 3.1 `_build_window_grid` does not emit `platform_attitude` VTRJs for type-1 PDS Rings ISS SEDR CKs
+
+**Severity:** HIGH (load-bearing — the platform gate is inactive until this lands)
+**Surfaced by:** Story 3.7 dev (Decision D4); confirmed via Story 3.7 lead's local AC8 smoke (`[L2] platform records: compared=0 synthesized-skip=3000`).
+**Symptom:** Story 3.1's `ck_sample._build_window_grid` calls `_intersect_interval(band, coverage)` which strictly filters `lo < hi`, so zero-duration `(t, t)` intervals (the canonical shape of type-1 CK records — one per ISS shutter event) are dropped. The platform coverage union appears empty → `bake_attitude` emits `"[SKIP] ... empty ET grid"` for every platform structure (`-31100`, `-32100`) → no `v*_platform_attitude.*.bin.br` files are produced.
+
+The runtime AttitudeService correctly falls back to the **synthesized HGA-Earth-pointing path** for platform attitude (per Story 3.2 § AC4), but that path is NOT the SPICE ground truth. The L2 platform gate is therefore inactive: every fixture record routes to `n_platform_synthesized` and the platform 1-mrad assertion never fires.
+
+**Diagnostic:** The vitest test at `web/tests/attitude-l2-fixture.test.ts:317-322` logs:
+`[L2] platform records: compared=<N>, synthesized-skip=<M> (synthesized-skip > 0 indicates Story 3.1 type-1-CK gap)`
+
+When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` drops to zero — the L2 gate then activates the platform comparison without test-side changes.
+
+**Resolution paths:**
+
+- (a) Amend `ck_sample._build_window_grid` (or `_intersect_interval`) to treat type-1 zero-duration intervals as discrete knot ETs. Emit a `platform_attitude` VTRJ with explicit per-sample ETs (column-0 ET storage already supported per ADR-0004 § Body Layout per Kind, Story 3.1 amendment 2026-05-21).
+- (b) Add a fallback that polls the type-1 CK record set directly via `ckgp(struct_id, et, tol=0, ref)` at each knot ET and writes the resulting (et, quat) pairs as explicit-ET VTRJ rows.
+
+**Routing:** **Same Story 3.1 hotfix as [3.7 / HIGH] #1 above.** Both findings are Story 3.1 amendments; ship them together. Without the platform VTRJs, the L2 platform gate is inactive even after the bus cadence fix.
+
+**Linked artifacts:**
+
+- Story 3.7 Dev Agent Record § Issues Encountered #2.
+- Story 3.7 Vitest test `attitude-l2-fixture.test.ts:272-302` (the provenance-gated platform comparison block).
+
+### [3.7 / MED] L1 + L2 + L3 wall-clock budget (NFR-M4 ≤ 5 min) not measured nor CI-enforced
+
+**Severity:** MED (NFR enforcement gap; the gate IS the budget per AC3 wording)
+**Surfaced by:** Story 3.7 code review § AA-7.
+**Symptom:** AC3 says "the total L1 + L2 + L3 wall-clock time stays ≤ 5 minutes (NFR-M4 budget)" and gives the auto-trim instruction ("parameterize the sample count downward (e.g., 100 per window)") if the budget is exceeded. The story implements the size cap (AC4) but does NOT measure or assert the wall-clock budget anywhere — no `time` wrapper around the CI steps, no per-step duration captured + asserted, no auto-trim trigger. The CI workflow's `timeout-minutes: 15` (bake) + `timeout-minutes: 10` (test-web) are timeouts, not budget gates. With `test-web` now needing `bake`, the critical path lengthens; if bake+test-web combined exceeds 5 min, the NFR is silently violated.
+**Resolution:** Add a CI step (post-bake, pre-`test-web`) that records the bake job's elapsed time and asserts a target (e.g., 4 min for bake, leaving 1 min headroom for test-web). OR: add a measurement step that surfaces the actual timing in the CI log so the lead can manually verify each PR. The auto-trim path (lower N) is harder to wire up reactively in CI; the simpler defense is the measurement + manual trim.
+**Routing:** Story 7.x CI-hardening pass, or fold into the Story 3.1 hotfix above (since the cadence change will also shift CI timing measurably). LOW urgency until the Story 3.1 amendment lands (because the current `bake` step is fast on the existing 5-sec cadence; the hotfix's 1-sec cadence path may push timing).
+
+### [3.7 / LOW] `l2_attitude_validation.py` carries unused runtime helpers (`_sample_uniform_in_intervals`, `_intersect_two_coverages`)
+
+**Severity:** LOW (dead code at runtime; used only in tests)
+**Surfaced by:** Story 3.7 code review § BH-1 + BH-2.
+**Symptom:** `_sample_uniform_in_intervals` (lines 303-342) and `_intersect_two_coverages` (lines 261-286) are defined + tested but never called in `generate_fixture_records`. They were drafted to support the original AC1 "uniform-on-continuous-band" sampling strategy; Decision D1 (forced by `tol=0` type-1 CK constraint) pivoted to `random.Random.sample` on a discrete knot set, leaving these helpers unused at runtime. The module docstring around line 303 documents their semantics; the unit tests still exercise them.
+**Resolution:** Either (a) drop both helpers + their unit tests (cleanest; removes ~80 lines + 8 tests), or (b) keep them as reusable interval-math primitives and add a docstring note that they're intentionally not called by the current generator (defensive future-use). Recommendation: (a) — Story 7.x kernel-drift report or a future refactor can re-introduce them if needed.
+
+### [3.7 / LOW] `_bus_quat_at` does not catch `SpiceyError`
+
+**Severity:** LOW (the in-band knot filter guarantees no out-of-coverage ETs reach this function; defensive guard only)
+**Surfaced by:** Story 3.7 code review § EC-2.
+**Symptom:** `_bus_quat_at` (lines 345-375) calls `spice.pxform(REFERENCE_FRAME, frame, et)` without a try/except. The function's contract assumes the ET lies inside bus FK frame coverage — true today because `platform_coverage ⊆ bus_coverage` for encounter windows (per the inline comment line 538). If a future kernel update breaks that subset relationship, `pxform` raises and the entire fixture generator aborts with no diagnostic context.
+**Resolution:** Mirror `_platform_quat_at`'s pattern — wrap in `try/except SpiceyError: return None` and let the caller skip the record + increment `n_dropped_bus`. One-line guard.
+
+### [3.7 / LOW] `n_dropped_bus` counter branch is unreachable today
+
+**Severity:** LOW (defensive code; counter is correctly incremented when EC-2 lands)
+**Surfaced by:** Story 3.7 code review § BH-7.
+**Symptom:** `_bus_quat_at` cannot return `None` (it raises on failure rather than returning None), so the `if bus_quat is None` branch at line 601 is dead. Pairs with EC-2: once `_bus_quat_at` is amended to return None on SpiceyError, this branch becomes live.
+**Resolution:** Land together with EC-2.
+
+### [3.7 / LOW] `chosen_ets` does not dedupe `in_band_knots`; `rng.sample` would raise on duplicates
+
+**Severity:** LOW (PDS Rings type-1 CKs do not produce duplicate-knot intervals in practice)
+**Surfaced by:** Story 3.7 code review § BH-6.
+**Symptom:** Line 588: `rng.sample(in_band_knots, k=samples_per_window)`. If `in_band_knots` ever contained duplicate ET values (theoretically possible if two CK kernels report the same shutter event timestamp), `random.sample` operates on the duplicates as distinct elements — fine. But if a future deduplication step in the kernel pipeline filtered to unique ETs, the count could drop below `samples_per_window` and the sample would raise `ValueError`.
+**Resolution:** `in_band_knots = sorted(set(...))` before the sample call. Hardens the contract; no behavioral change today.
+
+### [3.7 / LOW] `prefetchAttitudeChunks` uses `Promise.all` with no per-chunk error attribution
+
+**Severity:** LOW (CI artifacts are complete by construction; per-chunk error attribution is a diagnostic-quality improvement only)
+**Surfaced by:** Story 3.7 code review § EC-7.
+**Symptom:** `web/tests/attitude-l2-fixture.test.ts:205-218` awaits all attitude chunks via `Promise.all`. If any single chunk fails to load (404 / SHA mismatch / brotli decompression error), the rejection propagates with no per-chunk attribution — the CI log shows whichever rejection vitest happens to surface first.
+**Resolution:** Wrap each `chunkLoader.load(f)` in a try/catch that records `(file.url, error.message)` and emits a structured list before re-throwing. Diagnostic improvement only.
+
+### [3.7 / LOW] `fixturePresent` gate doesn't verify chunk-file presence
+
+**Severity:** LOW (partial-copy scenario is rare in CI; the actual `chunkLoader.load` failure surfaces at runtime)
+**Surfaced by:** Story 3.7 code review § BH-10.
+**Symptom:** `attitude-l2-fixture.test.ts:56`: `fixturePresent = existsSync(FIXTURE_PATH) && existsSync(MANIFEST_PATH)`. Doesn't verify the per-body `.bin.br` chunks. A partial-copy scenario (manifest + fixture present, chunks missing) would pass the gate and surface as a `prefetchAttitudeChunks` failure (the chunk-loader's 404 response). Failure mode is loud but late.
+**Resolution:** Optionally extend `fixturePresent` to also verify at least one attitude chunk exists on disk. Defensive only; CI never produces partial artifacts.
+
+### [3.7 / LOW] `n_platform_synthesized` is informational only — no regression gate
+
+**Severity:** LOW (the L2 gate becomes active for platform automatically once Story 3.1 platform VTRJs are emitted)
+**Surfaced by:** Story 3.7 code review § EC-9.
+**Symptom:** When Story 3.1 is amended (per `[3.7 / HIGH]` #2 above), `n_platform_synthesized` should drop to zero and `n_platform_compared` should rise to match the fixture's platform record count. There is no test-side assertion enforcing this — the diagnostic is informational. A regression in Story 3.1 that re-broke platform VTRJ emission would silently slip past Story 3.7's L2 gate (the bus assertion would still pass; platform would silently revert to `n_platform_synthesized > 0`).
+**Resolution:** After Story 3.1's platform VTRJ amendment lands, add a regression assertion in `attitude-l2-fixture.test.ts`: `expect(n_platform_synthesized).toBe(0)` (or `expect(n_platform_compared).toBeGreaterThan(0)`). One-line follow-up.
 

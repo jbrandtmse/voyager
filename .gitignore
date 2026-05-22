@@ -5,6 +5,9 @@ _bmad/custom/config.user.toml
 # Web (TypeScript / Vite) build artifacts
 web/node_modules/
 web/dist/
+# Vite dep-optimization cache (regenerated on every `npm run dev`).
+# The default web/.gitignore from create-vite predates this location move.
+web/.vite/
 
 # Bake (Python / uv) build artifacts
 bake/.venv/
@@ -24,6 +27,10 @@ bake/out/*.bin.br.part
 bake/out/manifest.json
 bake/out/manifest.json.part
 bake/out/validation-report.md
+# Story 3.3 — `web/scripts/build_glb.ts` emits this so
+# `bake/src/manifest_writer.py` can merge the `models[]` section into
+# `bake/out/manifest.json`. Regenerable via `just bake-glb`; not source.
+bake/out/models-manifest-fragment.json
 
 # Web public/data — manifest.json is the runtime contract (committed). The
 # brotli VTRJ binaries are regenerable via `just bake && just copy-bake-to-web`

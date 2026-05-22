@@ -76,6 +76,31 @@ export class VtrjFormatError extends Error {
 
 // === Injectable defaults ===========================================
 
+/**
+ * Story 3.3.1 — anchor a manifest URL against the document root (the origin's
+ * `/` path), not the active page URL. The base is `${origin}/` so the URL
+ * constructor produces a root-relative absolute URL for any input shape.
+ *
+ * Fallbacks:
+ *   - Server-side / no-window (tests in Node, SSR) — return the URL as-is.
+ *     `URL(url, '/')` would throw without an origin; tests inject their own
+ *     `fetchImpl` and don't care about resolution.
+ */
+// Exported for unit testing (Story 3.3.1). The runtime call site is the only
+// production consumer; the export carries the `__forTest` suffix so the
+// surface contract reads "internal" at the callsite.
+export const resolveAgainstRoot__forTest = (url: string): string => resolveAgainstRoot(url);
+
+const resolveAgainstRoot = (url: string): string => {
+  if (typeof window === 'undefined' || !window.location) return url;
+  try {
+    return new URL(url, `${window.location.origin}/`).toString();
+  } catch {
+    // Malformed URL — let the underlying fetch surface the real error.
+    return url;
+  }
+};
+
 const defaultSha256Hex = async (buffer: ArrayBuffer): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', buffer);
   const bytes = new Uint8Array(digest);
@@ -90,8 +115,31 @@ const defaultSha256Hex = async (buffer: ArrayBuffer): Promise<string> => {
 
 const MAGIC = 'VTRJ';
 const HEADER_SIZE = 40;
-const BYTES_PER_SAMPLE = 48; // 6 × f64
+// Per-sample byte width depends on the VTRJ kind (Story 3.1 ADR-0004 § Body
+// Layout per Kind amendment 2026-05-21). Trajectory bodies are 6 doubles per
+// sample (`[x, y, z, vx, vy, vz]`); attitude bodies are 5 doubles per sample
+// (`[et, qw, qx, qy, qz]` — explicit per-sample ETs in column 0 + SPICE
+// scalar-first quaternion). The body kind is inferred from the `body_id`
+// header field via the disjoint NAIF SPK-ID / CK structure-ID namespaces; the
+// runtime mirror of `bake/src/vtrj_writer.py:_kind_for_body_id`.
+const BYTES_PER_TRAJECTORY_SAMPLE = 48; // 6 × f64
+const BYTES_PER_ATTITUDE_SAMPLE = 40; // 5 × f64
 const SUPPORTED_VERSION = 1;
+
+// CK structure IDs for the four attitude body classes per the Story 3.1 bake.
+// Mirror of `bake/src/vtrj_writer.py:ATTITUDE_BODY_IDS`. Trajectory IDs (NAIF
+// SPK IDs -31, -32, 10, 1..8, 301) are the complementary set; the union is
+// `ALLOWED_BODY_IDS` in the Python writer.
+const ATTITUDE_BODY_IDS = new Set<number>([-31000, -31100, -32000, -32100]);
+
+/**
+ * Returns the on-disk kind ('trajectory' | 'attitude') for a VTRJ body_id.
+ * Disjoint namespaces — trajectory IDs are 2-digit NAIF SPK IDs, attitude IDs
+ * are 5-digit CK structure IDs.
+ */
+export type VtrjKind = 'trajectory' | 'attitude';
+export const kindForBodyId = (bodyId: number): VtrjKind =>
+  ATTITUDE_BODY_IDS.has(bodyId) ? 'attitude' : 'trajectory';
 
 const decodeMagic = (view: DataView): string => {
   let s = '';
@@ -136,7 +184,14 @@ export const parseVtrjHeader = (buffer: ArrayBuffer): VtrjHeader => {
 };
 
 const sliceSamples = (buffer: ArrayBuffer, header: VtrjHeader): Float64Array => {
-  const expectedBodyBytes = header.sampleCount * BYTES_PER_SAMPLE;
+  // Per-sample width depends on the kind. Trajectory (NAIF SPK ID) → 6 doubles
+  // per sample; attitude (CK structure ID) → 5 doubles per sample. The header
+  // body_id is the disambiguator (Story 3.1 ADR-0004 amendment).
+  const kind = kindForBodyId(header.bodyId);
+  const componentsPerSample = kind === 'attitude' ? 5 : 6;
+  const bytesPerSample =
+    kind === 'attitude' ? BYTES_PER_ATTITUDE_SAMPLE : BYTES_PER_TRAJECTORY_SAMPLE;
+  const expectedBodyBytes = header.sampleCount * bytesPerSample;
   const haveBodyBytes = buffer.byteLength - HEADER_SIZE;
   if (haveBodyBytes < expectedBodyBytes) {
     throw new VtrjFormatError(
@@ -145,7 +200,7 @@ const sliceSamples = (buffer: ArrayBuffer, header: VtrjHeader): Float64Array => 
   }
   // Float64Array requires 8-byte alignment of the underlying buffer offset.
   // Header is 40 bytes (multiple of 8), so the body offset is already aligned.
-  return new Float64Array(buffer, HEADER_SIZE, header.sampleCount * 6);
+  return new Float64Array(buffer, HEADER_SIZE, header.sampleCount * componentsPerSample);
 };
 
 // === LRU cache ====================================================
@@ -259,7 +314,18 @@ export class ChunkLoader {
   }
 
   private async fetchAndDecode(file: ManifestFile): Promise<LoadedChunk> {
-    const response = await this.fetchImpl(file.url);
+    // Story 3.3.1 — resolve manifest URLs against the document root, not the
+    // active page URL. The manifest's `files[].url` values are root-relative
+    // (e.g. "data/voyager-1-seg01.bin.br" — no leading slash). On a chapter
+    // route like /c/v1-jupiter, a bare `fetch(file.url)` resolves to
+    // /c/data/voyager-... — Vite serves the SPA fallback HTML for the
+    // unmatched path, and the integrity check then hashes that HTML and
+    // throws. We anchor against `${origin}/` so any URL — root-relative
+    // ("data/foo.bin.br"), absolute ("/data/foo.bin.br"), or fully-qualified
+    // ("https://cdn.example.com/foo.bin.br") — resolves consistently
+    // regardless of the active page URL.
+    const fetchUrl = resolveAgainstRoot(file.url);
+    const response = await this.fetchImpl(fetchUrl);
     if (!response.ok) {
       throw new Error(
         `Chunk fetch failed: ${file.url} returned HTTP ${response.status} ${response.statusText}`,

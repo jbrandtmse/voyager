@@ -109,9 +109,11 @@ def test_generate_writes_well_formed_fixture(tmp_path: Path) -> None:
     assert payload["schemaVersion"] == 1
     assert "generated" in payload
     assert "bodies" in payload
-    # Both V1 and V2 should be present
+    # V1 + V2 + Sun (10) + planet barycenters 1..8 + Moon (301) per Story 1.13
+    # extension to ALLOWED_BODY_IDS. The list is sorted: spacecraft first (most
+    # negative), then planet barycenters ascending, then Sun, then Moon.
     naif_ids = sorted(b["naifId"] for b in payload["bodies"])
-    assert naif_ids == [-32, -31]
+    assert naif_ids == [-32, -31, 1, 2, 3, 4, 5, 6, 7, 8, 10, 301]
     # Each body should have many samples (sum across all segments)
     for body in payload["bodies"]:
         assert len(body["samples"]) > 50, (

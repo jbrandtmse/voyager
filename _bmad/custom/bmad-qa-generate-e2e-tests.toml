@@ -1,21 +1,19 @@
-# Voyager project override for bmad-qa-generate-e2e-tests.
-# Loads voyager-skill-rules.md so the skill enforces:
-#   - Rule 3: Browser-smoke evidence requirement for web/src/ stories (drives MCP test generation)
-#   - Rule 4: Structured completion handshake when run as a subagent under /epic-cycle
-#   - Rule 6: Chrome DevTools MCP brotli workaround for post-probe surfaces
-# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+# Project override for bmad-qa-generate-e2e-tests.
+# Loads voyager-skill-rules.md as informational context AND the
+# Chrome DevTools MCP smoke-stage policy (Voyager-specific test-summary
+# requirement). No on_complete hook: the /epic-cycle workflow's
+# spawn-prompt skeleton handles the test-discoverability check and
+# closing-summary requirement at runtime.
 #
-# Story 2.0 AC2 adds the "Chrome DevTools MCP smoke" stage requirement via
-# persistent_facts so the skill's Step 5 summary emits an MCP smoke section
-# whenever the story's Files-to-Modify list includes any `web/src/**` path.
+# See epic-cycle-teams-v3.md for the upgrade rationale.
 
 [workflow]
 
 persistent_facts = [
   "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
-  """Voyager test-tier policy — Chrome DevTools MCP smoke stage (Story 2.0 AC2, encoding Rule 3 + Rule 6 from voyager-skill-rules.md):
+  """Voyager test-tier policy — Chrome DevTools MCP smoke stage (Story 2.0 AC2, encoding Rule 3 + Rule 8 from voyager-skill-rules.md):
 
-When generating tests for a story whose Files-to-Modify (or equivalent file-touch list) includes any path under `web/src/`, the test-summary output MUST include a dedicated "Chrome DevTools MCP smoke" stage IN ADDITION to the standard Vitest unit / integration / Playwright sections. The MCP smoke stage is the per-story exit criterion for browser-smoke evidence (voyager-skill-rules.md Rule 3) and the canonical browser-smoke driver is Chrome DevTools MCP (Rule 6 — no initScript/shim needed post-Story-1.16).
+When generating tests for a story whose Files-to-Modify (or equivalent file-touch list) includes any path under `web/src/`, the test-summary output MUST include a dedicated "Chrome DevTools MCP smoke" stage IN ADDITION to the standard Vitest unit / integration / Playwright sections. The MCP smoke stage is the per-story exit criterion for browser-smoke evidence (voyager-skill-rules.md Rule 3) and the canonical browser-smoke driver is Chrome DevTools MCP (Rule 8 — no initScript/shim needed post-Story-1.16).
 
 The MCP smoke stage must propose at minimum the following MCP tool calls and asserted observations:
   1. `mcp__chrome-devtools-mcp__navigate_page` — open the dev server URL exercising the story's feature (note any required query params, e.g. `?dev=precision`, `?embed=1`, `?chapter=…`).

@@ -31,6 +31,7 @@ import {
 import { ManifestLoader, type Manifest } from './services/manifest-loader';
 import { ChunkLoader } from './services/chunk-loader';
 import { EphemerisService } from './services/ephemeris-service';
+import { AttitudeService } from './services/attitude-service';
 import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
@@ -38,6 +39,8 @@ import {
 import { startFirstPaint, mountAttributionsFooter } from './boot/first-paint';
 import './components/v-about-page';
 import { SpacecraftModels } from './render/spacecraft-models';
+import { AttitudeApplier } from './render/attitude-applier';
+import { BoresightRenderer } from './render/boresight-renderer';
 import { TrajectoryLines } from './render/trajectory-lines';
 import { CelestialBodies } from './render/celestial-bodies';
 import { Skybox } from './render/skybox';
@@ -294,16 +297,29 @@ const bootstrap = (): void => {
     };
   }
 
-  // Story 1.12 — spacecraft + trajectory rendering. SpacecraftModels is
-  // constructed up-front so the scene-graph structure is stable; its GLB
-  // load is async and adds the body mesh once it lands. TrajectoryLines
-  // construction is deferred until the EphemerisService is available (it
-  // samples the polyline at construction).
+  // Story 1.12 / Story 3.3 — spacecraft + trajectory rendering.
+  // SpacecraftModels is constructed up-front so the scene-graph structure is
+  // stable; its GLB load is async and adds the body LOD chain (4 LODs per
+  // AC3) once it lands. The load is kicked off AFTER the manifest resolves
+  // (below) so the manifest-driven LOD URLs flow through. Until then the
+  // spacecraft group exists but contains only the label sprite.
+  // TrajectoryLines construction is deferred until the EphemerisService is
+  // available (it samples the polyline at construction).
   const spacecraftModels = new SpacecraftModels();
   engine.worldGroup.add(spacecraftModels.root);
-  spacecraftModels.load().catch((err: unknown) => {
-    console.error('[main] spacecraft GLB load failed:', err);
-  });
+
+  // Story 3.3 AC9 — DEV debug surface for the lead-driven Chrome DevTools MCP
+  // smoke. Exposes the SpacecraftModels instance so the smoke probe can
+  // resolve `__voyagerDebug.spacecraftModels.getHandle('voyager-1').{group,lod}`.
+  // Stripped from production builds by Vite's `import.meta.env.DEV` constant
+  // folding.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+    w.__voyagerDebug = {
+      ...(w.__voyagerDebug ?? {}),
+      spacecraftModels,
+    };
+  }
   let trajectoryLines: TrajectoryLines | null = null;
 
   // Story 1.13 — celestial bodies + Milky Way skybox. Constructed before
@@ -325,14 +341,102 @@ const bootstrap = (): void => {
     async (manifest) => {
       const chunkLoader = new ChunkLoader();
       const ephemerisService = new EphemerisService(manifest, chunkLoader);
+      // Story 3.2 — AttitudeService is constructed AFTER EphemerisService so
+      // the synthesized HGA-Earth-pointing cruise path can query both
+      // spacecraft and Earth positions through the injected EphemerisService.
+      // Shares the SAME ChunkLoader instance (one cache, one decoder).
+      const attitudeService = new AttitudeService(
+        manifest,
+        chunkLoader,
+        ephemerisService,
+      );
       firstPaintHandle.hud.ephemerisService = ephemerisService;
+      // Story 3.6 — wire AttitudeService into <v-hud> so the inline
+      // <v-attitude-indicator> can read getBusProvenance(activeSpacecraftId, et)
+      // on each tick. The HUD's `updated()` lifecycle hook propagates this
+      // reference down to the indicator sub-component.
+      firstPaintHandle.hud.attitudeService = attitudeService;
+
+      // Story 3.4 — AttitudeApplier is constructed AFTER AttitudeService so
+      // the per-frame `tick(et, attitudeService, spacecraftModels)` callback
+      // (registered below in the engine.onFrame block) has both
+      // dependencies resolved. The applier holds no global state per
+      // ADR-0015; it is dependency-injected at the call site.
+      const attitudeApplier = new AttitudeApplier();
+
+      // Story 3.5 — BoresightRenderer constructs ONE wireframe NA-camera
+      // cone per spacecraft and parents it to the active LOD's
+      // SCAN_PLATFORM node. The cone inherits the per-frame platform
+      // rotation via scene-graph parenting (no per-frame quaternion
+      // compose). attach() must run AFTER spacecraftModels.load() resolves
+      // so the LOD chain is populated; tick() runs in engine.onFrame AFTER
+      // attitudeApplier.tick() so the LOD-swap check sees the same level
+      // the applier resolved against.
+      const boresightRenderer = new BoresightRenderer();
+
+      // Story 3.2 AC8 + Story 3.4 AC8 + Story 3.5 AC8 — dev-only debug
+      // surface for the lead's Chrome DevTools MCP smoke. Exposed alongside
+      // the existing Story 2.x surfaces under `window.__voyagerDebug.*`.
+      // Stripped from production builds by Vite's `import.meta.env.DEV`
+      // constant folding.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+        w.__voyagerDebug = {
+          ...(w.__voyagerDebug ?? {}),
+          attitudeService,
+          attitudeApplier,
+          boresightRenderer,
+        };
+      }
+
+      // Story 3.3 — kick off the spacecraft LOD-chain load with the manifest
+      // now that it's resolved. The load is fire-and-forget; per-frame
+      // tick() handles the load-pending state via hold-previous + visible
+      // gates so we can register the tick callback below before the load
+      // promise resolves.
+      //
+      // ADR-0006 § Decision step 3 — pass the WebGLRenderer so the
+      // `KTX2Loader` registered inside SpacecraftModels can call
+      // `detectSupport(renderer)` and choose a GPU-compatible transcode
+      // format for the Basis-Universal-encoded textures. Without this the
+      // loader throws a "Missing initialization with `detectSupport`"
+      // error on the first KTX2 texture inside the LOD GLBs.
+      const renderer = engine.getRenderer();
+      spacecraftModels
+        .load({ manifest, renderer: renderer ?? undefined })
+        .then(() => {
+          // Story 3.5 T2.2 — attach the boresight cone once the LOD chain
+          // has populated SCAN_PLATFORM. Pre-load attach would resolve a
+          // null platform and the cone would stay un-parented until the
+          // first LOD-swap tick rescued it. Attaching post-load is the
+          // cleanest contract.
+          boresightRenderer.attach(spacecraftModels);
+        })
+        .catch((err: unknown) => {
+          console.error('[main] spacecraft GLB chain load failed:', err);
+        });
 
       // Hook spacecraft + celestial-body updates onto the render loop
       // immediately. All three modules handle null returns via
       // hold-previous semantics, so it's safe to register the tick before
       // any chunks land.
+      //
+      // Story 3.4 AC1 — `attitudeApplier.tick(...)` runs BETWEEN the
+      // spacecraft position update (which sets handle.group.position +
+      // handle.group.visible) and the downstream trajectory / celestial
+      // body updates. This ordering is load-bearing:
+      //   - spacecraftModels.tick must run first so the visibility gate
+      //     (handle.group.visible) is up-to-date before the applier reads
+      //     it (AC2 last clause).
+      //   - Story 3.5 — `boresightRenderer.tick(...)` runs AFTER the
+      //     applier so its LOD-swap check sees the same level the applier
+      //     just resolved against. The cone's world rotation is propagated
+      //     by Three.js scene-graph parenting (cone is a child of
+      //     SCAN_PLATFORM whose quaternion the applier just wrote).
       engine.onFrame((et: number) => {
         spacecraftModels.tick(et, ephemerisService);
+        attitudeApplier.tick(et, attitudeService, spacecraftModels);
+        boresightRenderer.tick(spacecraftModels);
         if (trajectoryLines !== null) trajectoryLines.tick(et);
         if (celestialBodies !== null) celestialBodies.tick(et, ephemerisService);
       });

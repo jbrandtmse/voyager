@@ -44,6 +44,20 @@ Titan trajectory while V2 took the slower Grand Tour route.
 
 ---
 
+## Pale Blue Dot family-portrait imaging sequence
+
+| Spacecraft | UTC instant            | Source |
+| ---------- | ---------------------- | ------ |
+| Voyager 1  | `1990-02-14T00:00:00Z` | NASA/JPL "Voyager 1's Pale Blue Dot" — the family-portrait imaging sequence anchor; Sagan, *Pale Blue Dot* (Random House, 1994). Date-level sourcing — the imaging sequence executed across several hours, and the canonical instant is the midnight UTC anchor. |
+
+The Pale Blue Dot date is included in the ck_sample.py encounter window
+schedule (Story 3.1 AC7) so the attitude bake covers the family-portrait
+imaging sequence at the 10-second cadence; Story 5.2 owns the choreographed
+scan-platform attitude synthesis since there is no CK coverage for the scan
+platform on this date (see `docs/kernels/ckbrief-inventory.md`).
+
+---
+
 ## Heliopause crossings
 
 | Spacecraft | UTC date     | Source |

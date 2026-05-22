@@ -318,19 +318,28 @@ const stripCommentsAndStrings = (src: string): string => {
 };
 
 describe('Story 1.13 QA-extended — KTX2 deferral (executable code only)', () => {
-  it('no executable KTX2Loader reference in web/src/ (excludes comments + string literals)', () => {
+  // Story 3.3 lifted the KTX2 deferral for the SPACECRAFT GLB (ADR-0006);
+  // the deferral remains for celestial-body textures (Story 4.3 territory).
+  // Whitelist mirrors `celestial-bodies-defense.test.ts`.
+  const STORY_3_3_KTX2_WHITELIST = new Set<string>([
+    'src\\render\\spacecraft-models.ts',
+    'src/render/spacecraft-models.ts',
+  ]);
+  it('no executable KTX2Loader reference in web/src/ outside the Story-3.3 spacecraft surface', () => {
     const tsFiles = walkTsFiles(srcRoot);
     const violations: string[] = [];
     for (const file of tsFiles) {
+      const rel = relative(webRoot, file);
+      if (STORY_3_3_KTX2_WHITELIST.has(rel)) continue;
       const stripped = stripCommentsAndStrings(readFileSync(file, 'utf-8'));
       if (/\bKTX2Loader\b/.test(stripped)) {
-        violations.push(relative(webRoot, file));
+        violations.push(rel);
       }
     }
     expect(
       violations,
-      'Story 4.3 KTX2 work appears to have begun (KTX2Loader present in executable code). ' +
-        `Files: ${violations.join(', ')}. Update this defense if the deferral is intentionally lifted.`,
+      'KTX2Loader usage outside the Story 3.3 whitelist. Files: ' +
+        `${violations.join(', ')}. Update STORY_3_3_KTX2_WHITELIST if Story 4.3 lifts the celestial-textures deferral.`,
     ).toEqual([]);
   });
 });

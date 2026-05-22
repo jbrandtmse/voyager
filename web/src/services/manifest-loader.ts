@@ -33,6 +33,12 @@ const FileSchema = z.object({
   timeRangeEt: z.tuple([z.number(), z.number()]),
   cadenceSec: z.number().positive(),
   kind: z.enum(['trajectory', 'bus_attitude', 'platform_attitude']),
+  // Story 3.1 AC3: attitude entries carry `provenance: "ck"` to denote
+  // SPICE-CK-derived samples. Trajectory entries omit the field. The Zod
+  // schema accepts an optional enum so old manifests (pre-Story-3.1) parse
+  // unchanged and the runtime AttitudeService can branch on the field
+  // without `string | undefined` widening.
+  provenance: z.enum(['ck']).optional(),
 });
 
 const BodySchema = z.object({
@@ -53,6 +59,27 @@ const ValidationTolerancesSchema = z.object({
   rmsPositionErrorKm: z.number().positive(),
 });
 
+// Story 3.3 AC4 — `models[]` section for the 4-LOD spacecraft GLB chain.
+// Each model entry carries its LOD set; each LOD records the content-hashed
+// URL, the SHA-256 + size of the on-disk GLB, and the maximum render-space
+// distance (km) at which this LOD level is active (null for the far-field
+// LOD which has no upper bound). The schema is additive: pre-Story-3.3
+// manifests parse with an empty `models` array (default([])).
+const ModelLodSchema = z.object({
+  level: z.number().int().min(0).max(3),
+  url: z.string(),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  sizeBytes: z.number().int().positive(),
+  maxDistanceKm: z.number().positive().nullable(),
+});
+
+const ModelSchema = z.object({
+  id: z.string(),
+  lods: z.array(ModelLodSchema).min(1),
+  pivotMeters: z.tuple([z.number(), z.number(), z.number()]),
+  scaleToKm: z.number().positive(),
+});
+
 const ManifestSchema = z.object({
   schemaVersion: z.literal(1),
   bakeCommit: z.string(),
@@ -61,12 +88,19 @@ const ManifestSchema = z.object({
   bodies: z.array(BodySchema),
   chapters: z.array(z.unknown()),
   validationTolerances: ValidationTolerancesSchema,
+  // Story 3.3 AC4 — additive; defaults to empty array so pre-Story-3.3
+  // manifests parse unchanged. SpacecraftModels falls back to the
+  // DEFAULT_VOYAGER_GLB_URL single-LOD path when models is empty (the
+  // transition window before `just bake-glb` has been run on a fresh clone).
+  models: z.array(ModelSchema).default([]),
 });
 
 // === Public types ===================================================
 
 export type ManifestFile = z.infer<typeof FileSchema>;
 export type ManifestBody = z.infer<typeof BodySchema>;
+export type ManifestModel = z.infer<typeof ModelSchema>;
+export type ManifestModelLod = z.infer<typeof ModelLodSchema>;
 export type Manifest = z.infer<typeof ManifestSchema>;
 
 export class ManifestValidationError extends Error {

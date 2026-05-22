@@ -1,0 +1,37 @@
+{
+  "source_sha256": "bd86ded828dd3f459293aee4ffc3cd0998d8db67439317c8299650a1174c3289",
+  "source_path": "bake/inputs/models/voyager-raw.glb",
+  "phase0_notes": "Upstream NASA Voyager Probe (B) GLB authored in Blender 4.2 (Khronos glTF Blender I/O v4.2.57). Draco-compressed (KHR_draco_mesh_compression), with EXT_texture_webp textures embedded. Four meshes (BODY.040, BODY.000, BODY.002, Cube.004) and four nodes (tex_01, tex_02_AO, tex_02_AO_dark, _root). Mesh names are non-semantic Blender export artefacts; the bounding-box heuristic (§ Authoring the Named Hierarchy middle path) confidently identifies each mesh's role. Three textures present (WebP+PNG fallbacks): Voyager_tex_01 (baseColor for tex_01), tex_02_AO (baseColor+AO for tex_02_AO and tex_02_AO_dark). KTX2/toktx transcoding is wired into the build pipeline per AC2 + ADR-0006.",
+  "mesh_mapping": [
+    {
+      "source_mesh_index": 0,
+      "source_name": "BODY.040",
+      "target_parent": "BUS",
+      "rationale": "Bounding box [-7.999, -6.842, -8.685] to [7.999, 15.936, 26.210] (15344 verts) — large, elongated along +Y to ~16 m and +Z to ~26 m. This is the bus chassis + magnetometer boom + RTG arms. Vertex count (15344) is the largest in the mesh; it's the structural body of the spacecraft. Targets the BUS group as its root mesh."
+    },
+    {
+      "source_mesh_index": 1,
+      "source_name": "BODY.000",
+      "target_parent": "HGA",
+      "rationale": "Bounding box [-3.933, -1.192, -3.933] to [3.933, 2.125, 3.933] (1553 verts) — radially symmetric in XZ (radius ~3.93 m) with narrow Y extent (3.32 m). The 3.93 m radius matches the historical Voyager HGA dish diameter of 3.7 m (NASA factsheet — the slightly larger mesh diameter accounts for rim curvature). High aspect ratio (radius/height = 1.18) is the disk-shape signature called out in the story's middle-path heuristic. Targets the HGA group."
+    },
+    {
+      "source_mesh_index": 2,
+      "source_name": "BODY.002",
+      "target_parent": "SCAN_PLATFORM",
+      "rationale": "Bounding box [-1.902, -1.398, -1.902] to [1.902, -0.567, 1.902] (433 verts) — small box-shaped mesh sitting BELOW the bus origin (Y from -1.40 to -0.57, mean ~-0.98 m). The Voyager scan platform is mounted on the bus on a boom extending from below the bus chassis (per JPL Voyager spacecraft schematic; scan platform is on the -Y face / 'lower' face of the bus). Carries the four science instruments — NA-camera (ISSNA), wide-angle camera, UVS, IRIS — clustered on the platform. Targets the SCAN_PLATFORM group."
+    },
+    {
+      "source_mesh_index": 3,
+      "source_name": "Cube.004",
+      "target_parent": "BUS",
+      "rationale": "Bounding box [-0.5, -0.5, -0.5] to [0.5, 0.5, 0.5] (24 verts) — a 1 m skeletal cube at the world origin. Likely the Blender-exported root rig/skeleton placeholder (not a real spacecraft component). Lands under BUS by default per the story's middle-path heuristic ('Anything else → BUS by default'). It will not visibly contribute once meshopt + simplify run because its 24 verts make it a non-feature at every LOD level."
+    }
+  ],
+  "scan_platform_pivot_meters": [0.0, -0.567, 0.0],
+  "scan_platform_pivot_rationale": "The historical scan-platform articulation axis is on the +Y face of the bus (per bake/src/fk_inventory.py § scan-platform notes — frames -31100 / -32100). The platform mesh (BODY.002) sits below the bus origin (Y from -1.40 to -0.57), which means its TOP face — closest to the bus — is at Y=-0.567. That's where the platform hinge would physically be in the upstream mesh's coordinate system. Pivot offset is therefore (0, -0.567, 0) meters in the bus-local frame. After mesh re-parenting under SCAN_PLATFORM, the mesh's vertex coordinates are translated so its Y=-0.567 face is at the SCAN_PLATFORM group's origin. NOTE: the +Y vs -Y orientation here reflects the upstream GLB's coordinate convention, which is Blender-Z-up exported as glTF-Y-up; the platform sits on the bus's -Y face in glTF space. The FK kernel's articulation axis is in the SPICE frame, not the glTF frame; the per-frame attitude application in Story 3.4 will compose the FK rotation onto the named hierarchy's local quaternion, so this offset only needs to be the geometric hinge point in the GLB's own frame.",
+  "hga_orientation_relative_to_bus_quat": [1.0, 0.0, 0.0, 0.0],
+  "hga_orientation_rationale": "Story 3.2's fk-constants.ts derives HGA_BORESIGHT_RELATIVE_TO_BUS = (0, 0, -1) — the HGA points along bus -Z. The HGA group's quaternion (relative to BUS) must rotate its local +Z axis to bus -Z. That's a 180° rotation about the X axis, Rx(180°). The corresponding scalar-last quaternion is (x=sin(90°), y=0, z=0, w=cos(90°)) = (1, 0, 0, 0). The HGA dish mesh (BODY.000) is then re-parented under this rotated HGA group, so its local +Z (the dish's boresight in the upstream Blender export) becomes bus -Z at runtime. NOTE: this pre-bakes the HGA boresight orientation at the glTF level. The per-frame attitude application in Story 3.4 then only needs to rotate the BUS group (Story 3.2's getBusQuat output) — the HGA inherits the bus rotation automatically and its boresight remains bus-frame-correct.",
+  "hga_position_meters": [0.0, 2.125, 0.0],
+  "hga_position_rationale": "The HGA dish (BODY.000) mesh sits above the bus origin (Y from -1.19 to +2.13). Its TOP face (where the dish attaches to the bus on a boom) is at Y=2.125 in the glTF frame. Re-parented under HGA, the mesh is translated so Y=2.125 is the HGA group's origin (so the dish hangs below the HGA group). Alternative: translate so Y=0 is the dish's geometric center; chosen the top face to match the mechanical mounting picture from JPL's Voyager spacecraft diagram (the dish is bolted to the bus on its upper face)."
+}

@@ -88,6 +88,71 @@ describe('Story 2.5 AC2 — first-paint conditional chrome mounting', () => {
   });
 });
 
+describe('Story 3.6 AC7 — embed mode skips <v-attitude-indicator> inside <v-hud>', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+    window.history.replaceState(null, '', '/');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('omits <v-attitude-indicator> from the HUD shadow DOM when embedEnabled=true', async () => {
+    const handle = startFirstPaint(document.body, { embedEnabled: true });
+    await handle.hud.updateComplete;
+    // The indicator sub-component lives inside <v-hud>'s shadow root; the
+    // chrome-skip discipline is the conditional render path in <v-hud>'s
+    // template (mirrors how <v-chapter-index> / <v-help-overlay> are
+    // skipped in first-paint via conditional appendChild). The strongest
+    // test for "not in the DOM" is the absence of the element entirely.
+    const indicator = handle.hud.shadowRoot?.querySelector(
+      'v-attitude-indicator',
+    );
+    expect(indicator ?? null).toBeNull();
+    // Also assert there's no global instance lurking anywhere.
+    expect(document.querySelector('v-attitude-indicator')).toBeNull();
+  });
+
+  it('mounts <v-attitude-indicator> inside <v-hud> when embedEnabled=false (Story 3.6 baseline)', async () => {
+    const handle = startFirstPaint(document.body, { embedEnabled: false });
+    await handle.hud.updateComplete;
+    const indicator = handle.hud.shadowRoot?.querySelector(
+      'v-attitude-indicator',
+    );
+    expect(indicator).not.toBeNull();
+  });
+
+  it('mounts <v-attitude-indicator> when embedEnabled is omitted entirely', async () => {
+    const handle = startFirstPaint(document.body);
+    await handle.hud.updateComplete;
+    const indicator = handle.hud.shadowRoot?.querySelector(
+      'v-attitude-indicator',
+    );
+    expect(indicator).not.toBeNull();
+  });
+
+  it('hud.attitudeIndicator accessor returns null in embed mode (handle parity)', async () => {
+    const handle = startFirstPaint(document.body, { embedEnabled: true });
+    await handle.hud.updateComplete;
+    expect(handle.hud.attitudeIndicator).toBeNull();
+  });
+
+  it('the HUD itself STILL mounts in embed mode — only the provenance indicator is skipped', async () => {
+    // Editorial / instrument content (date, distance, speed, instruments)
+    // is simulation content, not chrome. Only the provenance indicator
+    // participates in the chrome-skip discipline.
+    const handle = startFirstPaint(document.body, { embedEnabled: true });
+    await handle.hud.updateComplete;
+    expect(document.querySelector('v-hud')).not.toBeNull();
+    expect(handle.hud.hudDate).not.toBeNull();
+    expect(handle.hud.hudDistance).not.toBeNull();
+    expect(handle.hud.hudSpeed).not.toBeNull();
+  });
+});
+
 describe('Story 2.5 AC3 — embed-mode keyboard NO-OPs (M, 1..9)', () => {
   beforeEach(() => {
     vi.useFakeTimers();

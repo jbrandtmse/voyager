@@ -1,8 +1,10 @@
-# Voyager project override for bmad-dev-story.
-# Loads voyager-skill-rules.md so the skill enforces:
-#   - Rule 4: Structured completion handshake when run as a subagent under /epic-cycle
-#   - Rule 5: NFR tripwire amends planning artifacts in place rather than working around in code comments
-# See _bmad/custom/voyager-skill-rules.md for the full rule set and rationale.
+# Project override for bmad-dev-story.
+# Loads voyager-skill-rules.md so Rule 5 (NFR tripwire response) and the
+# other shared rules are visible to the dev mid-flow. No on_complete hook:
+# the /epic-cycle workflow's spawn-prompt skeleton enforces the
+# verification gates and closing-summary requirement at runtime.
+#
+# See epic-cycle-teams-v3.md for the upgrade rationale.
 
 [workflow]
 

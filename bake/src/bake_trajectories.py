@@ -18,6 +18,7 @@ Canonical invocation (Story 1.4 AC1):
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -425,11 +426,33 @@ def bake(
             for k in kernel_entries
         ]
         manifest_path = out / "manifest.json"
+        # Story 3.3 AC4 — merge the models manifest fragment when present.
+        # `bake_trajectories.py` runs FIRST in the `just bake` chain; the
+        # subsequent `ck_sample.py` invocation re-emits the manifest and also
+        # picks up the fragment. We merge here too so a standalone
+        # `just bake-trajectories` after `just bake-glb` still produces a
+        # fully-populated manifest (the trajectory-only state at the head of
+        # the chain).
+        models_fragment_path = out / "models-manifest-fragment.json"
+        models_arg: list | None = None
+        if models_fragment_path.exists():
+            try:
+                fragment = json.loads(models_fragment_path.read_text(encoding="utf-8"))
+                models_arg = fragment.get("models")
+                if models_arg is not None and not isinstance(models_arg, list):
+                    print(
+                        f"[WARN]   {models_fragment_path}: 'models' must be a list, ignoring."
+                    )
+                    models_arg = None
+            except json.JSONDecodeError as exc:
+                print(f"[WARN]   {models_fragment_path}: invalid JSON ({exc}); skipping merge.")
+                models_arg = None
         emit_manifest(
             bodies=body_records,
             kernels=manifest_kernels,
             output_path=manifest_path,
             repo_root=repo,
+            models=models_arg,
         )
         total_vtrjs = total_segments + len(CELESTIAL_BODIES)
         total_bodies = len(BODIES) + len(CELESTIAL_BODIES)
