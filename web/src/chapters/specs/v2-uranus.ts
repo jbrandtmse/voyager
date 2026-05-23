@@ -21,6 +21,8 @@ const spec: ChapterSpec = {
   spacecraft: 'v2',
   ogDescription:
     'Voyager 2 becomes the only spacecraft ever to fly past Uranus on 24 January 1986.',
+  // Story 4.1 AC5 — Uranus barycenter (NAIF 7).
+  targetBody: 7,
 };
 
 export default spec;

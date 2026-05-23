@@ -180,7 +180,7 @@ development_status:
   # Epic 4: Encounter Chapters — All Six Gas-Giant Flybys
   epic-4: in-progress
   4-0-epic-3-deferred-cleanup: done
-  4-1-viewframe-service-and-translation-only-smoothstep-blend: backlog
+  4-1-viewframe-service-and-translation-only-smoothstep-blend: done
   4-2-voyagercameracontroller-manual-override-and-restore-default: backlog
   4-3-cadence-shift-trajectory-chunks-and-4k-8k-texture-upgrade: backlog
   4-4-v-timeline-scrubber-variant-detail-detail-scrubber-variant: backlog

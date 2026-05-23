@@ -22,6 +22,8 @@ const spec: ChapterSpec = {
   spacecraft: 'v2',
   ogDescription:
     'Voyager 2 passes Saturn on 26 August 1981, then continues toward the Grand Tour endpoints Uranus and Neptune.',
+  // Story 4.1 AC5 — Saturn barycenter (NAIF 6).
+  targetBody: 6,
 };
 
 export default spec;

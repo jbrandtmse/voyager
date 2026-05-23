@@ -32,6 +32,7 @@ import { ManifestLoader, type Manifest } from './services/manifest-loader';
 import { ChunkLoader } from './services/chunk-loader';
 import { EphemerisService } from './services/ephemeris-service';
 import { AttitudeService } from './services/attitude-service';
+import { ViewFrameService } from './services/view-frame';
 import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
@@ -50,8 +51,22 @@ import {
   startFpsReadout,
 } from './dev/fps-readout';
 import { CELESTIAL_BODY_NAIF_IDS } from './constants/body-radii';
+import type { Spacecraft } from './types/chapter';
 
 const MANIFEST_URL = '/data/manifest.json';
+
+/**
+ * Story 4.1 AC6 — map a chapter's `spacecraft` field to the NAIF SPK ID
+ * the `<v-attitude-indicator>` consumes via `setActiveSpacecraft`. The
+ * `'both'` case isn't used by any current chapter spec (Story 2.1 didn't
+ * ship one) but the type allows it; we default to V1 (-31) to match the
+ * indicator's stub default (Story 3.6 AC4) so the UI remains stable if
+ * a future chapter declares 'both'.
+ */
+const naifIdForSpacecraft = (s: Spacecraft): -31 | -32 => {
+  if (s === 'v2') return -32;
+  return -31; // 'v1' or 'both'
+};
 
 const bootstrap = (): void => {
   const params = getUrlParams();
@@ -208,6 +223,35 @@ const bootstrap = (): void => {
     },
   );
 
+  // Story 4.1 AC6 — close Epic 3 retro Action #3: route ChapterDirector
+  // `held` transitions to `<v-attitude-indicator>.setActiveSpacecraft(naifId)`
+  // so the inline HUD indicator reads the right spacecraft's bus attitude
+  // on V2 chapter pages (previously stuck on the V1 stub default per the
+  // Story 4.0 smoke gap at /c/v2-saturn). The Story 3.6 indicator default
+  // is V1 (-31); we only flip to -32 when a V2 chapter holds. On cruise
+  // (`event.to === 'out'`) we intentionally do NOT call the setter — the
+  // indicator's last-known regime stays painted (avoids a placeholder
+  // flicker between chapters).
+  //
+  // Installed AFTER firstPaintHandle so the optional-chain has the HUD
+  // handle available, and BEFORE the synchronous cold-load seed below so
+  // a cold-load arriving inside a V2 chapter window (e.g. /c/v2-saturn)
+  // fires the wire on the seed itself rather than waiting for the first
+  // ChapterDirector transition crossing — the indicator paints the right
+  // spacecraft on the first frame.
+  // The subscriber records the last spacecraft seen on a `held` transition
+  // even if the indicator isn't yet mounted (Lit's first render is
+  // microtask-async after the host's connectedCallback). After Lit's first
+  // render flush below we replay the last value so cold-load arrival inside
+  // a V2 chapter window paints correctly on the first user-visible frame.
+  let lastHeldNaifId: -31 | -32 | null = null;
+  chapterDirector.subscribe((event) => {
+    if (event.to !== 'held') return;
+    const naifId = naifIdForSpacecraft(event.chapter.spacecraft);
+    lastHeldNaifId = naifId;
+    firstPaintHandle.hud.attitudeIndicator?.setActiveSpacecraft(naifId);
+  });
+
   // Story 2.4 — seed the ChapterDirector FSM synchronously to the cold-load
   // ET BEFORE the URLRouter subscribes. `engine.onFrame((et) => director.update(et))`
   // above only REGISTERS the per-frame callback; the first invocation
@@ -220,6 +264,27 @@ const bootstrap = (): void => {
   // honors the URL contract that cold-load arrival is the canonical
   // state — not a transition the router needs to mirror.
   chapterDirector.update(clockManager.simTimeEt);
+
+  // Story 4.1 AC6 (smoke fix 2026-05-23): the sync seed above fires `held`
+  // transitions, but `firstPaintHandle.hud.attitudeIndicator` is still null
+  // at that moment because <v-hud>'s Lit render runs microtask-async after
+  // connectedCallback. The subscriber's optional-chain therefore no-ops.
+  // After <v-hud>'s first render completes the indicator is reachable —
+  // replay the last held naifId (or fall back to the current activeChapter)
+  // so /c/v2-saturn cold-loads paint the V2 indicator instead of the V1
+  // stub default. The lead-driven Chrome DevTools MCP smoke (Story 4.1 AC8
+  // verified the absence of this replay was the load-bearing bug closing
+  // Epic 3 retro Action #3 required).
+  void firstPaintHandle.hud.updateComplete?.then(() => {
+    const naifId =
+      lastHeldNaifId ??
+      (chapterDirector.activeChapter
+        ? naifIdForSpacecraft(chapterDirector.activeChapter.spacecraft)
+        : null);
+    if (naifId !== null) {
+      firstPaintHandle.hud.attitudeIndicator?.setActiveSpacecraft(naifId);
+    }
+  });
 
   // Story 2.4 — install the URL router AFTER first-paint so document-level
   // `chapter-jump` listeners are attached before the scrubber + chapter
@@ -350,6 +415,16 @@ const bootstrap = (): void => {
         chunkLoader,
         ephemerisService,
       );
+      // Story 4.1 AC2 — ViewFrameService is constructed AFTER EphemerisService
+      // (which it injects per ADR-0015 no-global-store) and wired into the
+      // pre-existing RenderEngine via the setViewFrame post-construction
+      // setter. The setter contract exists because RenderEngine is
+      // constructed at boot (before the manifest lands); ViewFrame can only
+      // exist after EphemerisService, so it joins post-manifest. The blend
+      // is translation-only per ADR-0023; reduced-motion source defaults to
+      // the central `prefers-reduced-motion: reduce` media query.
+      const viewFrameService = new ViewFrameService(ephemerisService);
+      engine.setViewFrame(viewFrameService, chapterDirector);
       firstPaintHandle.hud.ephemerisService = ephemerisService;
       // Story 3.6 — wire AttitudeService into <v-hud> so the inline
       // <v-attitude-indicator> can read getBusProvenance(activeSpacecraftId, et)
@@ -374,11 +449,11 @@ const bootstrap = (): void => {
       // the applier resolved against.
       const boresightRenderer = new BoresightRenderer();
 
-      // Story 3.2 AC8 + Story 3.4 AC8 + Story 3.5 AC8 — dev-only debug
-      // surface for the lead's Chrome DevTools MCP smoke. Exposed alongside
-      // the existing Story 2.x surfaces under `window.__voyagerDebug.*`.
-      // Stripped from production builds by Vite's `import.meta.env.DEV`
-      // constant folding.
+      // Story 3.2 AC8 + Story 3.4 AC8 + Story 3.5 AC8 + Story 4.1 AC8
+      // — dev-only debug surface for the lead's Chrome DevTools MCP smoke.
+      // Exposed alongside the existing Story 2.x surfaces under
+      // `window.__voyagerDebug.*`. Stripped from production builds by
+      // Vite's `import.meta.env.DEV` constant folding.
       if (import.meta.env.DEV) {
         const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
         w.__voyagerDebug = {
@@ -386,6 +461,11 @@ const bootstrap = (): void => {
           attitudeService,
           attitudeApplier,
           boresightRenderer,
+          // Story 4.1 AC8 — ViewFrameService handle. The lead's smoke at
+          // /c/v2-saturn probes
+          // `__voyagerDebug.viewFrame.getTransform(currentEt, __voyagerDebug.chapterDirector.activeChapter).originOffsetWorld`
+          // to confirm AC1+AC2 wire-up end-to-end at the in-window ET.
+          viewFrame: viewFrameService,
         };
       }
 

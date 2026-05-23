@@ -22,6 +22,8 @@ const spec: ChapterSpec = {
   spacecraft: 'v1',
   ogDescription:
     'Voyager 1 closes on Saturn on 12 November 1980, bending past Titan to leave the ecliptic for interstellar space.',
+  // Story 4.1 AC5 — Saturn barycenter (NAIF 6).
+  targetBody: 6,
 };
 
 export default spec;

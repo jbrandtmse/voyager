@@ -706,4 +706,26 @@ Recommendation: (a) — same scope window as the lower-left fix (`[4.0-smoke / L
 
 **Linked evidence:** `_bmad-output/implementation-artifacts/4-0-smoke-evidence/mcp-v1-jupiter-fullpage.png`, `_bmad-output/implementation-artifacts/4-0-smoke-evidence/mcp-smoke-summary.md`.
 
+---
+
+## Story 4.1 deferrals (locked in by code review on 2026-05-22)
+
+The following LOW-severity items surfaced during Story 4.1 code review (`/epic-cycle 4` code-review stage). All are defensive-only; no current consumer triggers any of them.
+
+1. **[4.1 / LOW]** `ViewFrameService` identity-transform sentinel — the wrapper object is `Object.freeze`'d but the inner `Float64Array` (`originOffsetWorld`) is NOT frozen. A future consumer that writes through `transform.originOffsetWorld[0] = 5` would silently corrupt the shared cross-frame identity sentinel, NaN-poisoning every subsequent identity-branch frame.
+
+   **Why deferred:** every current consumer (RenderEngine.tick at `web/src/render/render-engine.ts:293-299` is the only one) READS the array; nothing writes. Story 4.2's VoyagerCameraController will also be read-only against this surface. The defensive hardening (e.g. `Object.freeze(new Float64Array(...))` if Float64Array supported it, or always returning a fresh small array even on the identity branch) is correct but costs a per-frame allocation in the cruise hot path — undesirable on every-frame-cruise.
+
+   **Suggested resolution:** add a Vitest defensive guard test in `view-frame.test.ts` that attempts a write to `originOffsetWorld[0]` after retrieving the identity transform and asserts the next call still returns zero — would surface any future consumer-side write at test time without requiring a runtime freeze.
+
+   **Routing:** any future story that touches `view-frame.ts` (Story 4.2 VoyagerCameraController is the natural landing — it composes ViewFrame's output into camera state).
+
+2. **[4.1 / LOW]** `ViewFrameService` does not guard against NaN / Infinity components from `EphemerisService.getPosition`. The `alpha * bodyPos[i]` multiplication propagates `NaN` / `±Infinity` straight through to the worldGroup transform, which then NaN-poisons the floating-origin Float32 cast.
+
+   **Why deferred:** the bake's invariants prevent NaN/Infinity in chunk samples (bake/tests/test_bake_defense.py finite-vector checks), and the runtime ChunkLoader doesn't synthesize samples. EphemerisService.getPosition contract is `WorldVec3 | null`; null already routes to identity. A future kernel-data-corruption incident or a manifest-vs-chunk mismatch could surface this — pin as documented behaviour via `view-frame-qa-gaps.test.ts:111-132` so a future hardening pass with `Number.isFinite` gates is visible at test time.
+
+   **Suggested resolution:** add an `isFinite(bodyPos[i])` short-circuit to the identity branch in `ViewFrameService.getTransform` before the multiplication — defensive cost: 3 number checks per non-cruise frame.
+
+   **Routing:** any future hardening pass on `view-frame.ts`, or the next QA/code-review iteration if an MCP smoke ever surfaces a NaN-poisoned worldGroup state.
+
 

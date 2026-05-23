@@ -20,6 +20,8 @@ const spec: ChapterSpec = {
   spacecraft: 'v2',
   ogDescription:
     'Voyager 2 reaches Jupiter on 9 July 1979, four months behind its sibling, lining up the Grand Tour through the outer planets.',
+  // Story 4.1 AC5 — Jupiter barycenter (NAIF 5).
+  targetBody: 5,
 };
 
 export default spec;

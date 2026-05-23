@@ -68,6 +68,26 @@ export interface ChapterSpec {
    * that would break attribute serialisation.
    */
   readonly ogDescription: string;
+  /**
+   * Story 4.1 AC5 — optional NAIF body ID that this chapter's view-frame
+   * blend should center on during the held window. Populated only on the
+   * six encounter chapters (V1/V2 × Jupiter/Saturn + V2 × Uranus/Neptune);
+   * left `undefined` on cruise / launch / heliopause / Pale Blue Dot
+   * chapters, which keep the heliocentric (identity) origin shift.
+   *
+   * The IDs are NAIF SPK barycenter IDs (Jupiter = 5, Saturn = 6,
+   * Uranus = 7, Neptune = 8) — matches the runtime manifest's
+   * `bodies[].naifId` convention established by Story 1.13 and used by
+   * `BODY_RADII_KM` in `constants/body-radii.ts`. The bake samples
+   * planet positions at the barycenter rather than the body itself
+   * because the gas-giant moons orbit the barycenter; barycenter ↔
+   * body offset is sub-pixel at solar-system zoom.
+   *
+   * Consumed by `ViewFrameService.getTransform(et, activeChapter)`:
+   * `undefined` ⇒ identity (`originOffsetWorld = (0, 0, 0)`); populated
+   * ⇒ smoothstep blend over the ±2-day window per ADR-0023.
+   */
+  readonly targetBody?: number;
 }
 
 /**

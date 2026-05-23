@@ -23,6 +23,8 @@ const spec: ChapterSpec = {
   spacecraft: 'v2',
   ogDescription:
     'Voyager 2 reaches Neptune on 25 August 1989, the last planetary encounter of either probe, before bending south past Triton.',
+  // Story 4.1 AC5 — Neptune barycenter (NAIF 8).
+  targetBody: 8,
 };
 
 export default spec;

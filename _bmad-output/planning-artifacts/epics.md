@@ -1561,7 +1561,8 @@ So that the entry feels cinematic and FR31 has its substrate, fulfilling AR11 an
 **Given** the service module,
 **When** I inspect `web/src/services/view-frame.ts`,
 **Then** it exposes `getTransform(et: ET, activeChapter: ChapterSpec | null): ViewFrameTransform` returning the J2000 → render-space origin offset (a translation-only `Vector3`),
-**And** during cruise (no active chapter window or chapter is a non-encounter), the transform returns an identity-shifted-by-camera origin (preserving the heliocentric frame),
+**And** during true cruise (no active chapter window or chapter is a non-encounter) **AND no adjacent encounter's ±2-day ramp band covers `et`**, the transform returns the identity zero-offset (preserving the heliocentric frame),
+**And** when `activeChapter === null` OR `activeChapter.targetBody === undefined` BUT an encounter chapter's ±2-day ramp band covers `et`, the service resolves that adjacent encounter from the registry and applies its smoothstep blend (the FSM only dwells in `held` per Story 2.1, so the ramp zones outside `held` would otherwise be unreachable — encounter blends are choreographic and take precedence over a held non-encounter inside their ramp; production registry pin guarantees encounter ramps do not overlap any non-encounter window),
 **And** during the `entering`/`exiting` substates of an encounter chapter, the transform applies a smoothstep alpha [0,1] over the ±2-day blend window where alpha=0 at window edge and alpha=1 at the inner boundary (then constant at alpha=1 during the `held` substate),
 **And** the blend origin lerps between heliocentric (Sun-centered after floating-origin) and body-centered (encounter's target body — Jupiter for V1J/V2J, Saturn for V1S/V2S, Uranus for V2U, Neptune for V2N).
 

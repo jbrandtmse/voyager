@@ -20,6 +20,9 @@ const spec: ChapterSpec = {
   spacecraft: 'v1',
   ogDescription:
     'Voyager 1 sweeps past Jupiter on 5 March 1979, riding the giant planet for a gravitational kick toward Saturn.',
+  // Story 4.1 AC5 — Jupiter barycenter (NAIF 5), matches the runtime
+  // manifest's bake convention (see constants/body-radii.ts).
+  targetBody: 5,
 };
 
 export default spec;
