@@ -72,12 +72,14 @@ const CAPS_REVERSE_Z_OK: GPUCapabilities = {
   supportsReverseZ: true,
   supportsFloatDepth: true,
   recommendedTextureTier: '8k',
+  adequateForEightK: true,
 };
 
 const CAPS_NO_REVERSE_Z: GPUCapabilities = {
   supportsReverseZ: false,
   supportsFloatDepth: false,
   recommendedTextureTier: '4k',
+  adequateForEightK: false,
 };
 
 describe('RenderEngine — scene graph topology', () => {

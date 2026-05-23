@@ -112,6 +112,73 @@ date-level sourcing rather than fabricating sub-second precision.
 
 ---
 
+## Moon physical properties (Story 4.3 T4.5)
+
+The 13 outer-system moons rendered during encounter chapters (12 imaged by
+Voyager + Hyperion which Voyager 2 imaged but for which no equirectangular
+texture map exists — see "Texture coverage" note below). Mean radii are NASA
+fact-sheet values rounded to 0.1 km precision; the source canonical document
+per system is the NASA Solar System Exploration "Moons" fact sheet collection
+at `https://science.nasa.gov/moons/` and the parent-body fact sheets at
+`https://nssdc.gsfc.nasa.gov/planetary/factsheet/`. The IAU 2015 working group
+on Cartographic Coordinates & Rotational Elements final report (Archinal et
+al., *Celestial Mechanics & Dynamical Astronomy* 130, 22 (2018)) is the upstream
+reference both NASA fact sheets cite.
+
+### Jupiter system (encountered by V1J + V2J)
+
+| Moon     | NAIF | Mean radius (km) | Notes / Source |
+| -------- | ---- | ---------------- | -------------- |
+| Io       | 501  | 1,821.6          | Galileo + Juno-derived; volcanically active, the most geologically active body in the solar system. |
+| Europa   | 502  | 1,560.8          | Galileo + Juno (Perijove 45) confirmed sub-surface ocean. |
+| Ganymede | 503  | 2,634.1          | Largest moon in the solar system — larger than Mercury (2,439.7 km) by volume; smaller by mass due to ice composition. |
+| Callisto | 504  | 2,410.3          | Outermost Galilean; heavily cratered, geologically inert. |
+
+### Saturn system (encountered by V1S + V2S)
+
+| Moon     | NAIF | Mean radius (km) | Notes / Source |
+| -------- | ---- | ---------------- | -------------- |
+| Titan    | 606  | 2,574.7          | Second-largest moon in the solar system; only moon with a substantial atmosphere. Cassini ISS global map at PIA19658. |
+| Hyperion | 607  | 135.0            | Mean of the 360×266×205 km tri-axial ellipsoid (`(180+133+102.5)/3 ≈ 138.5`; NASA fact sheet rounds to 135). Chaotic rotation; the only known major moon with a non-equilibrium rotational state. **No public-domain equirectangular texture map exists** — USGS Astrogeology confirms no Hyperion control network exists (`https://astrogeology.usgs.gov/search/map/hyperion_image_control_network`). The simulation renders Hyperion as a grey-sphere placeholder per the Story 4.3 T4.5 deferral. |
+| Iapetus  | 608  | 734.5            | Two-toned moon (Cassini Regio bright/dark hemispheres). Voyager + Cassini composite. |
+
+### Uranus system (encountered by V2U)
+
+| Moon    | NAIF | Mean radius (km) | Notes / Source |
+| ------- | ---- | ---------------- | -------------- |
+| Miranda | 705  | 235.8            | Smallest of the five major Uranian moons; dramatic Voyager-2-imaged surface fractures. |
+| Ariel   | 701  | 578.9            | Brightest of the Uranian moons. Voyager 2 imagery is grayscale-only (Story 4.3 build pipeline expands to RGB). |
+| Umbriel | 702  | 584.7            | Darkest of the Uranian moons. Voyager 2 grayscale source. |
+| Titania | 703  | 788.9            | Largest Uranian moon. |
+| Oberon  | 704  | 761.4            | Outermost Uranian moon (of the five major). |
+
+### Neptune system (encountered by V2N)
+
+| Moon   | NAIF | Mean radius (km) | Notes / Source |
+| ------ | ---- | ---------------- | -------------- |
+| Triton | 801  | 1,353.4          | Only large moon in the solar system with a retrograde orbit; thought to be a captured Kuiper Belt object. Voyager 2 1989 flyby imagery covers ~75% of the surface. |
+
+### Texture coverage caveat (Story 4.3 T4.5)
+
+Voyager 1 imaged the Galilean moons + the inner Saturn moons; Voyager 2 added
+Uranus's major moons + Triton at Neptune. Cassini (Saturn, 2004-2017) and
+Galileo (Jupiter, 1995-2003) filled in the modern high-resolution mosaics.
+Where Cassini / Galileo mosaics exist (Io, Europa, Ganymede, Callisto, Titan,
+Iapetus) the texture is near-complete. Where only Voyager 2 imagery exists
+(Uranus moons, Triton) the texture covers ~50-75% of the surface — the
+unilluminated half is filled with the average surface tone, which is visually
+plausible at flyby scrub distances.
+
+**Hyperion specifically** — Voyager 2 captured Hyperion in 1981 from ~500,000 km;
+Cassini added closer imaging in 2005-2010. No control network has been
+established by USGS because Hyperion's chaotic 3:4 rotation resonance prevents
+a clean body-fixed coordinate system. The simulation renders Hyperion as a
+grey sphere using `BODY_RADII_KM[607]` for the geometry but no `textureSlug`,
+which the `CelestialBodies` fallback path resolves to the default grey
+material.
+
+---
+
 ## Editorial chapter copy
 
 Per ADR-0021, the heliopause chapter prose lives in

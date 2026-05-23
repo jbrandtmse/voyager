@@ -47,20 +47,38 @@ describe('Story 1.13 — selectTier resolves to 2k for both 8k and 4k caps (PNG-
   });
 });
 
-describe('Story 1.13 — texture URL templates', () => {
-  it('textureUrlForSlug formats <base>/<slug>-<tier>.<ext>', () => {
+describe('Story 1.13 — texture URL templates (Story 4.3 extension)', () => {
+  it('textureUrlForSlug formats <base>/<slug>-<tier>.<per-tier-ext>', () => {
+    // Story 1.13 — 2k tier uses PNG.
     expect(textureUrlForSlug('mercury', '2k')).toBe(
-      `${TEXTURE_BASE_URL}/mercury-2k.${TEXTURE_FILE_EXTENSION}`,
+      `${TEXTURE_BASE_URL}/mercury-2k.png`,
     );
+    // Story 4.3 — 4k + 8k tiers use KTX2 (Basis Universal supercompression).
     expect(textureUrlForSlug('jupiter', '4k')).toBe(
-      `${TEXTURE_BASE_URL}/jupiter-4k.${TEXTURE_FILE_EXTENSION}`,
+      `${TEXTURE_BASE_URL}/jupiter-4k.ktx2`,
+    );
+    expect(textureUrlForSlug('jupiter', '8k')).toBe(
+      `${TEXTURE_BASE_URL}/jupiter-8k.ktx2`,
     );
   });
 
   it('textureUrlForBody maps known NAIF IDs to their slug-based URL', () => {
+    // Story 1.13 cruise bodies (Sun + 8 planets + Earth's Moon +
+    // Milky Way) ship `<slug>-2k.png`. Story 4.3 cycle-4 added 12 outer-
+    // system moons whose 2k tier is KTX2-only (no `-2k.png` exists on
+    // disk for them); cycle-7's `SLUG_TIER_OVERRIDES_TO_KTX2` set
+    // resolves those slugs to `.ktx2` at the 2k tier. This test pins
+    // the per-category routing.
+    const OUTER_MOON_SLUGS = new Set([
+      'io', 'europa', 'ganymede', 'callisto',
+      'titan', 'iapetus',
+      'ariel', 'umbriel', 'titania', 'oberon', 'miranda',
+      'triton',
+    ]);
     for (const [naifId, slug] of Object.entries(BODY_TEXTURE_SLUGS)) {
+      const expectedExt = OUTER_MOON_SLUGS.has(slug) ? 'ktx2' : 'png';
       expect(textureUrlForBody(Number(naifId), '2k')).toBe(
-        `${TEXTURE_BASE_URL}/${slug}-2k.${TEXTURE_FILE_EXTENSION}`,
+        `${TEXTURE_BASE_URL}/${slug}-2k.${expectedExt}`,
       );
     }
   });
@@ -180,13 +198,19 @@ describe('Story 1.13 — TextureLoaderService argument routing', () => {
     expect(override.loadCalls).toHaveLength(1);
   });
 
-  it('honors a per-call tier override', async () => {
-    const { loader, loadCalls } = makeStubLoader();
-    const svc = new TextureLoaderService(loader);
-    // Story 1.13 only ships 2k, but the API supports 4k — used as a
-    // forward-looking hook for Story 4.3 callers.
+  it('honors a per-call tier override (Story 4.3: 4k routes through KTX2 path)', async () => {
+    const png = makeStubLoader();
+    const ktx2 = makeStubLoader();
+    // Story 4.3 — 4k tier uses KTX2; inject both stubs via the
+    // options-object constructor form so we can verify the route.
+    const svc = new TextureLoaderService({
+      pngLoader: png.loader,
+      ktx2Loader: ktx2.loader,
+    });
     await svc.loadBody(7, { tier: '4k' }); // Uranus
-    expect(loadCalls[0]).toMatch(/uranus-4k\.png$/);
+    expect(png.loadCalls).toEqual([]);
+    expect(ktx2.loadCalls).toHaveLength(1);
+    expect(ktx2.loadCalls[0]).toMatch(/uranus-4k\.ktx2$/);
   });
 });
 

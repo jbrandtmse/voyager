@@ -111,6 +111,7 @@ describe('GPUCapabilityProbe.run', () => {
       supportsReverseZ: false,
       supportsFloatDepth: false,
       recommendedTextureTier: '4k',
+      adequateForEightK: false,
     });
   });
 

@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "build:og": "node --import tsx scripts/og-cards.ts",
     "build-glb": "node --import tsx scripts/build_glb.ts",
+    "build-textures": "node --import tsx scripts/build_textures.ts",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint .",

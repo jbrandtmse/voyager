@@ -18,6 +18,17 @@ import type { GPUCapabilities } from '../boot/gpu-capability-probe';
 import { MISSION_START_ET } from '../constants/mission';
 import type { ViewFrameService } from '../services/view-frame';
 import type { ChapterDirector } from '../services/chapter-director';
+import type { TextureTier } from '../services/texture-loader';
+
+/**
+ * Story 4.3 AC4 — minimum CelestialBodies surface RenderEngine consumes so
+ * `upgradePlanetTexture(bodyId)` can delegate to the actual mesh-owning
+ * module without a runtime import cycle. The concrete CelestialBodies class
+ * (web/src/render/celestial-bodies.ts) satisfies this shape.
+ */
+export interface CelestialBodiesLike {
+  upgradePlanetTexture(bodyId: number, targetTier?: TextureTier): void;
+}
 
 // Minimum surface RenderEngine consumes from ClockManager. The concrete
 // ClockManager satisfies this shape; tests inject a stub that exposes
@@ -99,6 +110,13 @@ export class RenderEngine {
   // this).
   private viewFrame: ViewFrameService | null;
   private chapterDirector: ChapterDirector | null;
+  // Story 4.3 AC4 — CelestialBodies handle. Set post-construction via
+  // `setCelestialBodies(...)` because `main.ts` constructs RenderEngine
+  // BEFORE the manifest lands (and CelestialBodies needs the celestial-
+  // body chunks pre-cached per Story 1.13). `RenderEngine.upgradePlanetTexture`
+  // delegates to this handle; without it the call is a silent no-op (test
+  // harnesses that don't wire CelestialBodies still drive the engine).
+  private celestialBodies: CelestialBodiesLike | null = null;
   // Story 4.2 AC2 — flips to `true` the moment VoyagerCameraController sees
   // a user gesture on the canvas, and back to `false` when the restore
   // animation completes (R shortcut or restore-button click). While true,
@@ -271,6 +289,58 @@ export class RenderEngine {
   ): void {
     this.viewFrame = viewFrame;
     this.chapterDirector = chapterDirector;
+  }
+
+  /**
+   * Story 4.3 AC4 — wire the CelestialBodies handle post-construction.
+   * Mirror of `setViewFrame`: `main.ts` constructs RenderEngine before
+   * the celestial-body chunks land in the ChunkLoader cache (and therefore
+   * before CelestialBodies can be constructed). Once the chunks resolve
+   * and `new CelestialBodies({textureLoader})` is constructed, this setter
+   * promotes the engine into the texture-upgrade-capable state.
+   *
+   * Idempotent — calling with the same instance is a no-op. Passing `null`
+   * reverts to the silent-no-op posture (used by `dispose()` if a future
+   * teardown path needs it).
+   */
+  setCelestialBodies(handle: CelestialBodiesLike | null): void {
+    this.celestialBodies = handle;
+  }
+
+  /**
+   * Story 4.3 AC4 — async-load the higher-tier KTX2 texture for a single
+   * planet and atomically swap it into the body's material. Delegates to
+   * `CelestialBodies.upgradePlanetTexture(bodyId, targetTier)` when wired;
+   * a silent no-op otherwise.
+   *
+   * GPU-memory gate (NFR-C6): callers MUST check
+   * `capabilities.adequateForEightK` before requesting `'8k'`. The engine
+   * does NOT enforce the gate here (separation of concerns: the FSM
+   * subscriber is the right place to gate the request, so a low-end-GPU
+   * user simply never receives an `upgradePlanetTexture(_, '8k')` call).
+   *
+   * The default `targetTier` is `'4k'` because the gas-giant texture
+   * sources cap at 4K resolution — see the docstring on
+   * `GAS_GIANT_JOBS` in `web/scripts/build_textures.ts` for the Rule-5
+   * amendment that documents the procurement-time discovery: Solar
+   * System Scope's "8K" files are actually 4K dimensions, and no NASA /
+   * USGS source ships genuinely 8K gas-giant equirectangular maps. The
+   * runtime `'8k'` request still works (tier-ordering accepts it), but
+   * no caller in Story 4.3 exercises that path.
+   */
+  upgradePlanetTexture(bodyId: number, targetTier: TextureTier = '4k'): void {
+    if (this.celestialBodies === null) return;
+    this.celestialBodies.upgradePlanetTexture(bodyId, targetTier);
+  }
+
+  /**
+   * Story 4.3 AC4 — public accessor for the GPU capability snapshot.
+   * Used by the SOI-entry subscriber wiring in main.ts (or the lead's
+   * integration test) to gate `upgradePlanetTexture` calls on
+   * `adequateForEightK`.
+   */
+  getCapabilities(): GPUCapabilities {
+    return this.capabilities;
   }
 
   setSize(width: number, height: number): void {

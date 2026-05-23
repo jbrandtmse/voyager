@@ -116,7 +116,7 @@ The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cle
 - **[1.8 / LOW]** `resolveMainEntry` silent `/src/main.ts` fallback — DEFER to Story 7.x build hygiene.
 - **[1.10 / LOW]** `ClockManager.tick` reclamping at mission end — DEFER (HUD-driven cleanup).
 - **[1.10 / LOW]** `stepDecade` rounding from mid-decade — DEFER to Story 6.5 (qualitative testing).
-- **[1.10 / LOW]** Last-10% chunk prefetch not wired — DEFER to Story 4.3 (explicit handoff per Story 1.10 dev notes).
+- ~~**[1.10 / LOW]** Last-10% chunk prefetch not wired — DEFER to Story 4.3 (explicit handoff per Story 1.10 dev notes).~~ **CLOSED 2026-05-23 by Story 4.3 T2** — `EphemerisService.maybePrefetchNeighbour` fires at the last 10% of the current chunk's window (NFR-P6); `boundaryStalled` getter exposes the cache-miss signal for `<v-speed-multiplier>` auto-cap wiring.
 - **[1.11 / LOW]** HUD `ephemerisService` field vs accessor asymmetry — DEFER (no consumer needs subscribe).
 - **[1.11 / LOW]** `<v-hud-date>.tick` non-finite ET guard — DEFER (latent).
 - **[1.11 / LOW]** `<v-hud>` querySelector caching — DEFER to Story 7.6.
@@ -753,3 +753,47 @@ The following items surfaced during Story 4.2 code review (`/epic-cycle 4` code-
    **Suggested resolution:** Add a small unit test in `voyager-camera-controller.test.ts` that constructs a camera, positions it at exactly `MIN_ZOOM_DISTANCE_KM` and `MAX_ZOOM_DISTANCE_KM` from origin, calls `camera.updateMatrixWorld()`, and asserts every element of `camera.matrixWorldInverse.elements` is `Number.isFinite`. ~10 lines; trivial to add but adds belt-and-braces redundancy on a Story-1.5-guaranteed surface.
 
    **Routing:** Any future story that touches `voyager-camera-controller.ts`, or a defensive-test sweep pass at Epic 4 retro.
+
+## Deferred from: code review of Story 4.3 (2026-05-23)
+
+The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stub-EphemerisService → AC7 Rule-5 amendment; F2 ADR-0006 UASTC-vs-ETC1S → ADR-0006 Story-4.3 amendment block). The four LOW items below were deferred per the standard X.0 deferred-work pattern.
+
+1. **[4.3 / LOW]** `EphemerisService.boundaryStalled` is service-wide; per-body loop can clear stale flag.
+
+   **What's the issue:** The flag is set true on a `getStateAt` cache-miss and cleared on ANY successful `getStateAt`. In the per-frame loop (`CelestialBodies.tick` iterates 10 cruise bodies; `MissionPhaseFSM.update` iterates 2 spacecraft × 4 gas giants = 8 distance queries) a successful body-B lookup masks a stalled body-A. The QA test pins this as the explicit contract (`web/src/services/ephemeris-service.qa.test.ts:260-291`).
+
+   **Why deferred:** The speed-multiplier's primary auto-cap signal is `chunkLoader.pendingCount` (service-wide, ungated by body) per Story 1.10. `boundaryStalled` is a narrower per-frame signal — and the `<v-speed-multiplier>` consumer wire-up to read it is itself deferred (story 4.3 Dev Notes line 263). Until that wire-up lands the per-body-vs-service-wide distinction has no user-visible effect.
+
+   **Suggested resolution:** Replace the scalar flag with a `Map<bodyId, boolean>` or a `Set<bodyId> stalledBodies`; the getter returns `stalledBodies.size > 0`. Or: keep the scalar but compute it as `OR over the per-frame queries` instead of last-write-wins. ~15 lines. Belongs to the same future story that wires `<v-speed-multiplier>` to the narrower signal.
+
+   **Routing:** A future story that wires `<v-speed-multiplier>` to `ephemerisService.boundaryStalled` (likely Epic 4 Story 4.5 or 4.6 when the encounter chapter actually exercises the cache-miss path).
+
+2. **[4.3 / LOW]** `GPUCapabilityProbe.adequateForEightK` is a hand-coded `MAX_TEXTURE_SIZE >= 16384` heuristic.
+
+   **What's the issue:** The heuristic uses `MAX_TEXTURE_SIZE >= 16384` as a proxy for "1 GB+ VRAM, can host an 8K KTX2 layer." Defensible for desktop GPUs (every 2014+ desktop class reports 16384+) but breaks down for: (a) high-memory mobile chips (Apple A-series, Snapdragon 8-gen) that report 16384 but have memory pressure from the OS / browser frame; (b) Intel integrated GPUs that report 16384 with shared system memory; (c) embedded GPUs that may misreport.
+
+   **Why deferred:** Story 4.3's Out-of-Scope clause explicitly locks the 1 GB threshold with a hand-coded heuristic and defers "a proper memory-aware tier selector" to Epic 6 polish / Story 7.x perf-hardening. The Story 4.3 amendment to AC4 (8K → 4K source-cap) makes the `adequateForEightK` field functionally a no-op for the current ship — the 4K tier is what the runtime requests, and `adequateForEightK` is the gate the SOI-entry subscriber checks anyway (so a `false` value keeps the cruise 2K active).
+
+   **Suggested resolution:** WebGPU's `requestAdapterInfo()` exposes a `description` field with vendor / device strings (Chrome behind a flag as of 2026; Safari and Firefox catching up). Combined with `GPUSupportedLimits.maxBufferSize`, a future GPUCapabilityProbe iteration could classify the GPU tier more reliably. For Chromium-only deployments `WEBGL_debug_renderer_info`'s `UNMASKED_RENDERER_WEBGL` + a vendor lookup table is the interim path.
+
+   **Routing:** Epic 6 polish (tier-aware texture selector) OR Story 7.x perf-hardening (memory budgeting). Whichever lands first.
+
+3. **[4.3 / LOW]** `web/tests/build-textures-e2e.test.ts` writes test fixtures into the real `web/textures-src/gas-giants/` directory.
+
+   **What's the issue:** Lines 132-135 + 177-180 of the E2E test compute `REPO_TEXTURES_SRC = join(__dirname, '..', 'textures-src', 'gas-giants')` and write a `${Date.now()}-keyed-slug-4k.png` fixture into the REAL repo source tree before invoking `buildOne`. The `finally` block removes the file, but a test-process crash between `writeFixturePng` (line 135) and the `finally` (line 154) leaks the fixture as an LFS-tracked PNG into the repo (per `.gitattributes` `web/textures-src/**/*.png filter=lfs`).
+
+   **Why deferred:** Test-only hazard. The `finally`-block cleanup is the right discipline; the leak window is narrow (test process must crash WITHIN the toktx + sharp invocation, which is rare). The build pipeline E2E test is itself slow-tier-gated by toktx availability, so it runs infrequently. No production impact.
+
+   **Suggested resolution:** Refactor `buildOne` / `resolveSourcePath` to accept an optional `texturesSrcRoot` argument (default to the module-scope `TEXTURES_SRC` constant for backward compat). The E2E test then passes an `os.tmpdir()`-rooted directory; no fixture lands in the real source tree. ~15 lines on the script side, ~5 lines on the test side. Trivial when somebody touches `build_textures.ts` next.
+
+   **Routing:** Any future story that touches `web/scripts/build_textures.ts` (e.g. when 8K source data becomes available for a future tier upgrade), or a test-hygiene pass.
+
+4. **[4.3 / LOW]** `bake_trajectories.py:758` print-statement `total_vtrjs` drifts when moons + encounter bands emit.
+
+   **What's the issue:** Line 758 prints `total_vtrjs = total_segments + len(CELESTIAL_BODIES)` — this count was correct before Story 4.3. Story 4.3 adds 18 encounter-band records (6 encounters × 3 bands) plus up to 13 moon trajectory chunks (when satellite SPKs are furnished). The bake's summary print line under-counts the actual emit by up to 31 chunks.
+
+   **Why deferred:** Cosmetic — the manifest output is correct, the bake produces the right files, only the human-readable summary line drifts. No automation reads the print line (bake CI asserts on file presence + SHA, not on the print text). Story 4.3 didn't touch this line because the test contract (manifest correctness) was unaffected.
+
+   **Suggested resolution:** Compute `total_vtrjs = sum(len(b.files) for b in body_records)` at the bottom of the bake loop, immediately before the print. ~2 lines. Trivial when somebody next touches the bake summary path.
+
+   **Routing:** Any future bake-pipeline story (Epic 4 Story 4.6 / 4.7 chapter content or Epic 5 PBD bake extensions will likely touch this code path).

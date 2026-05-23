@@ -43,6 +43,12 @@ import { EphemerisService } from './services/ephemeris-service';
 import { AttitudeService } from './services/attitude-service';
 import { ViewFrameService } from './services/view-frame';
 import {
+  MissionPhaseFSM,
+  type MissionPhaseEvent,
+  SPACECRAFT_NAIF_IDS,
+  GAS_GIANT_NAIF_IDS,
+} from './services/mission-phase-fsm';
+import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
 } from './dev/ephemeris-perf';
@@ -478,10 +484,48 @@ const bootstrap = (): void => {
   // skybox loads its texture asynchronously and attaches to the
   // SkyboxGroup (NOT worldGroup) so it doesn't floating-origin-recenter
   // (Story 1.5 architectural contract — Architecture lines 374–376).
-  const textureLoader = new TextureLoaderService();
+  // Story 4.3 cycle-6 — wire the WebGLRenderer into the TextureLoaderService
+  // constructor so its internal `KTX2Loader` calls `detectSupport(renderer)`
+  // during initialization. Without this, the loader doesn't know which
+  // Basis Universal transcode target the GPU supports and refuses to decode
+  // KTX2 textures at runtime with:
+  //   `THREE.KTX2Loader: Missing initialization with `.detectSupport(renderer)`.`
+  // The renderer is already initialized at this point (`engine.init(canvas)`
+  // ran at line ~180); `engine.getRenderer()` returns the live instance.
+  // This is the canonical Three.js KTX2 init pattern (same as Story 3.3's
+  // SpacecraftModels GLB pipeline, which wires the renderer via
+  // `KTX2Loader.detectSupport` in the GLTFLoader registration path).
+  const rendererForTextures = engine.getRenderer();
+  const textureLoader = new TextureLoaderService(
+    rendererForTextures !== null ? { renderer: rendererForTextures } : undefined,
+  );
   const skybox = new Skybox({ textureLoader });
   engine.skyboxGroup.add(skybox.root);
   let celestialBodies: CelestialBodies | null = null;
+  // Story 4.3 AC3 — MissionPhaseFSM is constructed post-manifest (inside the
+  // manifest-resolves block below); the per-frame onFrame closure captures
+  // this binding so the FSM update can fire inside the existing canonical
+  // onFrame body (preserving Story 3.4 / 3.5 ordering defenses).
+  let missionPhaseFSMRef: MissionPhaseFSM | null = null;
+  // Story 4.3 cycle-5 — cold-load SOI-state replay gate. The FSM's
+  // `first update seeds silently` contract (AC3) is correct for a
+  // "crossing INTO an SOI" observer — synthesizing a fake `soiEntered`
+  // event on cold-load would corrupt the contract for downstream consumers
+  // that genuinely need "did I just cross?" semantics. But AC4 + AC5
+  // BOTH need the gas-giant texture upgrade + moon meshes on cold-load
+  // when the spacecraft is ALREADY inside an SOI (e.g. opening
+  // `/c/v1-jupiter` lands the simulation at V1's Jupiter encounter ET,
+  // which is inside Jupiter's SOI). Resolution per Rule 5 (the
+  // contradiction was discovered by the lead's MCP smoke at cycle-4):
+  // add a one-shot "cold-load replay" that queries `getSoiState` for
+  // every (spacecraft × gas-giant) pair AFTER the first FSM update and
+  // calls the SAME consumer code path the `soiEntered` subscriber
+  // calls. Gated by `coldLoadReplayDone` so it runs exactly once;
+  // wired in via the forward-referenced `coldLoadReplayRef` so the
+  // per-frame block (above, line ~625) can fire it after the first
+  // FSM update completes.
+  let coldLoadReplayDone = false;
+  let coldLoadReplayRef: (() => void) | null = null;
 
   // Story 1.6 AC1 + Task 10: load the manifest at boot. Once loaded, we
   // construct the ChunkLoader + EphemerisService and wire the service into
@@ -610,6 +654,20 @@ const bootstrap = (): void => {
         boresightRenderer.tick(spacecraftModels);
         if (trajectoryLines !== null) trajectoryLines.tick(et);
         if (celestialBodies !== null) celestialBodies.tick(et, ephemerisService);
+        // Story 4.3 AC3 — MissionPhaseFSM advances each frame. The FSM is
+        // declared further down the boot sequence; we forward-reference it
+        // via the closure-captured `missionPhaseFSMRef`. The wire is in
+        // this block (not a separate per-frame registration) so the
+        // existing boresight-renderer / attitude-applier ordering defense
+        // continues to match the canonical block.
+        if (missionPhaseFSMRef !== null) missionPhaseFSMRef.update(et);
+        // Story 4.3 cycle-5 — cold-load SOI-state replay (one-shot,
+        // forward-referenced via `coldLoadReplayRef`). Fires AFTER the
+        // first FSM `update(et)` lands, so the silent-seed has already
+        // populated `getSoiState`. The replay closure itself enforces
+        // the `coldLoadReplayDone` once-only gate — calling it on every
+        // subsequent frame is a cheap boolean compare.
+        if (coldLoadReplayRef !== null) coldLoadReplayRef();
       });
 
       // Story 1.12 + Story 1.13 — the trajectory polyline samples at
@@ -640,6 +698,105 @@ const bootstrap = (): void => {
       // a fallback grey tint before then).
       celestialBodies = new CelestialBodies({ textureLoader });
       engine.worldGroup.add(celestialBodies.root);
+
+      // Story 4.3 AC4 — wire CelestialBodies into the engine so the
+      // `RenderEngine.upgradePlanetTexture(bodyId)` pass-through has a
+      // concrete handle to delegate to. The setter mirrors
+      // `setViewFrame(...)` for the same reason: RenderEngine is
+      // constructed before the manifest lands, but CelestialBodies needs
+      // the post-manifest chunks.
+      engine.setCelestialBodies(celestialBodies);
+
+      // Story 4.3 AC3 + AC7 — construct MissionPhaseFSM and wire the
+      // SOI-entry subscriber that promotes gas-giant textures to the 4K
+      // tier on encounter entry. Per Rule 1 (integration AC) this is the
+      // production wiring path that the integration test
+      // (`web/tests/mission-phase-fsm-upgrade-texture-integration.test.ts`)
+      // exercises with stubs. The FSM's per-frame `update(et)` runs inside
+      // the canonical Story-3.4 per-frame block above (see the
+      // `missionPhaseFSMRef` forward-reference declaration earlier); we
+      // just assign the binding here.
+      const missionPhaseFSM = new MissionPhaseFSM({ ephemerisService });
+      missionPhaseFSMRef = missionPhaseFSM;
+      // Story 4.3 cycle-5 — extracted into a named helper so the cold-
+      // load replay (see `onSoiEnter` invocation in the per-frame block
+      // above) calls the EXACT same downstream code path the subscriber
+      // does. Guarantees parity between "crossing INTO an SOI at
+      // runtime" and "discovered to be inside an SOI on cold-load".
+      const onSoiEnter = (bodyId: number): void => {
+        // Story 4.3 T5 — construct moon meshes for the parent gas
+        // giant's satellite system on encounter entry. The add path is
+        // idempotent (re-adding a present moon is a no-op).
+        if (celestialBodies !== null) {
+          celestialBodies.addMoonsFor(bodyId);
+        }
+        // Story 4.3 AC4 — NFR-C6 gate: silently skip the upgrade when
+        // the device's GPU memory is below the 1 GB heuristic. On
+        // low-end devices the cruise 2K PNG remains the active texture;
+        // the user sees no UI hint per UX-DR32.
+        const caps = engine.getCapabilities();
+        if (!caps.adequateForEightK) return;
+        // Default tier is `'4k'` per the Story-4.3 Rule-5 amendment
+        // (gas-giant source data caps at 4K; see GAS_GIANT_JOBS
+        // docstring in web/scripts/build_textures.ts).
+        engine.upgradePlanetTexture(bodyId);
+      };
+      const onSoiExit = (bodyId: number): void => {
+        // Story 4.3 T5 — remove moon meshes for the parent gas giant
+        // on encounter exit. AC5 default: remove (vs LOD3-silhouette
+        // retain). The texture tier on the gas giant itself does NOT
+        // de-escalate (Out-of-Scope per the story — "the texture stays
+        // at the highest tier loaded for the session").
+        if (celestialBodies !== null) {
+          celestialBodies.removeMoonsFor(bodyId);
+        }
+      };
+      missionPhaseFSM.subscribe((event: MissionPhaseEvent) => {
+        if (event.type === 'soiEntered') {
+          onSoiEnter(event.bodyId);
+          return;
+        }
+        if (event.type === 'soiExited') {
+          onSoiExit(event.bodyId);
+          return;
+        }
+      });
+      // Story 4.3 cycle-5 — cold-load SOI-state replay. The FSM's
+      // first-update silent-seed (AC3) means that opening a URL like
+      // `/c/v1-jupiter` (which lands ET at V1's Jupiter encounter, INSIDE
+      // Jupiter's SOI) seeds the FSM state to 'inside' WITHOUT firing a
+      // `soiEntered` event. Without this replay, the cold-load Jupiter
+      // texture stays at 2K and the Galilean moons never appear. The
+      // replay runs once AFTER the first `update(et)` lands (so the
+      // silent-seed has happened), iterates every (spacecraft × gas
+      // giant) pair the FSM tracks, and calls `onSoiEnter(bodyId)` for
+      // every pair currently inside an SOI. Re-firing `onSoiEnter`
+      // later via the regular `soiEntered` event path is safe:
+      // `addMoonsFor` is idempotent (per-mesh existence check) and
+      // `upgradePlanetTexture` is monotonic at the tier ratchet (per
+      // Story 4.3 cycle-3 decisions).
+      coldLoadReplayRef = (): void => {
+        if (coldLoadReplayDone) return;
+        coldLoadReplayDone = true;
+        for (const sc of SPACECRAFT_NAIF_IDS) {
+          for (const gg of GAS_GIANT_NAIF_IDS) {
+            if (missionPhaseFSM.isInsideSoi(sc, gg)) {
+              onSoiEnter(gg);
+            }
+          }
+        }
+      };
+
+      // Story 4.3 AC8 — DEV-only debug surface for the lead's Chrome
+      // DevTools MCP smoke. Mirrors the Story-2.1 chapterDirector +
+      // Story-4.2 cameraController patterns: write to
+      // `window.__voyagerDebug.missionPhaseFSM`, which the lead's smoke
+      // probe reads via `evaluate_script`. Production builds strip this
+      // block via Vite's `import.meta.env.DEV` constant folding.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+        w.__voyagerDebug = { ...(w.__voyagerDebug ?? {}), missionPhaseFSM };
+      }
     },
     (err: unknown) => {
       console.error('[manifest] load failed:', err);

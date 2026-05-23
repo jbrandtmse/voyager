@@ -26,6 +26,14 @@ Use the **`EXT_meshopt_compression` glTF extension** for all GLB assets. Pipelin
 3. `toktx` → KTX2 textures (UASTC for hero, ETC1S for planets/skybox) — see ADR 0009 of UX spec terminology
 4. Content-hashed filename + `Cache-Control: public, max-age=31536000, immutable`
 
+**Story 4.3 amendment (2026-05-23, per voyager-skill-rules.md Rule 5):** the gas-giant 4K and outer-moon 2K KTX2 tiers shipped by Story 4.3 use **UASTC** for ALL textures — not ETC1S for the planet/moon tier as Decision step 3 originally specified. The rationale:
+
+- The Story 4.3 KTX2 tier is the **SOI-entry upgrade** target (the cruise default is the Story 1.13 2K PNG, which remains unchanged). When the runtime loads the higher-tier KTX2 it is a "hero asset" for the active encounter — the visible texture for the gas giant a user is currently looking at, magnified to fill the viewport. ETC1S's lower fidelity is appropriate for cruise/background surfaces; UASTC's higher fidelity is appropriate for hero zoom.
+- The bundle-budget impact is well under NFR-P5 (≤ 150 MB total): the 4 gas-giant 4K UASTC tier is ~10.6 MB and the 12 moon 2K UASTC tier is ~16.9 MB. Aggregate ~27.5 MB — leaves ~120 MB of headroom for future tiers.
+- The cruise/background tier IS the 2K PNG (Story 1.13) — UASTC vs ETC1S only applies to the KTX2 upgrade tier. Decision step 3's "planets/skybox = ETC1S" guidance maps cleanly to the cruise 2K PNG (which is uncompressed-by-PNG, not by Basis at all) and remains correct for any future cruise-tier KTX2 conversion.
+
+The amended Decision step 3 reading is: "UASTC for hero AND for SOI-entry/upgrade planet textures; ETC1S for cruise/background tier when Basis-encoded." A future story that introduces a cruise-tier KTX2 (e.g. swapping Story 1.13's PNGs for ETC1S KTX2 in a perf-pass) should follow Decision step 3 with the cruise-tier classification.
+
 Three.js consumes the compressed GLB via `GLTFLoader` with `MeshoptDecoder` registered.
 
 ## Consequences

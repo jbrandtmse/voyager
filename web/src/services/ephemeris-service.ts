@@ -52,6 +52,17 @@ export class EphemerisService {
   // doesn't spam the console every frame. One log per (failed) URL is enough
   // to surface 404s and SHA mismatches that would otherwise be invisible.
   private readonly warnedUrls = new Set<string>();
+  // Story 4.3 AC2 — track per-body the most recently prefetched neighbour
+  // URL so the 10%-of-window trigger doesn't refire the same prefetch every
+  // frame inside the trigger band. Cleared on body switch (different keys).
+  private readonly prefetchedNeighbourUrls = new Set<string>();
+  // Story 4.3 AC2 — `boundaryStalled` is set true on a frame where the
+  // requested ET falls inside a covered window but the chunk is NOT yet in
+  // cache (loader fetch is inflight). `<v-speed-multiplier>` reads this to
+  // auto-cap the speed to 0 until the chunk lands. Cleared on every
+  // successful state lookup so the flag is a single-frame "did I miss?"
+  // signal — not a sticky alarm.
+  private boundaryStalledFlag = false;
 
   constructor(manifest: Manifest, chunkLoader: ChunkLoader) {
     this.chunkLoader = chunkLoader;
@@ -79,6 +90,14 @@ export class EphemerisService {
   /**
    * Look up the manifest file that covers `et` for `bodyId`, or null if
    * `et` is outside every segment's range or `bodyId` is unknown.
+   *
+   * Story 4.3 AC1 — overlapping intervals: with the per-encounter cadence-
+   * band chunks (hourly ±30d, 1-min ±2d, 10-sec ±1hr) layered atop the
+   * per-SPK-segment baseline, multiple files may cover the same ET. We
+   * pick the file with the largest `start ≤ et` that also covers `et` —
+   * this naturally selects the narrowest (= finest-cadence) band whose
+   * window contains et, and falls back through the wider tiers if a
+   * narrower band's window has already exited.
    */
   private findSegmentFile(et: number, bodyId: number): ManifestFile | null {
     const idx = this.bodiesById.get(bodyId);
@@ -94,22 +113,105 @@ export class EphemerisService {
       if (idx.starts[mid] <= et) lo = mid;
       else hi = mid - 1;
     }
-    const candidate = idx.sortedFiles[lo];
-    if (et > candidate.timeRangeEt[1]) return null;
-    return candidate;
+    // Walk backward through files whose `start <= et` until one also
+    // covers `et` (et <= end). This handles the Story 4.3 overlapping-
+    // interval case where a narrower band's window may have exited
+    // even though its start is the closest start-≤-et.
+    //
+    // In the steady-state (cruise / no encounter overlap) the first
+    // candidate covers `et`, so the loop body runs exactly once. Worst
+    // case is ~4 files inspected per encounter (per-segment + hourly +
+    // 1min + 10sec stacked). Still O(log n + 4) ≈ O(log n).
+    for (let i = lo; i >= 0; i--) {
+      const candidate = idx.sortedFiles[i];
+      if (et <= candidate.timeRangeEt[1]) return candidate;
+    }
+    return null;
+  }
+
+  /**
+   * Story 4.3 AC2 — when `et` is inside the last 10% of the current file's
+   * window, eagerly load the NEXT file in the sorted index so it's in
+   * cache by the time the cursor crosses the boundary. NFR-P6 mandates
+   * the prefetch trigger fires by the last 10% of the window. The
+   * heuristic is conservative — we trigger any time in the last 10%, not
+   * only on first entry, so a slow scrub still benefits.
+   *
+   * Per-body once-per-URL discipline: each neighbour URL is prefetched
+   * once. The Set is bounded by the manifest's file count (small) so we
+   * don't bother LRU-evicting.
+   */
+  private maybePrefetchNeighbour(
+    et: number,
+    bodyId: number,
+    currentFile: ManifestFile,
+  ): void {
+    const idx = this.bodiesById.get(bodyId);
+    if (idx === undefined) return;
+    const [start, end] = currentFile.timeRangeEt;
+    const span = end - start;
+    if (span <= 0) return;
+    const triggerEt = end - span * 0.1; // last 10% of window — NFR-P6
+    if (et < triggerEt) return;
+
+    // Find the next file whose start > currentFile.start. Linear scan is
+    // fine — file counts are bounded (per-spacecraft typically < 30).
+    // We look for the SMALLEST start strictly greater than the current
+    // file's start; in the overlapping-interval case (Story 4.3) this
+    // picks the nearest narrower band when scrubbing INTO an encounter,
+    // and the next per-segment chunk when scrubbing OUT.
+    let neighbour: ManifestFile | null = null;
+    for (const f of idx.sortedFiles) {
+      if (f.timeRangeEt[0] <= start) continue;
+      if (neighbour === null || f.timeRangeEt[0] < neighbour.timeRangeEt[0]) {
+        neighbour = f;
+      }
+    }
+    if (neighbour === null) return;
+    if (this.prefetchedNeighbourUrls.has(neighbour.url)) return;
+    if (this.chunkLoader.peek(neighbour.url) !== undefined) {
+      this.prefetchedNeighbourUrls.add(neighbour.url);
+      return;
+    }
+    this.prefetchedNeighbourUrls.add(neighbour.url);
+    void this.chunkLoader.load(neighbour).catch((err: unknown) => {
+      // Prefetch failures are silently retried on the next trigger — drop
+      // from the Set so the next 10%-window entry kicks another attempt.
+      this.prefetchedNeighbourUrls.delete(neighbour.url);
+      if (this.warnedUrls.has(neighbour.url)) return;
+      this.warnedUrls.add(neighbour.url);
+      // eslint-disable-next-line no-console
+      console.warn(`[ephemeris] prefetch failed for ${neighbour.url}:`, err);
+    });
   }
 
   /**
    * Sync entry point. Returns the interpolated state at `et` for `bodyId`,
    * or null if the data isn't available yet (loader is fetching) or if `et`
    * is outside every segment for the body. Never throws on the hot path.
+   *
+   * Story 4.3 AC2 — side effects:
+   *   - Sets `boundaryStalled = true` if the queried ET is inside a covered
+   *     window but the chunk is missing from cache (forces speed-multiplier
+   *     auto-cap per Story 1.10 contract).
+   *   - Fires `maybePrefetchNeighbour` when et is in the last 10% of the
+   *     current file's window (NFR-P6 prefetch trigger).
    */
   getStateAt(et: number, bodyId: number): State | null {
     const file = this.findSegmentFile(et, bodyId);
-    if (file === null) return null;
+    if (file === null) {
+      // ET is outside every segment for the body — not a stall, just out
+      // of bounds. Don't set boundaryStalled (the speed-multiplier
+      // shouldn't auto-cap for "we're outside the mission window").
+      return null;
+    }
 
     const chunk = this.chunkLoader.peek(file.url);
     if (chunk === undefined) {
+      // Story 4.3 AC2 — the simulation reached a covered window's boundary
+      // before the chunk loaded. Set boundaryStalled so the speed
+      // multiplier auto-caps; the next successful lookup clears it.
+      this.boundaryStalledFlag = true;
       // Kick off the load asynchronously; subsequent frames will see the
       // cached chunk and return real data. ChunkLoader.load doesn't itself
       // log on failure (it just rejects), and the hot-path caller doesn't
@@ -125,7 +227,30 @@ export class EphemerisService {
       return null;
     }
 
+    // Story 4.3 AC2 — successful lookup clears the stall flag and fires
+    // the 10%-prefetch trigger if applicable.
+    this.boundaryStalledFlag = false;
+    this.maybePrefetchNeighbour(et, bodyId, file);
+
     return interpolateFromChunk(chunk, et);
+  }
+
+  /**
+   * Story 4.3 AC2 — `true` iff the most recent `getStateAt` call resolved
+   * a covered file but the chunk was not yet in cache. Read by the
+   * `<v-speed-multiplier>` consumer (or by ClockManager wiring) to
+   * auto-cap the speed to 0 until the chunk lands. Reset to false the
+   * next time `getStateAt` returns a real State.
+   *
+   * Cross-reference: `ChunkLoader.loading` (Story 1.6) reports whether
+   * ANY chunk is inflight; this flag is narrower — it specifically says
+   * "the chunk the per-frame loop wants RIGHT NOW is missing." The
+   * speed-multiplier auto-cap watches both: `loading` for "background
+   * prefetch in flight, don't accelerate" and `boundaryStalled` for
+   * "the visible scene cannot render until I get this chunk."
+   */
+  get boundaryStalled(): boolean {
+    return this.boundaryStalledFlag;
   }
 
   getPosition(et: number, bodyId: number): WorldVec3 | null {
