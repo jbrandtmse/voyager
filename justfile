@@ -54,6 +54,20 @@ bake-attitude: bake-trajectories
 bake-glb:
     npm run build-glb
 
+# Story 4.3 AC4/AC5 — bake the celestial-body KTX2 tier (4K + 8K for the
+# four gas giants; 2K for the 12 outer-system moons). Reads source PNG/JPG
+# from `web/textures-src/` (LFS-tracked, Solar System Scope CC-BY-4.0 for
+# the gas giants + NASA/USGS public-domain for the moons — see
+# `THIRD_PARTY.md`), runs `toktx` UASTC + Basis Universal supercompression
+# per ADR-0006 § Decision step 3, and writes the per-tier `<slug>-<tier>.ktx2`
+# files into `web/public/textures/`. Idempotent: a re-bake against unchanged
+# sources is a no-op. Standalone (not chained into `just bake`) because the
+# texture sources change rarely and the build is slow (~30s for the 8 gas-
+# giant outputs).
+[working-directory("web")]
+bake-textures:
+    npm run build-textures
+
 # Run the Layer-1 Python validation harness against baked VTRJ files (Story 1.4 AC4).
 [working-directory("bake")]
 validate:

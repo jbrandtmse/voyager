@@ -1,19 +1,63 @@
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 
-import { heliopauseCopyForSlug, type HeliopauseCopy } from '../data/heliopause-copy';
+import { heliopauseCopyForSlug } from '../data/heliopause-copy';
 import type {
   ChapterDirector,
 } from '../services/chapter-director';
-import type { ChapterTransitionEvent } from '../types/chapter';
+import type { ChapterSpec, ChapterTransitionEvent } from '../types/chapter';
 
 /**
- * `<v-chapter-copy>` — minimal right-side text-card panel (Story 2.9).
+ * Normalised editorial copy shape — both heliopause (Story 2.9) and
+ * encounter chapters (Story 4.5+) render through the same `<h2>` + `<p>`
+ * skeleton. Heliopause copy carries a `paragraphs` array; encounter copy
+ * carries a single `body` string which we wrap in a one-element array
+ * for rendering uniformity.
+ */
+interface ChapterCopyBlock {
+  readonly lede: string;
+  readonly paragraphs: readonly string[];
+}
+
+/**
+ * Story 4.5 AC5 — resolve an editorial copy block for a chapter, covering
+ * both the heliopause copy module (Story 2.9, slug-keyed lookup) and the
+ * Story 4.5+ encounter-chapter copy carried on `ChapterSpec.copy`.
+ *
+ * Returns `null` for chapters without copy (cruise / launch / PBD /
+ * non-tuned encounters); the component clears the panel for null
+ * results, matching the Story 2.9 behavior.
+ */
+const copyForChapter = (chapter: ChapterSpec): ChapterCopyBlock | null => {
+  // Heliopause chapters keep their copy in heliopause-copy.ts per
+  // ADR-0021 (the Story 2.9 source-of-truth) — preserve that wire-up so
+  // existing test expectations + slug-based lookups continue to work.
+  const heliopauseCopy = heliopauseCopyForSlug(chapter.slug);
+  if (heliopauseCopy !== null) {
+    return heliopauseCopy;
+  }
+  // Story 4.5 — encounter chapters carry their copy on the spec itself
+  // (a single `body` string). Wrap in a one-element paragraphs array to
+  // share the render path with heliopause copy.
+  if (chapter.copy !== undefined) {
+    return Object.freeze({
+      lede: chapter.copy.lede,
+      paragraphs: Object.freeze([chapter.copy.body]),
+    });
+  }
+  return null;
+};
+
+/**
+ * `<v-chapter-copy>` — minimal right-side text-card panel (Story 2.9 +
+ * Story 4.5 encounter-chapter extension).
  *
  * Subscribes to a `ChapterDirector` and renders the chapter's editorial copy
- * (lede + body paragraphs) while the chapter is in `held` state. Currently
- * only handles the V1H / V2H heliopause chapters per Story 2.9 scope; Epic 4
- * extends the same component (or a body-centered sibling) for the encounter
- * chapters.
+ * (lede + body paragraphs) while the chapter is in `held` state. Story 2.9
+ * shipped heliopause-only handling via the slug-keyed `heliopauseCopyForSlug`
+ * lookup; Story 4.5 extends the lookup to also read `ChapterSpec.copy` for
+ * encounter chapters (V1J first; V2J / V1S / V2S in Story 4.6; V2U / V2N in
+ * Story 4.7). Pale Blue Dot remains out — Epic 5 introduces its own copy
+ * shape.
  *
  * ## Light DOM
  *
@@ -64,7 +108,7 @@ export class VChapterCopy extends LitElement {
    * Kept as a state field so external tests can assert on it directly,
    * and so the render() pure-function pattern stays simple.
    */
-  private currentCopy: HeliopauseCopy | null = null;
+  private currentCopy: ChapterCopyBlock | null = null;
   /** Slug of the chapter whose copy is shown (for the data-slug attribute). */
   private currentSlug: string | null = null;
 
@@ -116,7 +160,7 @@ export class VChapterCopy extends LitElement {
       this.clearCopy();
       return;
     }
-    const copy = heliopauseCopyForSlug(active.slug);
+    const copy = copyForChapter(active);
     if (copy !== null) {
       this.setCopy(active.slug, copy);
     } else {
@@ -125,7 +169,7 @@ export class VChapterCopy extends LitElement {
   }
 
   private onTransition = (event: ChapterTransitionEvent): void => {
-    const copy = heliopauseCopyForSlug(event.chapter.slug);
+    const copy = copyForChapter(event.chapter);
     if (copy === null) return; // Not a chapter this story handles
     if (event.to === 'held') {
       this.setCopy(event.chapter.slug, copy);
@@ -140,7 +184,7 @@ export class VChapterCopy extends LitElement {
     }
   };
 
-  private setCopy(slug: string, copy: HeliopauseCopy): void {
+  private setCopy(slug: string, copy: ChapterCopyBlock): void {
     this.currentSlug = slug;
     this.currentCopy = copy;
     this.requestUpdate();

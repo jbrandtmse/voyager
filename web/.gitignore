@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Playwright transient outputs (Story 4.9 L4 visual regression — generated per-run)
+test-results/
+playwright-report/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

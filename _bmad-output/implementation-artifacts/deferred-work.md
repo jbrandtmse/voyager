@@ -116,7 +116,7 @@ The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cle
 - **[1.8 / LOW]** `resolveMainEntry` silent `/src/main.ts` fallback — DEFER to Story 7.x build hygiene.
 - **[1.10 / LOW]** `ClockManager.tick` reclamping at mission end — DEFER (HUD-driven cleanup).
 - **[1.10 / LOW]** `stepDecade` rounding from mid-decade — DEFER to Story 6.5 (qualitative testing).
-- **[1.10 / LOW]** Last-10% chunk prefetch not wired — DEFER to Story 4.3 (explicit handoff per Story 1.10 dev notes).
+- ~~**[1.10 / LOW]** Last-10% chunk prefetch not wired — DEFER to Story 4.3 (explicit handoff per Story 1.10 dev notes).~~ **CLOSED 2026-05-23 by Story 4.3 T2** — `EphemerisService.maybePrefetchNeighbour` fires at the last 10% of the current chunk's window (NFR-P6); `boundaryStalled` getter exposes the cache-miss signal for `<v-speed-multiplier>` auto-cap wiring.
 - **[1.11 / LOW]** HUD `ephemerisService` field vs accessor asymmetry — DEFER (no consumer needs subscribe).
 - **[1.11 / LOW]** `<v-hud-date>.tick` non-finite ET guard — DEFER (latent).
 - **[1.11 / LOW]** `<v-hud>` querySelector caching — DEFER to Story 7.6.
@@ -509,7 +509,7 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 ## Deferred from: code review of story-3-7-l2-js-vs-spice-attitude-consistency-validation-in-ci (2026-05-22)
 
-### [3.7 / HIGH] Story 3.1 bake cadence insufficient for V2 Saturn peak imaging — L2 gate fires RED (Rule 5 NFR tripwire, intended outcome)
+### ~~[3.7 / HIGH] Story 3.1 bake cadence insufficient for V2 Saturn peak imaging — L2 gate fires RED (Rule 5 NFR tripwire, intended outcome)~~ — CLOSED by Story 4.0 (2026-05-22): `ck_sample._build_window_grid` amended to path (c) variable cadence — 1-sec inside CA ±1hr, 5-sec across ±2-day band; epics.md Story 3.1 AC1 amended in parallel per Rule 5. V2 Saturn gate closes (worst-case bus angular error verified < 1 mrad post-amendment via Story 4.0 AC8 integration smoke).
 
 **Severity:** HIGH (CI will be RED on first push; canonical Rule 5 NFR tripwire response per user decision 2026-05-22)
 **Surfaced by:** Story 3.7 lead-driven AC8 smoke (T5.2 — `local-real-data-output.txt`); Story 3.7 code review § EC-10 + AA-18 (load-bearing tripwire).
@@ -548,7 +548,7 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 - Story 3.7 Dev Agent Record § Issues Encountered #1.
 - Original cadence calibration: Story 3.1 amendment 2026-05-21 (cycle-log entry).
 
-### [3.7 / HIGH] Story 3.1 `_build_window_grid` does not emit `platform_attitude` VTRJs for type-1 PDS Rings ISS SEDR CKs
+### ~~[3.7 / HIGH] Story 3.1 `_build_window_grid` does not emit `platform_attitude` VTRJs for type-1 PDS Rings ISS SEDR CKs~~ — CLOSED by Story 4.0 (2026-05-22): `ck_sample.bake_attitude` now detects type-1 coverage shape via `_is_type1_coverage` and harvests discrete in-band knot ETs via `_extract_knot_ets_in_band` (path (a) from this entry). Explicit-ET VTRJs are emitted for `platform_attitude` per ADR-0004 § Body Layout per Kind column-0 ET storage. Synthetic-fixture fast-tier test added in `bake/tests/test_ck_sample.py`. Story 3.7 L2 platform comparison gate activates automatically as `n_platform_synthesized` drops to zero (verified via AC8 integration smoke).
 
 **Severity:** HIGH (load-bearing — the platform gate is inactive until this lands)
 **Surfaced by:** Story 3.7 dev (Decision D4); confirmed via Story 3.7 lead's local AC8 smoke (`[L2] platform records: compared=0 synthesized-skip=3000`).
@@ -581,28 +581,28 @@ When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` dro
 **Resolution:** Add a CI step (post-bake, pre-`test-web`) that records the bake job's elapsed time and asserts a target (e.g., 4 min for bake, leaving 1 min headroom for test-web). OR: add a measurement step that surfaces the actual timing in the CI log so the lead can manually verify each PR. The auto-trim path (lower N) is harder to wire up reactively in CI; the simpler defense is the measurement + manual trim.
 **Routing:** Story 7.x CI-hardening pass, or fold into the Story 3.1 hotfix above (since the cadence change will also shift CI timing measurably). LOW urgency until the Story 3.1 amendment lands (because the current `bake` step is fast on the existing 5-sec cadence; the hotfix's 1-sec cadence path may push timing).
 
-### [3.7 / LOW] `l2_attitude_validation.py` carries unused runtime helpers (`_sample_uniform_in_intervals`, `_intersect_two_coverages`)
+### ~~[3.7 / LOW] `l2_attitude_validation.py` carries unused runtime helpers (`_sample_uniform_in_intervals`, `_intersect_two_coverages`)~~ — CLOSED by Story 4.0 (2026-05-22): both helpers dropped from `bake/src/l2_attitude_validation.py` (path (a) recommendation), along with their `bake/tests/test_l2_attitude_validation.py` unit tests (Decision D1's `random.Random.sample`-on-discrete-knot-set design left them unused at runtime). 1 helper test entry removed; 2 helpers gone; ~80 LOC dropped.
 
 **Severity:** LOW (dead code at runtime; used only in tests)
 **Surfaced by:** Story 3.7 code review § BH-1 + BH-2.
 **Symptom:** `_sample_uniform_in_intervals` (lines 303-342) and `_intersect_two_coverages` (lines 261-286) are defined + tested but never called in `generate_fixture_records`. They were drafted to support the original AC1 "uniform-on-continuous-band" sampling strategy; Decision D1 (forced by `tol=0` type-1 CK constraint) pivoted to `random.Random.sample` on a discrete knot set, leaving these helpers unused at runtime. The module docstring around line 303 documents their semantics; the unit tests still exercise them.
 **Resolution:** Either (a) drop both helpers + their unit tests (cleanest; removes ~80 lines + 8 tests), or (b) keep them as reusable interval-math primitives and add a docstring note that they're intentionally not called by the current generator (defensive future-use). Recommendation: (a) — Story 7.x kernel-drift report or a future refactor can re-introduce them if needed.
 
-### [3.7 / LOW] `_bus_quat_at` does not catch `SpiceyError`
+### ~~[3.7 / LOW] `_bus_quat_at` does not catch `SpiceyError`~~ — CLOSED by Story 4.0 (2026-05-22): `_bus_quat_at` now wraps `spice.pxform` in `try / except SpiceyError: return None` mirroring `_platform_quat_at`'s pattern. Paired closure with `n_dropped_bus`-unreachable-branch LOW below.
 
 **Severity:** LOW (the in-band knot filter guarantees no out-of-coverage ETs reach this function; defensive guard only)
 **Surfaced by:** Story 3.7 code review § EC-2.
 **Symptom:** `_bus_quat_at` (lines 345-375) calls `spice.pxform(REFERENCE_FRAME, frame, et)` without a try/except. The function's contract assumes the ET lies inside bus FK frame coverage — true today because `platform_coverage ⊆ bus_coverage` for encounter windows (per the inline comment line 538). If a future kernel update breaks that subset relationship, `pxform` raises and the entire fixture generator aborts with no diagnostic context.
 **Resolution:** Mirror `_platform_quat_at`'s pattern — wrap in `try/except SpiceyError: return None` and let the caller skip the record + increment `n_dropped_bus`. One-line guard.
 
-### [3.7 / LOW] `n_dropped_bus` counter branch is unreachable today
+### ~~[3.7 / LOW] `n_dropped_bus` counter branch is unreachable today~~ — CLOSED by Story 4.0 (2026-05-22): paired with `_bus_quat_at` SpiceyError-guard closure above; the `if bus_quat is None` branch at line 601 is now live and the `n_dropped_bus` counter correctly increments on bus FK frame coverage gaps.
 
 **Severity:** LOW (defensive code; counter is correctly incremented when EC-2 lands)
 **Surfaced by:** Story 3.7 code review § BH-7.
 **Symptom:** `_bus_quat_at` cannot return `None` (it raises on failure rather than returning None), so the `if bus_quat is None` branch at line 601 is dead. Pairs with EC-2: once `_bus_quat_at` is amended to return None on SpiceyError, this branch becomes live.
 **Resolution:** Land together with EC-2.
 
-### [3.7 / LOW] `chosen_ets` does not dedupe `in_band_knots`; `rng.sample` would raise on duplicates
+### ~~[3.7 / LOW] `chosen_ets` does not dedupe `in_band_knots`; `rng.sample` would raise on duplicates~~ — CLOSED by Story 4.0 (2026-05-22): `in_band_knots = sorted(set(...))` defensive dedup added before the `rng.sample` call, hardening against future kernel-dedup pipeline changes that could leave duplicate knot ETs.
 
 **Severity:** LOW (PDS Rings type-1 CKs do not produce duplicate-knot intervals in practice)
 **Surfaced by:** Story 3.7 code review § BH-6.
@@ -623,10 +623,191 @@ When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` dro
 **Symptom:** `attitude-l2-fixture.test.ts:56`: `fixturePresent = existsSync(FIXTURE_PATH) && existsSync(MANIFEST_PATH)`. Doesn't verify the per-body `.bin.br` chunks. A partial-copy scenario (manifest + fixture present, chunks missing) would pass the gate and surface as a `prefetchAttitudeChunks` failure (the chunk-loader's 404 response). Failure mode is loud but late.
 **Resolution:** Optionally extend `fixturePresent` to also verify at least one attitude chunk exists on disk. Defensive only; CI never produces partial artifacts.
 
-### [3.7 / LOW] `n_platform_synthesized` is informational only — no regression gate
+### ~~[3.7 / LOW] `n_platform_synthesized` is informational only — no regression gate~~ — CLOSED by Story 4.0 (2026-05-22): `web/tests/attitude-l2-fixture.test.ts` now asserts `expect(n_platform_synthesized).toBe(0)` (paired with `expect(n_platform_compared).toBeGreaterThan(0)`) inside the existing `describe.skipIf(!fixturePresent)` block, so the gate stays green when the fixture is absent locally but fires on any future regression in `bake/src/ck_sample.py` that re-breaks type-1 platform VTRJ emission. Activated by AC2's type-1 CK platform VTRJ emission landing.
 
 **Severity:** LOW (the L2 gate becomes active for platform automatically once Story 3.1 platform VTRJs are emitted)
 **Surfaced by:** Story 3.7 code review § EC-9.
 **Symptom:** When Story 3.1 is amended (per `[3.7 / HIGH]` #2 above), `n_platform_synthesized` should drop to zero and `n_platform_compared` should rise to match the fixture's platform record count. There is no test-side assertion enforcing this — the diagnostic is informational. A regression in Story 3.1 that re-broke platform VTRJ emission would silently slip past Story 3.7's L2 gate (the bus assertion would still pass; platform would silently revert to `n_platform_synthesized > 0`).
 **Resolution:** After Story 3.1's platform VTRJ amendment lands, add a regression assertion in `attitude-l2-fixture.test.ts`: `expect(n_platform_synthesized).toBe(0)` (or `expect(n_platform_compared).toBeGreaterThan(0)`). One-line follow-up.
 
+## Deferred from: code review of story-4-0-epic-3-deferred-cleanup (2026-05-22)
+
+### [4.0 / LOW] `_extract_knot_ets_in_band` boundary tests don't pin `band_lo == knot` / `band_hi == knot` exact-equality cases
+
+**Severity:** LOW (filter is inclusive `band_lo <= a <= band_hi` and behaves correctly at the boundary; coverage gap only)
+**Surfaced by:** Story 4.0 code review § EC-1.
+**Symptom:** `bake/src/ck_sample.py:_extract_knot_ets_in_band` uses inclusive bounds `band_lo <= a <= band_hi`. The dev test `test_extract_knot_ets_in_band_filters_to_band` covers knots at 950 / 1050 inside `(900, 1100)` but does NOT pin either boundary at strict equality. The QA gap test `TestVariableCadenceBandEdges.test_inner_band_endpoint_is_present_at_plus_half_width` covers the inner/outer seam in `_build_window_grid` but not the type-1 `_extract_knot_ets_in_band` boundary. If a future kernel update places a knot EXACTLY at `closest_approach ± HALF_WIDTH_1MIN`, behavior is well-defined but untested.
+**Resolution:** Add two one-line tests pinning `band_lo == knot` and `band_hi == knot` boundary cases. Defensive only.
+**Routing:** Epic 7 polish pass, OR fold into the next bake-tier story that touches `_extract_knot_ets_in_band` (e.g., Story 7.x kernel-drift verifier).
+
+### [4.0 / LOW] `web/src/dev/ephemeris-perf.ts` ET-span computation picks attitude file as first/last entry post-Story-4.0
+
+**Severity:** LOW (DEV-only harness; not production; not in CI)
+**Surfaced by:** Story 4.0 code review § BH-5b (post-`ephemeris-service.ts` filter fix audit).
+**Symptom:** `web/src/dev/ephemeris-perf.ts:98-103` iterates ALL `body.files` (including `bus_attitude` + `platform_attitude` entries) and uses `body.files[0].timeRangeEt[0]` / `body.files[body.files.length - 1].timeRangeEt[1]` for ET-span computation. Post-Story-4.0 mixed-kind body shapes, the first declared entry for V1/V2 may be an attitude file (or an out-of-order trajectory entry) — the perf harness's ET sampler reports the wrong span and the perf numbers are no longer comparable to pre-Story-4.0 baselines. DEV-only harness; no AC or NFR impact.
+**Resolution:** Mirror the production fix from `ephemeris-service.ts:67` — filter `body.files` to `kind === 'trajectory'` before computing the ET span. Two-line change.
+**Routing:** Story 6.x perf-pass (when the perf harness gets re-baselined for Epic 4/5 trajectory shapes), OR Epic 7 polish.
+
+### [4.0 / LOW] ADR-0004 § Body Layout per Kind cadence example numbers are triply stale (still cites pre-Story-3.1 "10-sec / 1-min / daily" schedule)
+
+**Severity:** LOW (the ADR's structural commitment — explicit-ET column-0 storage + `cadence_seconds` informational — IS honored by Story 4.0; only the descriptive example numbers are stale)
+**Surfaced by:** Story 4.0 code review § AA-1 (Rule 6 ADR cross-check).
+**Symptom:** `docs/adr/0004-custom-vtrj-binary-over-json-protobuf-arrow-parquet.md:53` describes attitude body cadence as "Cadence is **variable per file** (10-sec near closest approach, 1-min through encounter, daily during CK-covered cruise — the mission cadence schedule)." Those numbers are the pre-Story-3.1 original AC1 schedule; Story 3.1 amendment 2026-05-21 superseded them with uniform 5-sec, and Story 4.0 amendment 2026-05-22 superseded again with 1-sec ±4hr inner + 5-sec ±2-day outer. The ADR text is now triply stale. NOT a Rule 6 HIGH because the structural commitment (explicit-ET column-0, informational `cadence_seconds`) is preserved by both amendments; only the descriptive example numbers diverged.
+**Resolution:** Amend ADR-0004 § Body Layout per Kind to cite the current cadence schedule (or — better — phrase the description abstractly: "Cadence is variable per file and per bake-time policy; see `bake/src/ck_sample.py:_build_window_grid` for the current schedule") so the ADR doesn't need to be re-amended at every cadence-schedule change.
+**Routing:** Bundle with the next story that touches the bake-tier cadence schedule (Story 7.x kernel-drift or a future cadence-tuning story), OR fold into the next ADR-housekeeping pass.
+
+## Deferred from: Story 4.0 lead-driven Chrome DevTools MCP smoke (2026-05-22)
+
+### [4.0-smoke / LOW] Play button overlaps the mission scrubber at the lower-left HUD chrome region
+
+**Severity:** LOW (pre-existing visual layout defect from Stories 1.9 / 1.10 / 1.11; not a Story 4.0 regression — Story 4.0 touched zero UI layout code)
+**Surfaced by:** Story 4.0 lead-driven Chrome DevTools MCP smoke (user-reported during the smoke; confirmed by bbox probe).
+**Symptom:** Bounding-box probe of `/c/v1-jupiter` at 1116×866 viewport returns:
+
+- `<v-play-button>` (or its inner button): `x=33.47, y=788.53, width=44, height=44` → right=77.47, bottom=832.53
+- `<v-timeline-scrubber>`: `x=33.47, y=820.53, width=1049.06, height=12` → right=1082.53, bottom=832.53
+
+Both horizontal AND vertical bounding boxes overlap — the play button occupies the same lower-left rectangle (y=820–832) that the leftmost segment of the scrubber track lives in. Visually the play button sits on top of the scrubber track. Confirmed in `mcp-v1-jupiter-fullpage.png` (smoke evidence).
+
+**Diagnosis:** The HUD layout style stack (`web/src/styles/`) positions the play button and the scrubber both anchored to the bottom-left of the viewport, with no horizontal offset to clear the play button's 44px width from the scrubber's left edge. The defect predates Epic 4: Stories 1.9 (scrubber) and 1.10 (play button) were authored independently and the chrome-positioning conflict was never visually QA-gated.
+
+**Resolution paths:**
+
+- (a) Shift the play button to a fixed offset (e.g., `bottom: 24px; left: 24px`) and shift the scrubber to a left-of-play offset (e.g., `bottom: 12px; left: 88px`); preserves both controls at their current visual hierarchy.
+- (b) Move the play button into the scrubber's left-margin area as a sibling element with explicit z-index ordering; the scrubber track shortens by 44px to make room.
+- (c) Stack vertically: play button above the scrubber on its own row.
+
+Recommendation: (a) — least intrusive, preserves the existing visual hierarchy.
+
+**Routing:** **Story 6.2** (`<v-hud>` dismiss/restore and final HUD compaction polish per Epic 6). The "final HUD compaction polish" scope explicitly covers HUD-element layout fixes like this one. If the defect is visible enough to embarrass the launch, an earlier hotfix story can pick it up, but Story 6.2 is the natural landing.
+
+### [4.0-smoke / LOW] Top-right HUD chrome density — date readout visually clusters with chapter-index + help icons
+
+**Severity:** LOW (pre-existing visual layout defect from Stories 1.11 / 2.3 / 2.8; not a Story 4.0 regression)
+**Surfaced by:** Story 4.0 lead-driven Chrome DevTools MCP smoke (user-reported; confirmed in screenshot).
+**Symptom:** At 1116×866 viewport on `/c/v1-jupiter`, the top-right corner stacks three elements with minimal spacing:
+
+- Date readout (e.g., "1979-03-05 12:05") from `<v-hud>`
+- `<v-help-overlay>` icon at `x=1006.53, y=33.47, w=32, h=32` (right=1038.53)
+- `<v-chapter-index>` icon at `x=1050.53, y=33.47, w=32, h=42` (left=1050.53)
+
+Help icon ends at right=1038.53 and chapter-index starts at left=1050.53, leaving a 12px gap between the two icons themselves. The visual overlap reported by the user is between the date readout text and the icon column — the date text rendering extends rightward toward the icons such that on this viewport size the negative space reads as "overlap." Worse at narrower viewport widths.
+
+**Diagnosis:** Three independent HUD sub-elements (date readout from Story 1.11, help icon from Story 2.8, chapter-index icon from Story 2.3) each position themselves with `position: fixed; top: 24px; right: <variable>` without coordinating against each other through the HUD layout system. As more HUD chrome lands (e.g., `<v-attitude-indicator>` from Story 3.6, which appears in the top-right region per the current shadow-DOM mount; the future scrub-time-relative readout from Story 4.4), the density problem compounds.
+
+**Resolution paths:**
+
+- (a) Move all top-right HUD chrome into a single flex/grid container in `<v-hud>` with explicit gap + responsive collapse rules (recommended; replaces the per-component fixed-positioning).
+- (b) Per-component padding tuning until visual gaps are acceptable at the project's target viewport range (1024×768 through 1920×1080); brittle, breaks on next-component-addition.
+
+Recommendation: (a) — same scope window as the lower-left fix (`[4.0-smoke / LOW]` #1 above); a HUD-positioning refactor in Story 6.2 should handle both corners together.
+
+**Routing:** **Story 6.2** (`<v-hud>` dismiss/restore and final HUD compaction polish per Epic 6). Same natural-landing as `[4.0-smoke / LOW]` #1; ship both together.
+
+**Linked evidence:** `_bmad-output/implementation-artifacts/4-0-smoke-evidence/mcp-v1-jupiter-fullpage.png`, `_bmad-output/implementation-artifacts/4-0-smoke-evidence/mcp-smoke-summary.md`.
+
+---
+
+## Story 4.1 deferrals (locked in by code review on 2026-05-22)
+
+The following LOW-severity items surfaced during Story 4.1 code review (`/epic-cycle 4` code-review stage). All are defensive-only; no current consumer triggers any of them.
+
+1. **[4.1 / LOW]** `ViewFrameService` identity-transform sentinel — the wrapper object is `Object.freeze`'d but the inner `Float64Array` (`originOffsetWorld`) is NOT frozen. A future consumer that writes through `transform.originOffsetWorld[0] = 5` would silently corrupt the shared cross-frame identity sentinel, NaN-poisoning every subsequent identity-branch frame.
+
+   **Why deferred:** every current consumer (RenderEngine.tick at `web/src/render/render-engine.ts:293-299` is the only one) READS the array; nothing writes. Story 4.2's VoyagerCameraController will also be read-only against this surface. The defensive hardening (e.g. `Object.freeze(new Float64Array(...))` if Float64Array supported it, or always returning a fresh small array even on the identity branch) is correct but costs a per-frame allocation in the cruise hot path — undesirable on every-frame-cruise.
+
+   **Suggested resolution:** add a Vitest defensive guard test in `view-frame.test.ts` that attempts a write to `originOffsetWorld[0]` after retrieving the identity transform and asserts the next call still returns zero — would surface any future consumer-side write at test time without requiring a runtime freeze.
+
+   **Routing:** any future story that touches `view-frame.ts` (Story 4.2 VoyagerCameraController is the natural landing — it composes ViewFrame's output into camera state).
+
+2. **[4.1 / LOW]** `ViewFrameService` does not guard against NaN / Infinity components from `EphemerisService.getPosition`. The `alpha * bodyPos[i]` multiplication propagates `NaN` / `±Infinity` straight through to the worldGroup transform, which then NaN-poisons the floating-origin Float32 cast.
+
+   **Why deferred:** the bake's invariants prevent NaN/Infinity in chunk samples (bake/tests/test_bake_defense.py finite-vector checks), and the runtime ChunkLoader doesn't synthesize samples. EphemerisService.getPosition contract is `WorldVec3 | null`; null already routes to identity. A future kernel-data-corruption incident or a manifest-vs-chunk mismatch could surface this — pin as documented behaviour via `view-frame-qa-gaps.test.ts:111-132` so a future hardening pass with `Number.isFinite` gates is visible at test time.
+
+   **Suggested resolution:** add an `isFinite(bodyPos[i])` short-circuit to the identity branch in `ViewFrameService.getTransform` before the multiplication — defensive cost: 3 number checks per non-cruise frame.
+
+   **Routing:** any future hardening pass on `view-frame.ts`, or the next QA/code-review iteration if an MCP smoke ever surfaces a NaN-poisoned worldGroup state.
+
+
+
+## Deferred from: code review of 4-2-voyagercameracontroller-manual-override-and-restore-default (2026-05-22)
+
+The following items surfaced during Story 4.2 code review (`/epic-cycle 4` code-review stage) and were not auto-resolved inline. MED-1 / LOW-1 / LOW-3 / LOW-6 from the same review WERE auto-resolved into `web/src/render/voyager-camera-controller.ts`; only the items below remain.
+
+1. **[4.2 / MED]** Pinch-to-zoom (two-finger touch) not implemented (AC1 partial coverage).
+
+   **What's missing:** AC1 names "wheel/pinch → zoom (log-scale step per notch)". The controller wires `wheel` against the canvas but does NOT handle two-finger touch pinch. The internal `GestureState` is single-pointer (`pointerId: number`, not a Map), so multi-touch isn't tracked. Touch-device users have no zoom path today.
+
+   **Why deferred:** Implementing pinch requires extending the gesture-state machine to track 2+ pointer IDs simultaneously (compute the inter-pointer distance delta as the zoom factor), which is a non-trivial design change beyond a code-review inline patch. The Pointer Events primitive already plumbs `pointerType: 'touch'` + `pointerId`, so the wiring exists; the controller's state machine needs extension.
+
+   **Suggested resolution:** Either (a) amend AC1 to scope-cut pinch to a follow-up story (e.g. 4.5 or a dedicated touch-coverage story in Epic 6) with the rationale that touch is rare for Voyager's desktop-first audience, OR (b) author a follow-up story that extends `GestureState` to track multiple active pointers and computes the pinch-distance delta. Decision belongs to the lead; both paths are valid per the project's "no pre-declared scope cuts" rule.
+
+   **Routing:** Lead to triage at Story 4.2 close or Epic 4 retro; if (b), add to Story 4.5 / 4.7 scope or a dedicated Epic 6 story.
+
+2. **[4.2 / LOW]** No probe test for non-degenerate scene matrix at zoom clamp bounds (AC5 partial coverage).
+
+   **What's missing:** AC5 says "verified by a probe test at both clamp distances (camera.position magnitude == clamp bound; render produces a non-degenerate scene matrix)". Existing tests pin that wheel zoom can't push the camera past the clamps (`web/src/render/voyager-camera-controller.test.ts:166-187`), but no test positions the camera AT the clamp distances and asserts `camera.matrixWorldInverse` / `camera.projectionMatrix` have finite, non-NaN entries.
+
+   **Why deferred:** The reverse-Z precision-stability guarantee is structurally inherited from Story 1.5's reverse-Z precision suite (`render-engine.test.ts` precision section). The MISSING probe test is a defensive belt-and-braces verification that would have caught matrix corruption AT THE CLAMP BOUNDS specifically — but Story 1.5 already pins this for the broader reverse-Z range, and Story 4.2's clamps are well inside that range. Code-review LOW because the underlying precision guarantee is intact.
+
+   **Suggested resolution:** Add a small unit test in `voyager-camera-controller.test.ts` that constructs a camera, positions it at exactly `MIN_ZOOM_DISTANCE_KM` and `MAX_ZOOM_DISTANCE_KM` from origin, calls `camera.updateMatrixWorld()`, and asserts every element of `camera.matrixWorldInverse.elements` is `Number.isFinite`. ~10 lines; trivial to add but adds belt-and-braces redundancy on a Story-1.5-guaranteed surface.
+
+   **Routing:** Any future story that touches `voyager-camera-controller.ts`, or a defensive-test sweep pass at Epic 4 retro.
+
+## Deferred from: code review of Story 4.3 (2026-05-23)
+
+The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stub-EphemerisService → AC7 Rule-5 amendment; F2 ADR-0006 UASTC-vs-ETC1S → ADR-0006 Story-4.3 amendment block). The four LOW items below were deferred per the standard X.0 deferred-work pattern.
+
+1. **[4.3 / LOW]** `EphemerisService.boundaryStalled` is service-wide; per-body loop can clear stale flag.
+
+   **What's the issue:** The flag is set true on a `getStateAt` cache-miss and cleared on ANY successful `getStateAt`. In the per-frame loop (`CelestialBodies.tick` iterates 10 cruise bodies; `MissionPhaseFSM.update` iterates 2 spacecraft × 4 gas giants = 8 distance queries) a successful body-B lookup masks a stalled body-A. The QA test pins this as the explicit contract (`web/src/services/ephemeris-service.qa.test.ts:260-291`).
+
+   **Why deferred:** The speed-multiplier's primary auto-cap signal is `chunkLoader.pendingCount` (service-wide, ungated by body) per Story 1.10. `boundaryStalled` is a narrower per-frame signal — and the `<v-speed-multiplier>` consumer wire-up to read it is itself deferred (story 4.3 Dev Notes line 263). Until that wire-up lands the per-body-vs-service-wide distinction has no user-visible effect.
+
+   **Suggested resolution:** Replace the scalar flag with a `Map<bodyId, boolean>` or a `Set<bodyId> stalledBodies`; the getter returns `stalledBodies.size > 0`. Or: keep the scalar but compute it as `OR over the per-frame queries` instead of last-write-wins. ~15 lines. Belongs to the same future story that wires `<v-speed-multiplier>` to the narrower signal.
+
+   **Routing:** A future story that wires `<v-speed-multiplier>` to `ephemerisService.boundaryStalled` (likely Epic 4 Story 4.5 or 4.6 when the encounter chapter actually exercises the cache-miss path).
+
+2. **[4.3 / LOW]** `GPUCapabilityProbe.adequateForEightK` is a hand-coded `MAX_TEXTURE_SIZE >= 16384` heuristic.
+
+   **What's the issue:** The heuristic uses `MAX_TEXTURE_SIZE >= 16384` as a proxy for "1 GB+ VRAM, can host an 8K KTX2 layer." Defensible for desktop GPUs (every 2014+ desktop class reports 16384+) but breaks down for: (a) high-memory mobile chips (Apple A-series, Snapdragon 8-gen) that report 16384 but have memory pressure from the OS / browser frame; (b) Intel integrated GPUs that report 16384 with shared system memory; (c) embedded GPUs that may misreport.
+
+   **Why deferred:** Story 4.3's Out-of-Scope clause explicitly locks the 1 GB threshold with a hand-coded heuristic and defers "a proper memory-aware tier selector" to Epic 6 polish / Story 7.x perf-hardening. The Story 4.3 amendment to AC4 (8K → 4K source-cap) makes the `adequateForEightK` field functionally a no-op for the current ship — the 4K tier is what the runtime requests, and `adequateForEightK` is the gate the SOI-entry subscriber checks anyway (so a `false` value keeps the cruise 2K active).
+
+   **Suggested resolution:** WebGPU's `requestAdapterInfo()` exposes a `description` field with vendor / device strings (Chrome behind a flag as of 2026; Safari and Firefox catching up). Combined with `GPUSupportedLimits.maxBufferSize`, a future GPUCapabilityProbe iteration could classify the GPU tier more reliably. For Chromium-only deployments `WEBGL_debug_renderer_info`'s `UNMASKED_RENDERER_WEBGL` + a vendor lookup table is the interim path.
+
+   **Routing:** Epic 6 polish (tier-aware texture selector) OR Story 7.x perf-hardening (memory budgeting). Whichever lands first.
+
+3. **[4.3 / LOW]** `web/tests/build-textures-e2e.test.ts` writes test fixtures into the real `web/textures-src/gas-giants/` directory.
+
+   **What's the issue:** Lines 132-135 + 177-180 of the E2E test compute `REPO_TEXTURES_SRC = join(__dirname, '..', 'textures-src', 'gas-giants')` and write a `${Date.now()}-keyed-slug-4k.png` fixture into the REAL repo source tree before invoking `buildOne`. The `finally` block removes the file, but a test-process crash between `writeFixturePng` (line 135) and the `finally` (line 154) leaks the fixture as an LFS-tracked PNG into the repo (per `.gitattributes` `web/textures-src/**/*.png filter=lfs`).
+
+   **Why deferred:** Test-only hazard. The `finally`-block cleanup is the right discipline; the leak window is narrow (test process must crash WITHIN the toktx + sharp invocation, which is rare). The build pipeline E2E test is itself slow-tier-gated by toktx availability, so it runs infrequently. No production impact.
+
+   **Suggested resolution:** Refactor `buildOne` / `resolveSourcePath` to accept an optional `texturesSrcRoot` argument (default to the module-scope `TEXTURES_SRC` constant for backward compat). The E2E test then passes an `os.tmpdir()`-rooted directory; no fixture lands in the real source tree. ~15 lines on the script side, ~5 lines on the test side. Trivial when somebody touches `build_textures.ts` next.
+
+   **Routing:** Any future story that touches `web/scripts/build_textures.ts` (e.g. when 8K source data becomes available for a future tier upgrade), or a test-hygiene pass.
+
+4. **[4.3 / LOW]** `bake_trajectories.py:758` print-statement `total_vtrjs` drifts when moons + encounter bands emit.
+
+   **What's the issue:** Line 758 prints `total_vtrjs = total_segments + len(CELESTIAL_BODIES)` — this count was correct before Story 4.3. Story 4.3 adds 18 encounter-band records (6 encounters × 3 bands) plus up to 13 moon trajectory chunks (when satellite SPKs are furnished). The bake's summary print line under-counts the actual emit by up to 31 chunks.
+
+   **Why deferred:** Cosmetic — the manifest output is correct, the bake produces the right files, only the human-readable summary line drifts. No automation reads the print line (bake CI asserts on file presence + SHA, not on the print text). Story 4.3 didn't touch this line because the test contract (manifest correctness) was unaffected.
+
+   **Suggested resolution:** Compute `total_vtrjs = sum(len(b.files) for b in body_records)` at the bottom of the bake loop, immediately before the print. ~2 lines. Trivial when somebody next touches the bake summary path.
+
+   **Routing:** Any future bake-pipeline story (Epic 4 Story 4.6 / 4.7 chapter content or Epic 5 PBD bake extensions will likely touch this code path).
+
+---
+
+## Deferred from: code review of story 4-6 (2026-05-23)
+
+1. **[4.6 / LOW]** `MISSION_FACTS.md` V2J interior-sweep paragraph uses a `MM/DD` slash format once.
+
+   **What's the issue:** The new "Voyager 2 Jupiter encounter — interior sweep timeline" section's closing paragraph reads "the actual span from Callisto (07/08 12:21 UT) to Io (07/09 23:17 UT) is roughly 35 hours." All canonical instants elsewhere in the file (and in the same section's table) use full ISO-8601 timestamps. This single paragraph uses `07/08` / `07/09` US-style slash dates without a year, inside parenthetical commentary.
+
+   **Why deferred:** The QA gap-8 anti-`MM/DD/YYYY` defense regex requires a year (`\b\d{2}\/\d{2}\/\d{4}\b`), so this style-inconsistency is outside the citation-surface contract the test pins. The factual content is correct (both times match the ISO table rows above it). Pure style nit; not a regression risk.
+
+   **Suggested resolution:** Either restate as "Callisto (1979-07-08 12:21 UT)" / "Io (1979-07-09 23:17 UT)" or drop the parenthetical entirely (the table immediately above already cites both instants in ISO form). Trivial when MISSION_FACTS is next edited.
+
+   **Routing:** Any future MISSION_FACTS editorial pass (Story 4.7's V2U / V2N additions are the obvious next opportunity).

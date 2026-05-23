@@ -128,7 +128,8 @@ const SUPPORTED_VERSION = 1;
 
 // CK structure IDs for the four attitude body classes per the Story 3.1 bake.
 // Mirror of `bake/src/vtrj_writer.py:ATTITUDE_BODY_IDS`. Trajectory IDs (NAIF
-// SPK IDs -31, -32, 10, 1..8, 301) are the complementary set; the union is
+// SPK IDs -31, -32, 10, 1..8, 301, plus outer-system moons 501-504/606-608/
+// 701-705/801 added by Story 4.11) are the complementary set; the union is
 // `ALLOWED_BODY_IDS` in the Python writer.
 const ATTITUDE_BODY_IDS = new Set<number>([-31000, -31100, -32000, -32100]);
 

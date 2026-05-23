@@ -472,6 +472,11 @@ export class VHelpOverlay extends BaseElement {
           <ul class="shortcuts">
             ${this.renderShortcut([['H']], 'Toggle HUD')}
             ${this.renderShortcut([['G']], 'Toggle Golden Record audio')}
+            ${/* Story 4.10 BUG-008 fix — R restores the default camera framing
+                (Story 4.2 AC3 + AC7 / FR33). The shortcut is implemented in
+                `boot/camera-restore-affordance.ts`; this entry makes it
+                discoverable per Story 2.8's "full inventory" promise. */ ''}
+            ${this.renderShortcut([['R']], 'Restore default camera view')}
             ${this.renderShortcut([['?']], 'Open this help overlay')}
             ${this.renderShortcut([['Esc']], 'Close any overlay')}
           </ul>

@@ -97,7 +97,32 @@ describe.skipIf(!fixturePresent)(
     }> => {
       const { brotliDecompressSync } = await import('node:zlib');
 
+      // Story 4.0 amendment: the test prefetches ALL attitude chunks at
+      // once so subsequent `getBusQuat` / `getPlatformQuat` calls hit the
+      // synchronous `chunkLoader.peek` path. Story 4.0 AC2's type-1
+      // platform-VTRJ emission grows the attitude-file count to 13 (was 9
+      // pre-Story-4.0), which exceeds the production `DEFAULT_LRU_CAPACITY`
+      // of 12 — the first-prefetched chunk gets evicted by the 13th and
+      // `peek` returns undefined for it, causing 500 spurious `null` bus
+      // quaternion returns. Bumping the test capacity to comfortably fit
+      // every attitude file (and a few trajectory chunks if a future test
+      // shares the loader) keeps the prefetch pattern intact. The
+      // production LRU sizing is a separate question routed to the
+      // `[3.2 / LOW]` deferred-work item (decodedByUrl + LRU eviction
+      // policy), to be revisited at Story 6.x perf-pass or post-Epic-5
+      // when the per-encounter file count is final.
+      const attitudeFileCount = manifest.bodies.reduce(
+        (acc, body) =>
+          acc +
+          body.files.filter(
+            (f) => f.kind === 'bus_attitude' || f.kind === 'platform_attitude',
+          ).length,
+        0,
+      );
+      const testLruCapacity = Math.max(32, attitudeFileCount + 4);
+
       const chunkLoader = new ChunkLoader({
+        capacity: testLruCapacity,
         fetchImpl: (async (input: RequestInfo | URL) => {
           const raw = typeof input === 'string' ? input : input.toString();
           // chunk-loader anchors URLs at `${origin}/` (Story 3.3.1). Strip
@@ -311,15 +336,42 @@ describe.skipIf(!fixturePresent)(
           `manifest/fixture drift, or chunk load failed`,
       ).toBe(0);
       // Diagnostic: surface the platform compared / synthesized split.
-      // Synthesized is acceptable (Story 3.1 platform-VTRJ gap); we
-      // log it so a future fix to Story 3.1's `_build_window_grid` is
-      // visibly recognized when the count drops to zero.
-      // eslint-disable-next-line no-console
+      // Pre-Story-4.0 this was informational only ("synthesized is
+      // acceptable") because Story 3.1's `_build_window_grid` did not
+      // emit `platform_attitude` VTRJs for type-1 PDS Rings ISS SEDR CKs
+      // (the strict `lo < hi` filter dropped every zero-duration
+      // interval). Story 4.0 AC2 amended the bake to harvest discrete
+      // knot ETs from type-1 CKs and emit explicit-ET VTRJs; the
+      // runtime AttitudeService consequently returns `'ck'` provenance
+      // for the scan platform inside CK coverage windows, so the gate
+      // below now requires `n_platform_synthesized === 0`.
       console.info(
         `[L2] platform records: compared=${n_platform_compared}, ` +
           `synthesized-skip=${n_platform_synthesized} ` +
-          `(synthesized-skip > 0 indicates Story 3.1 type-1-CK gap)`,
+          `(synthesized-skip > 0 indicates Story 3.1 type-1-CK gap re-broken — ` +
+          `Story 4.0 AC3 regression gate)`,
       );
+
+      // Story 4.0 AC3 — regression gate. After Story 4.0's bake amendments,
+      // `n_platform_synthesized` should be zero (every CK window contributes
+      // platform records). A future regression in `bake/src/ck_sample.py`
+      // that re-breaks type-1 platform VTRJ emission would silently slip past
+      // the bus assertion above; this gate fires immediately on that case.
+      // Guarded by the same `describe.skipIf(!fixturePresent)` block so it
+      // stays green when the fixture is absent locally but fires in CI.
+      expect(
+        n_platform_synthesized,
+        `${n_platform_synthesized} platform records fell back to synthesized ` +
+          `provenance — Story 4.0 AC2's type-1 CK platform VTRJ emission has ` +
+          `regressed. Re-run \`just bake-attitude\` and verify ` +
+          `bake/out/v*_platform_attitude.*.bin.br files are present for ` +
+          `the affected windows.`,
+      ).toBe(0);
+      expect(
+        n_platform_compared,
+        `0 platform records compared — fixture and manifest may be drift; ` +
+          `expected at least one CK-provenance platform record post Story 4.0 AC2.`,
+      ).toBeGreaterThan(0);
 
       // The NFR-P10 gate.
       expect(

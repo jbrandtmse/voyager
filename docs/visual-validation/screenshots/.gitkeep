@@ -1,0 +1,14 @@
+# Story 4.8 — Gravity-assist annotated screenshots land here.
+#
+# The lead captures these via Chrome DevTools MCP per AC1 + AC7.
+# See ../gravity-assists.md for the per-encounter manifest + commentary.
+#
+# Expected files (8 total):
+#   v1-jupiter.png
+#   v2-jupiter.png
+#   v1-saturn.png
+#   v1-saturn-post-encounter.png
+#   v2-saturn.png
+#   v2-uranus.png
+#   v2-neptune.png
+#   v2-neptune-post-encounter.png

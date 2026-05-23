@@ -9,12 +9,37 @@ export interface GPUCapabilities {
   supportsReverseZ: boolean;
   supportsFloatDepth: boolean;
   recommendedTextureTier: '8k' | '4k';
+  /**
+   * Story 4.3 AC4 — `true` iff the GPU likely has the ≥ 1 GB VRAM budget
+   * needed to host an 8K KTX2 planet texture (~21 MB transcoded UASTC, but
+   * the active mip chain + driver overhead lifts the effective footprint
+   * well above the raw asset size — particularly when several bodies are
+   * upgraded simultaneously across an encounter). The story's
+   * Out-of-Scope clause locks the threshold at 1 GB; a proper memory-aware
+   * tier selector is deferred to Epic 6 polish / Story 7.x perf-hardening.
+   *
+   * WebGL2 does NOT expose VRAM directly — there is no
+   * `getParameter(GL_VRAM_SIZE)` equivalent. We approximate via
+   * `MAX_TEXTURE_SIZE`: a GPU reporting ≥ 16384 (the next size class above
+   * the 8192 minimum we need to even host an 8K layer) is empirically a
+   * desktop-class GPU with ≥ 1 GB VRAM (every desktop GPU from the
+   * 2014-onward generation reports 16384+; only mobile/embedded chips and
+   * very old integrated GPUs report 8192 exactly). The heuristic is
+   * intentionally conservative — when in doubt, return `false` and stay on
+   * the 4K tier, honouring NFR-C6 ("silent skip if GPU memory insufficient").
+   */
+  adequateForEightK: boolean;
 }
 
 // Texture-size threshold for the 8k tier. WebGL2 spec requires MAX_TEXTURE_SIZE
 // ≥ 2048; in practice modern desktop GPUs report 16384 or 32768. 8192 is the
 // minimum we need to host an 8k planet texture in a single layer.
 const TIER_8K_THRESHOLD = 8192;
+
+// Story 4.3 AC4 — the next size class above 8192. GPUs reporting 16384 or
+// higher are empirically the desktop-class hardware that satisfies the 1 GB
+// VRAM bar the AC's Out-of-Scope clause locks down.
+const EIGHT_K_VRAM_PROXY_THRESHOLD = 16384;
 
 // Heuristic for reverse-Z support: presence of the EXT_clip_control extension.
 // Three.js r170+ uses this extension under the hood for reversedDepthBuffer,
@@ -27,6 +52,7 @@ const DEFAULT_FAILED_CAPABILITIES: GPUCapabilities = {
   supportsReverseZ: false,
   supportsFloatDepth: false,
   recommendedTextureTier: '4k',
+  adequateForEightK: false,
 };
 
 // Inject the canvas constructor for tests. In production, falls back to the
@@ -72,11 +98,15 @@ export class GPUCapabilityProbe {
     const maxTextureSize = readMaxTextureSize(gl);
     const recommendedTextureTier: '8k' | '4k' =
       maxTextureSize >= TIER_8K_THRESHOLD ? '8k' : '4k';
+    // Story 4.3 AC4 — the 1 GB-VRAM proxy. See `EIGHT_K_VRAM_PROXY_THRESHOLD`
+    // docstring above for why MAX_TEXTURE_SIZE ≥ 16384 is the chosen heuristic.
+    const adequateForEightK = maxTextureSize >= EIGHT_K_VRAM_PROXY_THRESHOLD;
 
     return {
       supportsReverseZ,
       supportsFloatDepth,
       recommendedTextureTier,
+      adequateForEightK,
     };
   }
 }

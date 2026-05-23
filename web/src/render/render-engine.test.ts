@@ -72,12 +72,14 @@ const CAPS_REVERSE_Z_OK: GPUCapabilities = {
   supportsReverseZ: true,
   supportsFloatDepth: true,
   recommendedTextureTier: '8k',
+  adequateForEightK: true,
 };
 
 const CAPS_NO_REVERSE_Z: GPUCapabilities = {
   supportsReverseZ: false,
   supportsFloatDepth: false,
   recommendedTextureTier: '4k',
+  adequateForEightK: false,
 };
 
 describe('RenderEngine — scene graph topology', () => {
@@ -410,6 +412,115 @@ describe('RenderEngine — lifecycle', () => {
         configurable: true,
       });
     }
+    engine.dispose();
+  });
+});
+
+// =============================================================================
+// Story 4.1 AC2 — ViewFrameService composition inside RenderEngine.tick().
+// =============================================================================
+
+describe('RenderEngine — Story 4.1 AC2 ViewFrame composition', () => {
+  it('no viewFrame wired (default) — worldGroup.position unchanged', () => {
+    // Backward-compat probe: the legacy boot path / Story 1.5 tests still
+    // construct RenderEngine without a ViewFrameService. The floating-origin
+    // recenter must remain `-cameraWorldPos` exactly.
+    const cap = makeRendererCapture();
+    const engine = new RenderEngine(CAPS_REVERSE_Z_OK, {}, cap.factory);
+    engine.init(makeFakeCanvas());
+    engine.setCameraPosition(worldVec3(100, 200, 300));
+    engine.tick();
+    expect(engine.worldGroup.position.x).toBeCloseTo(-100, 5);
+    expect(engine.worldGroup.position.y).toBeCloseTo(-200, 5);
+    expect(engine.worldGroup.position.z).toBeCloseTo(-300, 5);
+    engine.dispose();
+  });
+
+  it('viewFrame returns identity (cruise) — worldGroup.position == -cameraWorldPos', () => {
+    const cap = makeRendererCapture();
+    const stubViewFrame = {
+      getTransform: () => ({ originOffsetWorld: worldVec3(0, 0, 0) }),
+    };
+    const stubDirector = { activeChapter: null };
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      {
+        viewFrame:
+          stubViewFrame as unknown as import('../services/view-frame').ViewFrameService,
+        chapterDirector:
+          stubDirector as unknown as import('../services/chapter-director').ChapterDirector,
+      },
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    engine.setCameraPosition(worldVec3(100, 200, 300));
+    engine.tick();
+    expect(engine.worldGroup.position.x).toBeCloseTo(-100, 5);
+    expect(engine.worldGroup.position.y).toBeCloseTo(-200, 5);
+    expect(engine.worldGroup.position.z).toBeCloseTo(-300, 5);
+    engine.dispose();
+  });
+
+  it('viewFrame returns non-zero offset — worldGroup.position composes the shift', () => {
+    // The contract: renderCameraPos = cameraWorldPos + originOffsetWorld;
+    // worldGroup.position = -renderCameraPos. So a positive +500 X shift
+    // pulls the world (-500 - 100) = -600 on X.
+    const cap = makeRendererCapture();
+    const stubViewFrame = {
+      getTransform: () => ({
+        originOffsetWorld: worldVec3(500, -700, 1100),
+      }),
+    };
+    const stubDirector = { activeChapter: null };
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      {
+        viewFrame:
+          stubViewFrame as unknown as import('../services/view-frame').ViewFrameService,
+        chapterDirector:
+          stubDirector as unknown as import('../services/chapter-director').ChapterDirector,
+      },
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    engine.setCameraPosition(worldVec3(100, 200, 300));
+    engine.tick();
+    expect(engine.worldGroup.position.x).toBeCloseTo(-(100 + 500), 5);
+    expect(engine.worldGroup.position.y).toBeCloseTo(-(200 + -700), 5);
+    expect(engine.worldGroup.position.z).toBeCloseTo(-(300 + 1100), 5);
+    engine.dispose();
+  });
+
+  it('viewFrame.getTransform receives the current ET and activeChapter', () => {
+    // Pin the wire-up contract — RenderEngine must pass the
+    // ChapterDirector's currently-held chapter to ViewFrame, not null or
+    // a stale value.
+    const cap = makeRendererCapture();
+    let lastEt = -1;
+    let lastChapter: unknown = 'sentinel';
+    const fakeChapter = { slug: 'v1-jupiter', targetBody: 5 } as unknown;
+    const stubViewFrame = {
+      getTransform: (et: number, chapter: unknown) => {
+        lastEt = et;
+        lastChapter = chapter;
+        return { originOffsetWorld: worldVec3(0, 0, 0) };
+      },
+    };
+    const stubDirector = { activeChapter: fakeChapter };
+    const engine = new RenderEngine(
+      CAPS_REVERSE_Z_OK,
+      {
+        viewFrame:
+          stubViewFrame as unknown as import('../services/view-frame').ViewFrameService,
+        chapterDirector:
+          stubDirector as unknown as import('../services/chapter-director').ChapterDirector,
+      },
+      cap.factory,
+    );
+    engine.init(makeFakeCanvas());
+    engine.tick();
+    expect(typeof lastEt).toBe('number');
+    expect(lastChapter).toBe(fakeChapter);
     engine.dispose();
   });
 });

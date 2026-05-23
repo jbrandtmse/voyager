@@ -14,6 +14,12 @@ import './styles/about.css';
 // DOM, so tokens cascade directly). Loaded unconditionally because the
 // component is part of the simulation surface, not chrome.
 import './styles/chapter-copy.css';
+// Story 4.2 — restore-camera affordance stylesheet. The button is a Light-
+// DOM native `<button>` (no Lit shadow root); CSS lives outside the
+// component graph and is loaded here so the `[data-manual-camera="true"]`
+// attribute selector resolves regardless of which boot path mounted the
+// button.
+import './styles/restore-camera.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
@@ -24,6 +30,10 @@ import { URLRouter } from './services/url-router';
 import { EmbedModeState } from './services/embed-mode-state';
 import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
+import { VoyagerCameraController } from './render/voyager-camera-controller';
+import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
+import { resolveChapterDefaultFraming } from './chapters/chapter-default-framing';
+import { worldVec3, type WorldVec3 } from './types/branded';
 import {
   isPrecisionSmokeMode,
   startPrecisionSmoke,
@@ -32,6 +42,13 @@ import { ManifestLoader, type Manifest } from './services/manifest-loader';
 import { ChunkLoader } from './services/chunk-loader';
 import { EphemerisService } from './services/ephemeris-service';
 import { AttitudeService } from './services/attitude-service';
+import { ViewFrameService } from './services/view-frame';
+import {
+  MissionPhaseFSM,
+  type MissionPhaseEvent,
+  SPACECRAFT_NAIF_IDS,
+  GAS_GIANT_NAIF_IDS,
+} from './services/mission-phase-fsm';
 import {
   isEphemerisPerfMode,
   startEphemerisPerfHarness,
@@ -50,8 +67,22 @@ import {
   startFpsReadout,
 } from './dev/fps-readout';
 import { CELESTIAL_BODY_NAIF_IDS } from './constants/body-radii';
+import type { Spacecraft } from './types/chapter';
 
 const MANIFEST_URL = '/data/manifest.json';
+
+/**
+ * Story 4.1 AC6 — map a chapter's `spacecraft` field to the NAIF SPK ID
+ * the `<v-attitude-indicator>` consumes via `setActiveSpacecraft`. The
+ * `'both'` case isn't used by any current chapter spec (Story 2.1 didn't
+ * ship one) but the type allows it; we default to V1 (-31) to match the
+ * indicator's stub default (Story 3.6 AC4) so the UI remains stable if
+ * a future chapter declares 'both'.
+ */
+const naifIdForSpacecraft = (s: Spacecraft): -31 | -32 => {
+  if (s === 'v2') return -32;
+  return -31; // 'v1' or 'both'
+};
 
 const bootstrap = (): void => {
   const params = getUrlParams();
@@ -208,6 +239,35 @@ const bootstrap = (): void => {
     },
   );
 
+  // Story 4.1 AC6 — close Epic 3 retro Action #3: route ChapterDirector
+  // `held` transitions to `<v-attitude-indicator>.setActiveSpacecraft(naifId)`
+  // so the inline HUD indicator reads the right spacecraft's bus attitude
+  // on V2 chapter pages (previously stuck on the V1 stub default per the
+  // Story 4.0 smoke gap at /c/v2-saturn). The Story 3.6 indicator default
+  // is V1 (-31); we only flip to -32 when a V2 chapter holds. On cruise
+  // (`event.to === 'out'`) we intentionally do NOT call the setter — the
+  // indicator's last-known regime stays painted (avoids a placeholder
+  // flicker between chapters).
+  //
+  // Installed AFTER firstPaintHandle so the optional-chain has the HUD
+  // handle available, and BEFORE the synchronous cold-load seed below so
+  // a cold-load arriving inside a V2 chapter window (e.g. /c/v2-saturn)
+  // fires the wire on the seed itself rather than waiting for the first
+  // ChapterDirector transition crossing — the indicator paints the right
+  // spacecraft on the first frame.
+  // The subscriber records the last spacecraft seen on a `held` transition
+  // even if the indicator isn't yet mounted (Lit's first render is
+  // microtask-async after the host's connectedCallback). After Lit's first
+  // render flush below we replay the last value so cold-load arrival inside
+  // a V2 chapter window paints correctly on the first user-visible frame.
+  let lastHeldNaifId: -31 | -32 | null = null;
+  chapterDirector.subscribe((event) => {
+    if (event.to !== 'held') return;
+    const naifId = naifIdForSpacecraft(event.chapter.spacecraft);
+    lastHeldNaifId = naifId;
+    firstPaintHandle.hud.attitudeIndicator?.setActiveSpacecraft(naifId);
+  });
+
   // Story 2.4 — seed the ChapterDirector FSM synchronously to the cold-load
   // ET BEFORE the URLRouter subscribes. `engine.onFrame((et) => director.update(et))`
   // above only REGISTERS the per-frame callback; the first invocation
@@ -220,6 +280,27 @@ const bootstrap = (): void => {
   // honors the URL contract that cold-load arrival is the canonical
   // state — not a transition the router needs to mirror.
   chapterDirector.update(clockManager.simTimeEt);
+
+  // Story 4.1 AC6 (smoke fix 2026-05-23): the sync seed above fires `held`
+  // transitions, but `firstPaintHandle.hud.attitudeIndicator` is still null
+  // at that moment because <v-hud>'s Lit render runs microtask-async after
+  // connectedCallback. The subscriber's optional-chain therefore no-ops.
+  // After <v-hud>'s first render completes the indicator is reachable —
+  // replay the last held naifId (or fall back to the current activeChapter)
+  // so /c/v2-saturn cold-loads paint the V2 indicator instead of the V1
+  // stub default. The lead-driven Chrome DevTools MCP smoke (Story 4.1 AC8
+  // verified the absence of this replay was the load-bearing bug closing
+  // Epic 3 retro Action #3 required).
+  void firstPaintHandle.hud.updateComplete?.then(() => {
+    const naifId =
+      lastHeldNaifId ??
+      (chapterDirector.activeChapter
+        ? naifIdForSpacecraft(chapterDirector.activeChapter.spacecraft)
+        : null);
+    if (naifId !== null) {
+      firstPaintHandle.hud.attitudeIndicator?.setActiveSpacecraft(naifId);
+    }
+  });
 
   // Story 2.4 — install the URL router AFTER first-paint so document-level
   // `chapter-jump` listeners are attached before the scrubber + chapter
@@ -262,6 +343,112 @@ const bootstrap = (): void => {
     }
   });
 
+  // Story 4.2 — VoyagerCameraController + restore affordance.
+  //
+  // The controller is constructed here (post-firstPaint so the canvas
+  // parent + speed-multiplier are mounted), but its `getActiveTarget`
+  // and `getViewFrameOrigin` closures reference services that join
+  // post-manifest. We track those services through mutable refs and the
+  // closures null-check; before the manifest lands the controller treats
+  // every gesture as cruise (Sun-at-origin pivot) which is the correct
+  // behavior anyway (the chapter director is also empty pre-manifest).
+  //
+  // The restore affordance mounts adjacent to `<v-speed-multiplier>` (the
+  // canvas's parent hosts both). `attributeHost` is the same parent so
+  // the `[data-manual-camera="true"]` CSS selector promotes the button
+  // when the controller flips the engine's manual-camera flag.
+  let ephemerisServiceRef: EphemerisService | null = null;
+  let viewFrameServiceRef: ViewFrameService | null = null;
+  const cameraController = new VoyagerCameraController({
+    camera: engine.camera,
+    domElement: canvas,
+    renderEngine: engine,
+    getActiveTarget: (): WorldVec3 | null => {
+      const active = chapterDirector.activeChapter;
+      if (active === null) return null;
+      if (active.targetBody === undefined) return null;
+      if (ephemerisServiceRef === null) return null;
+      const bodyPos = ephemerisServiceRef.getPosition(
+        clockManager.simTimeEt,
+        active.targetBody,
+      );
+      if (bodyPos === null) return null;
+      // The controller orbits in the shifted-render-space frame (post-
+      // floating-origin); subtract the ViewFrame origin offset so the
+      // pivot tracks the body in the same frame the camera lives in.
+      const off =
+        viewFrameServiceRef !== null
+          ? viewFrameServiceRef.getTransform(
+              clockManager.simTimeEt,
+              active,
+            ).originOffsetWorld
+          : null;
+      if (off === null) return bodyPos;
+      return worldVec3(
+        bodyPos[0] - off[0],
+        bodyPos[1] - off[1],
+        bodyPos[2] - off[2],
+      );
+    },
+    getViewFrameOrigin: (): WorldVec3 => {
+      if (viewFrameServiceRef === null) {
+        return worldVec3(0, 0, 0);
+      }
+      return viewFrameServiceRef.getTransform(
+        clockManager.simTimeEt,
+        chapterDirector.activeChapter,
+      ).originOffsetWorld;
+    },
+    // Story 4.5 AC3 — chapter-driven default framing. Reads the active
+    // chapter's `defaultFraming` field via the pure helper at
+    // `chapters/chapter-default-framing.ts`; null result falls back to
+    // the controller's built-in encounter / cruise defaults.
+    resolveDefaultFraming: (activeTarget) =>
+      resolveChapterDefaultFraming(chapterDirector.activeChapter, activeTarget),
+  });
+  cameraController.attach();
+
+  const restoreAffordance = mountCameraRestoreAffordance({
+    host: canvas.parentElement ?? document.body,
+    attributeHost: canvas.parentElement ?? document.body,
+    controller: cameraController,
+    renderEngine: engine,
+  });
+  // Reference the dispose handle so the linter doesn't flag the unused
+  // local; the SPA lifetime is the document, so we never explicitly
+  // dispose (the page unload tears everything down).
+  void restoreAffordance;
+
+  // Story 4.5 AC3 (smoke cycle-2 fix 2026-05-23): auto-trigger the
+  // chapter-default framing on `to === 'held'` transitions for chapters
+  // carrying `defaultFraming`. Without this subscriber the resolver IS
+  // registered but never CALLED — the camera stays at (0, 0, 0) (world
+  // origin, embedded inside Jupiter post-floating-origin).
+  //
+  // Gate on services being ready: the framing math reads
+  // `getActiveTarget()` which needs `ephemerisServiceRef` +
+  // `viewFrameServiceRef` to be live. Before the manifest resolves
+  // those refs are null and `getActiveTarget()` returns null — at
+  // which point the controller's fallback would snap to cruise-default
+  // (Sun-centered ~10 AU), which is worse than doing nothing. The
+  // sibling cold-load replay below fires after the manifest lands.
+  //
+  // Animated path (rather than instant) for runtime transitions —
+  // matches the R-key restore semantics + Story 4.1's smoothstep
+  // ViewFrame blend on chapter entry. Cold-load path uses instant
+  // because the camera starts at world origin.
+  //
+  // Suppress immediately AFTER a user gesture flipped manualCameraActive
+  // to true — the user explicitly took control; we don't override.
+  chapterDirector.subscribe((event) => {
+    if (event.to !== 'held') return;
+    if (event.chapter.defaultFraming === undefined) return;
+    if (ephemerisServiceRef === null) return;
+    if (viewFrameServiceRef === null) return;
+    if (engine.manualCameraActive) return;
+    cameraController.applyDefaultFraming({ animated: true });
+  });
+
   // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
   // the lead's Chrome DevTools MCP smoke can read
   // `window.__voyagerDebug.scrubber` and assert on marker DOM state.
@@ -274,6 +461,14 @@ const bootstrap = (): void => {
     w.__voyagerDebug = {
       ...(w.__voyagerDebug ?? {}),
       scrubber: firstPaintHandle.scrubber,
+      // Story 4.4 AC8 — expose both scrubber instances (mission + detail)
+      // as an array so the lead's Chrome DevTools MCP smoke can introspect
+      // both at once. The detail-variant entry is null in test mounts
+      // that didn't wire a ChapterDirector; production always has both.
+      timelineScrubbers: [
+        firstPaintHandle.scrubber,
+        firstPaintHandle.detailScrubber,
+      ].filter((s): s is NonNullable<typeof s> => s !== null),
       // Story 2.5 — null in embed mode (chapter-index is not mounted).
       // The MCP smoke must tolerate the missing key by checking embedMode
       // directly when verifying AC2.
@@ -294,6 +489,12 @@ const bootstrap = (): void => {
       // Story 2.5 — expose the boot-time embed flag so the lead-driven
       // MCP smoke can assert AC1 (`enabled === true` for `?embed=true`).
       embedMode,
+      // Story 4.2 AC8 — expose the VoyagerCameraController + RenderEngine
+      // for the lead's Chrome DevTools MCP smoke (probe
+      // `__voyagerDebug.cameraController.restore()` and
+      // `__voyagerDebug.renderEngine.manualCameraActive`).
+      cameraController,
+      renderEngine: engine,
     };
   }
 
@@ -328,10 +529,48 @@ const bootstrap = (): void => {
   // skybox loads its texture asynchronously and attaches to the
   // SkyboxGroup (NOT worldGroup) so it doesn't floating-origin-recenter
   // (Story 1.5 architectural contract — Architecture lines 374–376).
-  const textureLoader = new TextureLoaderService();
+  // Story 4.3 cycle-6 — wire the WebGLRenderer into the TextureLoaderService
+  // constructor so its internal `KTX2Loader` calls `detectSupport(renderer)`
+  // during initialization. Without this, the loader doesn't know which
+  // Basis Universal transcode target the GPU supports and refuses to decode
+  // KTX2 textures at runtime with:
+  //   `THREE.KTX2Loader: Missing initialization with `.detectSupport(renderer)`.`
+  // The renderer is already initialized at this point (`engine.init(canvas)`
+  // ran at line ~180); `engine.getRenderer()` returns the live instance.
+  // This is the canonical Three.js KTX2 init pattern (same as Story 3.3's
+  // SpacecraftModels GLB pipeline, which wires the renderer via
+  // `KTX2Loader.detectSupport` in the GLTFLoader registration path).
+  const rendererForTextures = engine.getRenderer();
+  const textureLoader = new TextureLoaderService(
+    rendererForTextures !== null ? { renderer: rendererForTextures } : undefined,
+  );
   const skybox = new Skybox({ textureLoader });
   engine.skyboxGroup.add(skybox.root);
   let celestialBodies: CelestialBodies | null = null;
+  // Story 4.3 AC3 — MissionPhaseFSM is constructed post-manifest (inside the
+  // manifest-resolves block below); the per-frame onFrame closure captures
+  // this binding so the FSM update can fire inside the existing canonical
+  // onFrame body (preserving Story 3.4 / 3.5 ordering defenses).
+  let missionPhaseFSMRef: MissionPhaseFSM | null = null;
+  // Story 4.3 cycle-5 — cold-load SOI-state replay gate. The FSM's
+  // `first update seeds silently` contract (AC3) is correct for a
+  // "crossing INTO an SOI" observer — synthesizing a fake `soiEntered`
+  // event on cold-load would corrupt the contract for downstream consumers
+  // that genuinely need "did I just cross?" semantics. But AC4 + AC5
+  // BOTH need the gas-giant texture upgrade + moon meshes on cold-load
+  // when the spacecraft is ALREADY inside an SOI (e.g. opening
+  // `/c/v1-jupiter` lands the simulation at V1's Jupiter encounter ET,
+  // which is inside Jupiter's SOI). Resolution per Rule 5 (the
+  // contradiction was discovered by the lead's MCP smoke at cycle-4):
+  // add a one-shot "cold-load replay" that queries `getSoiState` for
+  // every (spacecraft × gas-giant) pair AFTER the first FSM update and
+  // calls the SAME consumer code path the `soiEntered` subscriber
+  // calls. Gated by `coldLoadReplayDone` so it runs exactly once;
+  // wired in via the forward-referenced `coldLoadReplayRef` so the
+  // per-frame block (above, line ~625) can fire it after the first
+  // FSM update completes.
+  let coldLoadReplayDone = false;
+  let coldLoadReplayRef: (() => void) | null = null;
 
   // Story 1.6 AC1 + Task 10: load the manifest at boot. Once loaded, we
   // construct the ChunkLoader + EphemerisService and wire the service into
@@ -350,6 +589,22 @@ const bootstrap = (): void => {
         chunkLoader,
         ephemerisService,
       );
+      // Story 4.1 AC2 — ViewFrameService is constructed AFTER EphemerisService
+      // (which it injects per ADR-0015 no-global-store) and wired into the
+      // pre-existing RenderEngine via the setViewFrame post-construction
+      // setter. The setter contract exists because RenderEngine is
+      // constructed at boot (before the manifest lands); ViewFrame can only
+      // exist after EphemerisService, so it joins post-manifest. The blend
+      // is translation-only per ADR-0023; reduced-motion source defaults to
+      // the central `prefers-reduced-motion: reduce` media query.
+      const viewFrameService = new ViewFrameService(ephemerisService);
+      engine.setViewFrame(viewFrameService, chapterDirector);
+      // Story 4.2 — promote the camera-controller closures to the live
+      // services now that they exist. The controller's closures read
+      // these refs on every gesture, so a simple ref assignment is all
+      // that's needed — no re-construction.
+      ephemerisServiceRef = ephemerisService;
+      viewFrameServiceRef = viewFrameService;
       firstPaintHandle.hud.ephemerisService = ephemerisService;
       // Story 3.6 — wire AttitudeService into <v-hud> so the inline
       // <v-attitude-indicator> can read getBusProvenance(activeSpacecraftId, et)
@@ -374,11 +629,11 @@ const bootstrap = (): void => {
       // the applier resolved against.
       const boresightRenderer = new BoresightRenderer();
 
-      // Story 3.2 AC8 + Story 3.4 AC8 + Story 3.5 AC8 — dev-only debug
-      // surface for the lead's Chrome DevTools MCP smoke. Exposed alongside
-      // the existing Story 2.x surfaces under `window.__voyagerDebug.*`.
-      // Stripped from production builds by Vite's `import.meta.env.DEV`
-      // constant folding.
+      // Story 3.2 AC8 + Story 3.4 AC8 + Story 3.5 AC8 + Story 4.1 AC8
+      // — dev-only debug surface for the lead's Chrome DevTools MCP smoke.
+      // Exposed alongside the existing Story 2.x surfaces under
+      // `window.__voyagerDebug.*`. Stripped from production builds by
+      // Vite's `import.meta.env.DEV` constant folding.
       if (import.meta.env.DEV) {
         const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
         w.__voyagerDebug = {
@@ -386,6 +641,11 @@ const bootstrap = (): void => {
           attitudeService,
           attitudeApplier,
           boresightRenderer,
+          // Story 4.1 AC8 — ViewFrameService handle. The lead's smoke at
+          // /c/v2-saturn probes
+          // `__voyagerDebug.viewFrame.getTransform(currentEt, __voyagerDebug.chapterDirector.activeChapter).originOffsetWorld`
+          // to confirm AC1+AC2 wire-up end-to-end at the in-window ET.
+          viewFrame: viewFrameService,
         };
       }
 
@@ -439,6 +699,20 @@ const bootstrap = (): void => {
         boresightRenderer.tick(spacecraftModels);
         if (trajectoryLines !== null) trajectoryLines.tick(et);
         if (celestialBodies !== null) celestialBodies.tick(et, ephemerisService);
+        // Story 4.3 AC3 — MissionPhaseFSM advances each frame. The FSM is
+        // declared further down the boot sequence; we forward-reference it
+        // via the closure-captured `missionPhaseFSMRef`. The wire is in
+        // this block (not a separate per-frame registration) so the
+        // existing boresight-renderer / attitude-applier ordering defense
+        // continues to match the canonical block.
+        if (missionPhaseFSMRef !== null) missionPhaseFSMRef.update(et);
+        // Story 4.3 cycle-5 — cold-load SOI-state replay (one-shot,
+        // forward-referenced via `coldLoadReplayRef`). Fires AFTER the
+        // first FSM `update(et)` lands, so the silent-seed has already
+        // populated `getSoiState`. The replay closure itself enforces
+        // the `coldLoadReplayDone` once-only gate — calling it on every
+        // subsequent frame is a cheap boolean compare.
+        if (coldLoadReplayRef !== null) coldLoadReplayRef();
       });
 
       // Story 1.12 + Story 1.13 — the trajectory polyline samples at
@@ -456,6 +730,71 @@ const bootstrap = (): void => {
       await prefetchSpacecraftChunks(manifest, chunkLoader);
       await prefetchCelestialBodyChunks(manifest, chunkLoader);
 
+      // Story 4.5 AC3 cold-load framing replay (smoke cycle-2 fix
+      // 2026-05-23). Mirror of the Story 4.3 cold-load SOI replay
+      // pattern: on cold-load arrival into an encounter chapter (e.g.
+      // /c/v1-jupiter), the ChapterDirector sync seed (above, line
+      // ~282) fired `held` BEFORE the camera-controller existed AND
+      // before `ephemerisServiceRef` was promoted to the live service.
+      // The runtime subscriber installed alongside the controller
+      // therefore early-returns on the first held event (services
+      // null-gated). This one-shot replay fires AFTER the celestial-
+      // body chunks are in cache (so `ephemerisService.getPosition` for
+      // Jupiter resolves synchronously), the controller's resolver path
+      // succeeds, and the camera lands at the chapter's
+      // `defaultFraming` position instead of staying at world origin
+      // (i.e., embedded inside Jupiter post-floating-origin).
+      //
+      // Instant (not animated) on cold-load: the camera starts at
+      // (0, 0, 0); a 400ms tween from origin to a 3-Mm-out framing
+      // would be a jarring pull-back. The reduced-motion path takes
+      // the same instant branch — symmetric.
+      //
+      // Suppression: if the user has somehow already flipped the
+      // manual-camera flag (e.g. a gesture fired during the manifest
+      // load), respect that and don't override.
+      //
+      // Story 4.10 BUG-003 fix (2026-05-23): also fire the cold-load
+      // replay when NO chapter is active (cruise period — e.g.
+      // `/?t=1980-01-01T00:00:00Z`). Without this branch the camera
+      // stays at (0, 0, 0) (world origin = Sun barycenter) and the
+      // viewport shows only the Milky Way skybox; the visible promise
+      // of "visitor sees both Voyagers along their heliocentric
+      // trajectories" (FR31) is broken on every non-encounter
+      // timestamp. The controller's built-in `defaultFramingFallback`
+      // resolves to the cruise default (Sun-centered ~10 AU on +Z
+      // looking at origin) when `getActiveTarget()` returns null —
+      // which it does in cruise — so we just call
+      // `applyDefaultFraming` and let the existing cascade handle it.
+      const initialActiveChapter = chapterDirector.activeChapter;
+      // Story 4.12 AC2 — `?view=heliocentric` overrides the chapter-default
+      // body-centered framing on cold-load. The URL parameter is read once
+      // at boot from the URLSync; subsequent navigations honour the chapter's
+      // own body-centered framing unless the URL is re-loaded with the
+      // parameter still present.
+      const heliocentricView = urlSync.parseHeliocentricView();
+      if (!engine.manualCameraActive) {
+        if (heliocentricView.enabled) {
+          // Story 4.12 cold-load — frame the Sun-at-origin system view
+          // regardless of which chapter (if any) is currently active. The
+          // instant path matches the body-centered cold-load branches
+          // below: cameras start at world origin; a 400ms tween from
+          // origin would be a jarring pull-back.
+          cameraController.applyHeliocentricFraming({
+            distanceAu: heliocentricView.distanceAu,
+            elevationDeg: heliocentricView.elevationDeg,
+            animated: false,
+          });
+        } else if (initialActiveChapter === null) {
+          // Cruise cold-load (BUG-003): no active chapter; controller's
+          // cruise-default fallback frames the heliocentric system.
+          cameraController.applyDefaultFraming({ animated: false });
+        } else if (initialActiveChapter.defaultFraming !== undefined) {
+          // Encounter cold-load: chapter carries explicit defaultFraming.
+          cameraController.applyDefaultFraming({ animated: false });
+        }
+      }
+
       trajectoryLines = new TrajectoryLines(
         (et, naifId) => ephemerisService.getPosition(et, naifId),
         { width: window.innerWidth, height: window.innerHeight },
@@ -469,6 +808,105 @@ const bootstrap = (): void => {
       // a fallback grey tint before then).
       celestialBodies = new CelestialBodies({ textureLoader });
       engine.worldGroup.add(celestialBodies.root);
+
+      // Story 4.3 AC4 — wire CelestialBodies into the engine so the
+      // `RenderEngine.upgradePlanetTexture(bodyId)` pass-through has a
+      // concrete handle to delegate to. The setter mirrors
+      // `setViewFrame(...)` for the same reason: RenderEngine is
+      // constructed before the manifest lands, but CelestialBodies needs
+      // the post-manifest chunks.
+      engine.setCelestialBodies(celestialBodies);
+
+      // Story 4.3 AC3 + AC7 — construct MissionPhaseFSM and wire the
+      // SOI-entry subscriber that promotes gas-giant textures to the 4K
+      // tier on encounter entry. Per Rule 1 (integration AC) this is the
+      // production wiring path that the integration test
+      // (`web/tests/mission-phase-fsm-upgrade-texture-integration.test.ts`)
+      // exercises with stubs. The FSM's per-frame `update(et)` runs inside
+      // the canonical Story-3.4 per-frame block above (see the
+      // `missionPhaseFSMRef` forward-reference declaration earlier); we
+      // just assign the binding here.
+      const missionPhaseFSM = new MissionPhaseFSM({ ephemerisService });
+      missionPhaseFSMRef = missionPhaseFSM;
+      // Story 4.3 cycle-5 — extracted into a named helper so the cold-
+      // load replay (see `onSoiEnter` invocation in the per-frame block
+      // above) calls the EXACT same downstream code path the subscriber
+      // does. Guarantees parity between "crossing INTO an SOI at
+      // runtime" and "discovered to be inside an SOI on cold-load".
+      const onSoiEnter = (bodyId: number): void => {
+        // Story 4.3 T5 — construct moon meshes for the parent gas
+        // giant's satellite system on encounter entry. The add path is
+        // idempotent (re-adding a present moon is a no-op).
+        if (celestialBodies !== null) {
+          celestialBodies.addMoonsFor(bodyId);
+        }
+        // Story 4.3 AC4 — NFR-C6 gate: silently skip the upgrade when
+        // the device's GPU memory is below the 1 GB heuristic. On
+        // low-end devices the cruise 2K PNG remains the active texture;
+        // the user sees no UI hint per UX-DR32.
+        const caps = engine.getCapabilities();
+        if (!caps.adequateForEightK) return;
+        // Default tier is `'4k'` per the Story-4.3 Rule-5 amendment
+        // (gas-giant source data caps at 4K; see GAS_GIANT_JOBS
+        // docstring in web/scripts/build_textures.ts).
+        engine.upgradePlanetTexture(bodyId);
+      };
+      const onSoiExit = (bodyId: number): void => {
+        // Story 4.3 T5 — remove moon meshes for the parent gas giant
+        // on encounter exit. AC5 default: remove (vs LOD3-silhouette
+        // retain). The texture tier on the gas giant itself does NOT
+        // de-escalate (Out-of-Scope per the story — "the texture stays
+        // at the highest tier loaded for the session").
+        if (celestialBodies !== null) {
+          celestialBodies.removeMoonsFor(bodyId);
+        }
+      };
+      missionPhaseFSM.subscribe((event: MissionPhaseEvent) => {
+        if (event.type === 'soiEntered') {
+          onSoiEnter(event.bodyId);
+          return;
+        }
+        if (event.type === 'soiExited') {
+          onSoiExit(event.bodyId);
+          return;
+        }
+      });
+      // Story 4.3 cycle-5 — cold-load SOI-state replay. The FSM's
+      // first-update silent-seed (AC3) means that opening a URL like
+      // `/c/v1-jupiter` (which lands ET at V1's Jupiter encounter, INSIDE
+      // Jupiter's SOI) seeds the FSM state to 'inside' WITHOUT firing a
+      // `soiEntered` event. Without this replay, the cold-load Jupiter
+      // texture stays at 2K and the Galilean moons never appear. The
+      // replay runs once AFTER the first `update(et)` lands (so the
+      // silent-seed has happened), iterates every (spacecraft × gas
+      // giant) pair the FSM tracks, and calls `onSoiEnter(bodyId)` for
+      // every pair currently inside an SOI. Re-firing `onSoiEnter`
+      // later via the regular `soiEntered` event path is safe:
+      // `addMoonsFor` is idempotent (per-mesh existence check) and
+      // `upgradePlanetTexture` is monotonic at the tier ratchet (per
+      // Story 4.3 cycle-3 decisions).
+      coldLoadReplayRef = (): void => {
+        if (coldLoadReplayDone) return;
+        coldLoadReplayDone = true;
+        for (const sc of SPACECRAFT_NAIF_IDS) {
+          for (const gg of GAS_GIANT_NAIF_IDS) {
+            if (missionPhaseFSM.isInsideSoi(sc, gg)) {
+              onSoiEnter(gg);
+            }
+          }
+        }
+      };
+
+      // Story 4.3 AC8 — DEV-only debug surface for the lead's Chrome
+      // DevTools MCP smoke. Mirrors the Story-2.1 chapterDirector +
+      // Story-4.2 cameraController patterns: write to
+      // `window.__voyagerDebug.missionPhaseFSM`, which the lead's smoke
+      // probe reads via `evaluate_script`. Production builds strip this
+      // block via Vite's `import.meta.env.DEV` constant folding.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
+        w.__voyagerDebug = { ...(w.__voyagerDebug ?? {}), missionPhaseFSM };
+      }
     },
     (err: unknown) => {
       console.error('[manifest] load failed:', err);

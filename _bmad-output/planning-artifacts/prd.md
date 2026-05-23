@@ -126,7 +126,7 @@ The brief commits to the full v1 scope as the minimum we plan and deliver. There
 | Encounter | Spacecraft | Closest Approach Date (UT) | Key Moonlets / Hero Beats |
 | --- | --- | --- | --- |
 | Jupiter | Voyager 1 | 1979-03-05 12:05 | Io volcano discovery; Amalthea, Europa, Ganymede, Callisto over 48 hours; ring discovery |
-| Jupiter | Voyager 2 | 1979-07-09 22:29 | Callisto, Ganymede, Europa, Amalthea sequence |
+| Jupiter | Voyager 2 | 1979-07-09 22:29 | Callisto, Ganymede, Europa, Io sequence (Story 4.6 Rule-5 amendment — V2 did not make a close Amalthea pass; the original draft of this row read "...Europa, Amalthea sequence" but per NASA SP-439 Appendix A the V2 inbound sweep was the four Galilean moons, with Amalthea a V1-only close encounter) |
 | Saturn | Voyager 1 | 1980-11-12 23:46 | Titan close flyby at 6,490 km — the slingshot that ends V1's planetary tour |
 | Saturn | Voyager 2 | 1981-08-26 | Iapetus, Hyperion, Titan flybys |
 | Uranus | Voyager 2 | 1986-01-24 | Miranda flyby at 29,000 km + Ariel/Umbriel/Titania/Oberon; 11 new moons discovered |

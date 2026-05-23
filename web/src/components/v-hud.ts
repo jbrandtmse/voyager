@@ -15,6 +15,8 @@ import type { VAttitudeIndicator } from './v-attitude-indicator';
 import type { ClockManager } from '../services/clock-manager';
 import type { EphemerisService } from '../services/ephemeris-service';
 import type { AttitudeService } from '../services/attitude-service';
+import type { ChapterDirector } from '../services/chapter-director';
+import type { VHudChapterTitle } from './v-hud-chapter-title';
 
 /**
  * `<v-hud>` — quiet instrument-panel HUD overlay (Story 1.11 AC1, AC2, AC6, AC7).
@@ -157,6 +159,15 @@ export class VHud extends BaseElement {
    */
   attitudeService: AttitudeService | null = null;
   /**
+   * Story 4.10 BUG-006 fix — `ChapterDirector` reference propagated to the
+   * inline `<v-hud-chapter-title>` sub-component so its heading populates
+   * with the active chapter's name on `held` transitions. Set by the host
+   * (`first-paint.ts`) immediately after construction; the HUD propagates
+   * it down via `updated()` + the per-tick identity-gated assignment
+   * (matching the `attitudeService` / `ephemerisService` patterns).
+   */
+  chapterDirector: ChapterDirector | null = null;
+  /**
    * Story 3.6 AC7 — when true, the inline `<v-attitude-indicator>` is NOT
    * rendered (the chrome-skip discipline from Story 2.5; mirrors
    * `<v-help-overlay>` / `<v-chapter-index>` / `<v-attribution-panel>`
@@ -206,6 +217,15 @@ export class VHud extends BaseElement {
     );
   }
 
+  /** Story 4.10 BUG-006 — sub-component handle for the chapter title slot. */
+  get hudChapterTitle(): VHudChapterTitle | null {
+    return (
+      this.shadowRoot?.querySelector<VHudChapterTitle>(
+        'v-hud-chapter-title',
+      ) ?? null
+    );
+  }
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     // Propagate wiring down to children after Lit has rendered them.
@@ -230,6 +250,14 @@ export class VHud extends BaseElement {
     // manifest-load, at which point the next updated() call wires it through.
     const att = this.attitudeIndicator;
     if (att !== null) att.attitudeService = this.attitudeService;
+    // Story 4.10 BUG-006 — propagate ChapterDirector reference so the title
+    // slot subscribes to chapter transitions. ChapterDirector exists at
+    // boot (constructed in main.ts before first-paint mounts the HUD), so
+    // a single `updated()` propagation typically suffices, but the
+    // identity-gated per-tick wire in `tick()` defends against the
+    // post-render assignment trap (same trap as ephemerisService).
+    const title = this.hudChapterTitle;
+    if (title !== null) title.chapterDirector = this.chapterDirector;
   }
 
   /**
@@ -239,7 +267,26 @@ export class VHud extends BaseElement {
    */
   tick(et: number): void {
     this.hudDate?.tick(et);
-    this.hudDistance?.tick(et);
+    // Story 4.10 BUG-002 fix (2026-05-23) — same trap as Story 3.6's
+    // attitudeService propagation: `ephemerisService` is a plain class
+    // field (not in `static properties`), so a post-render assignment
+    // from `main.ts` does NOT trigger Lit's `updated()`. Without this
+    // identity-gated tick-time propagation, the production path (where
+    // EphemerisService is constructed AFTER the HUD mounts) leaves
+    // `v-hud-distance.ephemerisService` stuck at `null` and every
+    // tick's `computeAuString` short-circuits to `"— AU"`. Tests pass
+    // because they wire the service before first render; production
+    // wires it after.
+    const dist = this.hudDistance;
+    if (dist !== null) {
+      if (dist.ephemerisService !== this.ephemerisService) {
+        dist.ephemerisService = this.ephemerisService;
+      }
+      if (dist.clockManager !== this.clockManager) {
+        dist.clockManager = this.clockManager;
+      }
+      dist.tick(et);
+    }
     // Story 2.9 — instrument-shutoff strikethrough state is driven by ET.
     this.hudInstruments?.tick(et);
     // Story 3.6 — propagate the per-frame ET to the inline attitude indicator
@@ -262,6 +309,16 @@ export class VHud extends BaseElement {
       att.attitudeService = this.attitudeService;
     }
     att?.tick(et);
+    // Story 4.10 BUG-006 — per-tick identity-gated propagation of the
+    // ChapterDirector reference (same trap as ephemerisService /
+    // attitudeService: a post-render assignment on a plain class field
+    // doesn't trigger Lit's `updated()`). The chapter title's
+    // reactive-property setter compares identity, so the assignment is
+    // a no-op once wired.
+    const title = this.hudChapterTitle;
+    if (title !== null && title.chapterDirector !== this.chapterDirector) {
+      title.chapterDirector = this.chapterDirector;
+    }
   }
 
   override render(): TemplateResult {

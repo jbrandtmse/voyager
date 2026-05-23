@@ -6,13 +6,19 @@ import {
   MISSION_END_ET,
   SCRUB_RESUME_DELAY_MS,
 } from '../constants/mission';
-import { isoFromEt, formatForHud } from '../math/et-conversions';
+import {
+  isoFromEt,
+  formatForHud,
+  monthDayLabelFromEt,
+  monthDayYearLabelFromEt,
+} from '../math/et-conversions';
 import { attachPointerHandlers } from '../primitives/pointer-events';
 import { createSliderKeyboardHandler } from '../primitives/slider-keyboard';
+import { cadenceAwareStep } from '../primitives/cadence-aware-step';
 import { URLSync } from '../services/url-sync';
 import type { ClockManager, ClockState } from '../services/clock-manager';
 import type { ChapterDirector } from '../services/chapter-director';
-import type { ChapterSpec } from '../types/chapter';
+import type { ChapterSpec, ChapterTransitionEvent } from '../types/chapter';
 import { ALL_CHAPTERS } from '../chapters/registry';
 
 const ONE_DAY_SECONDS = 86400;
@@ -29,6 +35,24 @@ const clampEt = (et: number): number => {
   if (et < MISSION_START_ET) return MISSION_START_ET;
   if (et > MISSION_END_ET) return MISSION_END_ET;
   return et;
+};
+
+/**
+ * Story 4.4 AC2 — the encounter-chapter slug regex. The detail variant
+ * slides in iff (a) the chapter slug matches this pattern AND (b) the
+ * chapter's `targetBody` falls in the gas-giant barycenter set
+ * {5, 6, 7, 8}. The dual gate prevents a future "cruise interlude"
+ * chapter that happens to enter `held` from accidentally surfacing
+ * the detail scrubber.
+ */
+const ENCOUNTER_SLUG_PATTERN = /^v[12]-(jupiter|saturn|uranus|neptune)$/;
+const GAS_GIANT_NAIF_IDS: ReadonlySet<number> = new Set([5, 6, 7, 8]);
+
+const isEncounterChapter = (chapter: ChapterSpec | null): boolean => {
+  if (chapter === null) return false;
+  if (!ENCOUNTER_SLUG_PATTERN.test(chapter.slug)) return false;
+  if (chapter.targetBody === undefined) return false;
+  return GAS_GIANT_NAIF_IDS.has(chapter.targetBody);
 };
 
 /**
@@ -63,16 +87,23 @@ const clampEt = (et: number): number => {
  *   - `aria-valuenow` as an ISO-8601 UTC string (assistive-tech announces
  *     it to the user)
  *   - `aria-valuetext` as the human-readable "YYYY-MM-DD HH:MM UT" form
- *   - `aria-label="Mission timeline"`
+ *   - `aria-label="Mission timeline"` (mission variant) or
+ *     `"<chapter name> encounter timeline"` (detail variant, Story 4.4 AC5)
  *
- * Keyboard (Story 1.9 AC4):
+ * Keyboard (Story 1.9 AC4 — mission variant):
  *   - `←/→`: ±1 day
  *   - `Shift+←/→`: ±10 days
  *   - `Home/End`: jump to MISSION_START/END
  *   - All five suppress the native scroll-step via `preventDefault()`
  *
+ * Keyboard (Story 4.4 AC5 — detail variant, cadence-aware):
+ *   - `←/→`: ±10s / ±1min / ±1h depending on |et - anchor|
+ *   - `Shift+←/→`: ±100s / ±10min / ±10h (10× the small step)
+ *   - `Home/End`: jump to chapter window start/end
+ *   - Cadence tiers match `bake/src/bake_trajectories.py:CADENCE_BANDS`
+ *
  * Touch target (Story 1.9 AC8 / WCAG 2.5.5):
- *   - Visible thumb glyph 14 px
+ *   - Visible thumb glyph 14 px (mission) or 10 px (detail)
  *   - Effective hit area ≥ 44 × 44 px via a transparent `::before`
  *     pseudo-element. The visible glyph is NOT enlarged.
  *
@@ -81,7 +112,9 @@ const clampEt = (et: number): number => {
  * Every scrub change pushes through `URLSync.writeEtThrottled(et)`
  * (250 ms coalesce) during continuous interaction. The `pointerup`
  * release path calls `writeEtImmediate(et)` so the final URL reflects
- * the released value.
+ * the released value. Story 4.4 AC4 — both the mission AND detail
+ * scrubbers funnel into the SAME `URLSync` instance, so the 250 ms
+ * throttle is shared (not duplicated per variant).
  *
  * ## Chapter markers (Story 2.2)
  *
@@ -104,6 +137,24 @@ const clampEt = (et: number): number => {
  * CustomEvent (`{ slug, anchorEt }`) which Story 2.4's URL router will
  * subscribe to.
  *
+ * ## Detail variant (Story 4.4)
+ *
+ * When `variant === 'detail'`:
+ *   - Track is 4 px tall with `rgba(212, 160, 23, 0.18)` background.
+ *   - Thumb is a 10 px solid `--v-color-accent` circle (no border ring).
+ *   - Range is `[rangeStart, rangeEnd]` (set by the consumer per
+ *     active chapter window — `[windowStartEt, windowEndEt]`).
+ *   - Slides in / out on ChapterDirector substate transitions
+ *     (`entering` / `exiting`), gated by `isEncounterChapter`.
+ *   - Date-range labels render at the track ends.
+ *   - Keyboard step is cadence-aware via `cadenceAwareStep(et, chapter)`.
+ *
+ * When the detail variant is mounted but not active (no encounter
+ * chapter held), the host is `aria-hidden="true"` and visually
+ * hidden via `opacity: 0` + `transform: translateY(...)`. The slide-in
+ * transition is `--v-duration-slow` (400 ms ease-out; 0 ms under
+ * reduced-motion via the global token).
+ *
  * Hover dwell tooltip is CSS-only with a 200ms transition-delay; on
  * touch devices (`@media (hover: none)`) the marker labels show
  * persistently as the Tier-2 alternative (UX-DR22).
@@ -123,12 +174,45 @@ export class VTimelineScrubber extends BaseElement {
         touch-action: none;
       }
 
+      /* Story 4.4 — the detail variant sits ABOVE the mission scrubber
+         with --v-spacing-md vertical separation. We stack it via the
+         host bottom offset = mission bottom + mission-height + spacing. */
+      :host([variant='detail']) {
+        bottom: calc(var(--v-edge-margin) + 18px + var(--v-space-3, 12px));
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity var(--v-duration-slow) var(--v-ease-out),
+          transform var(--v-duration-slow) var(--v-ease-out);
+        pointer-events: none;
+      }
+
+      :host([variant='detail'][data-open]) {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
       .track {
         position: relative;
         height: 12px;
         background: var(--v-color-divider);
         border-radius: 6px;
         cursor: pointer;
+      }
+
+      /* Story 4.4 AC1 — detail-variant track is 4px tall with a low-
+         alpha accent background. The fill colour is suppressed because
+         the chapter window IS the range; the thumb position alone
+         conveys "you are here." */
+      :host([variant='detail']) .track {
+        height: 4px;
+        background: rgba(212, 160, 23, 0.18);
+        border-radius: 2px;
+      }
+
+      :host([variant='detail']) .fill {
+        /* Suppressed on the detail variant — see comment above. */
+        display: none;
       }
 
       .fill {
@@ -160,9 +244,21 @@ export class VTimelineScrubber extends BaseElement {
         cursor: grabbing;
       }
 
+      /* Story 4.4 AC1 — detail-variant thumb is a 10px solid accent
+         circle (NO border ring; distinct from mission variant's pin
+         glyph). The 44×44 hit area pseudo-element below is preserved. */
+      :host([variant='detail']) .thumb {
+        width: 10px;
+        height: 10px;
+        margin-left: -5px;
+        margin-top: -5px;
+        background: var(--v-color-accent);
+        border: 0;
+      }
+
       /* 44×44 hit target via a transparent overlay around the thumb glyph.
          Sized to exceed WCAG 2.5.5 (44px). The pseudo-element absorbs the
-         hit test; the visible glyph stays 14px. */
+         hit test; the visible glyph stays 14px (mission) / 10px (detail). */
       .thumb::before {
         content: '';
         position: absolute;
@@ -270,6 +366,39 @@ export class VTimelineScrubber extends BaseElement {
           display: none;
         }
       }
+
+      /* Story 4.4 AC6 — mission scrubber highlight band marking the
+         active chapter's [windowStartEt, windowEndEt] extent. Positioned
+         via inline style="left:X%; right:Y%" set by render(). The band
+         is rendered ABOVE the divider background but BELOW the fill and
+         thumb (z-order from track stacking context). */
+      .highlight-band {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: rgba(212, 160, 23, 0.18);
+        border-radius: 3px;
+        pointer-events: none;
+      }
+
+      /* Story 4.4 AC1 — detail-variant date-range labels at the track
+         ends. Uppercase mono in --v-color-accent. The labels render in
+         a flex row below the track. */
+      .detail-range-labels {
+        display: none;
+        margin-top: 4px;
+        font-family: var(--v-font-mono);
+        font-size: var(--v-size-hud-mono-sm);
+        text-transform: uppercase;
+        color: var(--v-color-accent);
+        justify-content: space-between;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      :host([variant='detail']) .detail-range-labels {
+        display: flex;
+      }
     `,
   ];
 
@@ -280,9 +409,21 @@ export class VTimelineScrubber extends BaseElement {
     // to the wired `ClockManager`. See get/set definitions below.
     simEt: { type: Number, reflect: false },
     isPlaying: { type: Boolean, reflect: false },
+    // Story 4.4 AC1 — detail variant range. The mission variant ignores
+    // these (it always renders [MISSION_START_ET, MISSION_END_ET]); the
+    // detail variant uses them to pixel-map the track + drive the
+    // keyboard handler's valueMin / valueMax + cadence-aware-step anchor.
+    rangeStart: { type: Number, attribute: 'range-start' },
+    rangeEnd: { type: Number, attribute: 'range-end' },
   };
 
   declare variant: ScrubberVariant;
+  // Story 4.4 / Rule 10 — declare-only on the reactive props; ctor-body
+  // assignment below. Class-field initializer would silently shadow
+  // Lit's generated accessor (lit.dev/msg/class-field-shadowing). The
+  // canonical pattern is v-chapter-index.ts:235-262.
+  declare rangeStart: number;
+  declare rangeEnd: number;
 
   /**
    * Story 1.10 source-of-truth. When non-null, the scrubber subscribes to
@@ -299,6 +440,10 @@ export class VTimelineScrubber extends BaseElement {
    * highlights the one matching `chapterDirector.activeChapter`. The
    * director is constructed in `main.ts` from `ALL_CHAPTERS` and shared
    * with the same per-frame ET pump that drives the clock.
+   *
+   * Story 4.4 — the detail variant ALSO subscribes when this is non-null,
+   * for the `entering`/`exiting`/`held`/`passed` transition events that
+   * drive the slide-in / slide-out animations.
    */
   chapterDirector: ChapterDirector | null = null;
 
@@ -359,9 +504,33 @@ export class VTimelineScrubber extends BaseElement {
   private clockUnsub: (() => void) | null = null;
   private chapterUnsub: (() => void) | null = null;
 
+  /**
+   * Story 4.4 AC2 — the detail variant is "open" when an encounter
+   * chapter is held (or entering/exiting). The CSS `[data-open]`
+   * attribute drives the slide-in via opacity/transform transitions;
+   * `aria-hidden` flips synchronously so assistive tech sees the same
+   * state the user does.
+   */
+  private detailOpen = false;
+
+  /**
+   * Story 4.4 AC5 — the chapter whose anchor is used for the cadence-
+   * aware step computation. Updated on `entering`/`held` transitions
+   * (encounter chapters only) so the keyboard tier responds to the
+   * current encounter; cleared on `exiting`/`passed` so the detail
+   * scrubber, if briefly visible during the exit slide, still computes
+   * sensible steps from the last-known anchor.
+   */
+  private activeDetailChapter: ChapterSpec | null = null;
+
   constructor() {
     super();
     this.variant = 'mission';
+    // Story 4.4 / Rule 10 — ctor-body initialization for the reactive
+    // properties. The mission variant ignores these; detail-variant
+    // consumers reset them on the chapter-window edges.
+    this.rangeStart = MISSION_START_ET;
+    this.rangeEnd = MISSION_END_ET;
   }
 
   override connectedCallback(): void {
@@ -374,6 +543,20 @@ export class VTimelineScrubber extends BaseElement {
     }
     if (this.chapterDirector !== null && this.chapterUnsub === null) {
       this.chapterUnsub = this.chapterDirector.subscribe(this.onChapterChange);
+      // Story 4.4 — seed the detail-open state from the director's
+      // current activeChapter, so a cold-load that lands inside an
+      // encounter window immediately presents the detail scrubber
+      // (no flash-of-hidden + flash-of-visible cycle).
+      this.syncDetailFromDirector(this.chapterDirector);
+    }
+    // Story 4.4 — sync aria-hidden on mount BEFORE first render so a
+    // detail-variant scrubber that is mounted but not yet open is
+    // already inaccessible to assistive tech.
+    if (this.variant === 'detail') {
+      this.setAttribute('aria-hidden', this.detailOpen ? 'false' : 'true');
+      if (this.detailOpen) {
+        this.setAttribute('data-open', '');
+      }
     }
   }
 
@@ -404,18 +587,131 @@ export class VTimelineScrubber extends BaseElement {
     this.requestUpdate();
   };
 
-  private onChapterChange = (): void => {
-    // ChapterDirector fires on state transitions (out↔entering↔held↔exiting↔
-    // passed), NOT per frame. Each transition is a candidate active-marker
-    // change so we requestUpdate(); the render() reads activeChapter
-    // synchronously.
-    this.requestUpdate();
+  private onChapterChange = (event: ChapterTransitionEvent): void => {
+    // Story 2.2 — mission-variant marker re-render on any transition.
+    // Story 4.4 AC2 — detail-variant slide-in/out + range update on
+    // encounter-chapter entering/exiting transitions, and active-chapter
+    // tracking for cadence-aware steps.
+    if (this.variant === 'detail') {
+      this.handleDetailTransition(event);
+    } else {
+      // Mission variant cares about every transition for marker repaint
+      // AND for the highlight-band repaint (AC6) which tracks the
+      // active encounter chapter.
+      this.requestUpdate();
+    }
   };
 
+  /**
+   * Story 4.4 AC2 — seed the detail-variant's open state from a
+   * ChapterDirector's current `activeChapter`. Called on connect and on
+   * any `held → entering` / `entering → held` transition. The transition
+   * subscriber path also updates `rangeStart` / `rangeEnd` BEFORE the
+   * slide-in begins (so the user never sees a flash of wrong-range
+   * content).
+   */
+  private syncDetailFromDirector(director: ChapterDirector): void {
+    const active = director.activeChapter;
+    if (active !== null && isEncounterChapter(active)) {
+      this.activeDetailChapter = active;
+      this.rangeStart = active.windowStartEt;
+      this.rangeEnd = active.windowEndEt;
+      this.detailOpen = true;
+    } else {
+      this.activeDetailChapter = null;
+      this.detailOpen = false;
+    }
+  }
+
+  private handleDetailTransition(event: ChapterTransitionEvent): void {
+    if (!isEncounterChapter(event.chapter)) {
+      // Non-encounter chapters never gate the detail variant; ignore.
+      this.requestUpdate();
+      return;
+    }
+    // The ChapterDirector FSM's transition states have direction-sensitive
+    // meanings:
+    //   forward scrub: out → entering → held → exiting → passed
+    //   reverse scrub: passed → exiting → held → entering → out
+    // The `to === 'entering'` event fires in BOTH directions but means
+    // "opening" only when the FROM state is `out` (forward) or `held`
+    // (reverse coming back from passed isn't the relevant case here).
+    // The cleanest gate is: `held` ⇒ open; everything else ⇒ closed-or-
+    // pending-close. We mirror the resting-state semantics from
+    // `restingStateAtEt(...)` in ChapterDirector — the detail variant is
+    // open iff the cursor is inside the window.
+    if (event.to === 'held') {
+      // Forward `entering→held` OR reverse `exiting→held`. The detail
+      // variant is now open with the correct chapter range.
+      this.activeDetailChapter = event.chapter;
+      this.rangeStart = event.chapter.windowStartEt;
+      this.rangeEnd = event.chapter.windowEndEt;
+      this.detailOpen = true;
+    } else if (event.to === 'entering') {
+      // Forward `out → entering` (about to enter held — open synchronously
+      // so the slide-in begins now) OR reverse `held → entering` (about
+      // to leave the window via the start edge — close).
+      if (event.from === 'out') {
+        // Forward entry: open and set range BEFORE the slide-in begins.
+        this.activeDetailChapter = event.chapter;
+        this.rangeStart = event.chapter.windowStartEt;
+        this.rangeEnd = event.chapter.windowEndEt;
+        this.detailOpen = true;
+      } else {
+        // Reverse: leaving the window via the start edge. The next
+        // transition (`entering → out`) is what brings the chapter
+        // fully outside; close on this edge so the slide-out animates
+        // simultaneously with the cursor leaving.
+        this.detailOpen = false;
+      }
+    } else if (event.to === 'exiting' || event.to === 'passed' || event.to === 'out') {
+      // Slide out — symmetric with the slide-in. We leave the range
+      // populated so the in-flight transition pixels don't reflow to
+      // the (default) mission window mid-animation. `out` covers the
+      // reverse-scrub `entering → out` final step; `exiting` /
+      // `passed` cover the forward path.
+      this.detailOpen = false;
+    }
+    // Reflect the new attribute synchronously so the CSS transition
+    // can run in this frame (don't wait for render() — the
+    // `[data-open]` selector reads the host attribute, not a shadow-
+    // DOM child).
+    if (this.detailOpen) {
+      this.setAttribute('data-open', '');
+      this.setAttribute('aria-hidden', 'false');
+    } else {
+      this.removeAttribute('data-open');
+      this.setAttribute('aria-hidden', 'true');
+    }
+    this.requestUpdate();
+  }
+
+  /**
+   * Story 4.4 AC1 — variant-aware track range. For the mission variant
+   * the range is the full mission window; for the detail variant it is
+   * `[rangeStart, rangeEnd]` set by the chapter-transition subscriber.
+   */
+  private rangeLow(): number {
+    return this.variant === 'detail' ? this.rangeStart : MISSION_START_ET;
+  }
+  private rangeHigh(): number {
+    return this.variant === 'detail' ? this.rangeEnd : MISSION_END_ET;
+  }
+
   private computeFraction(): number {
-    const span = MISSION_END_ET - MISSION_START_ET;
+    const lo = this.rangeLow();
+    const hi = this.rangeHigh();
+    const span = hi - lo;
     if (span <= 0) return 0;
-    return (clampEt(this.simEt) - MISSION_START_ET) / span;
+    // Clamp to the rendered range — outside-range ETs collapse to the
+    // nearest end. The detail variant is conditionally rendered only
+    // when the cursor is within the chapter window, so this clamp is a
+    // safety net for the slide-out interval (where the cursor may have
+    // just left the window).
+    const et = this.simEt;
+    if (et <= lo) return 0;
+    if (et >= hi) return 1;
+    return (et - lo) / span;
   }
 
   private emitScrub(source: ScrubSource): void {
@@ -467,6 +763,13 @@ export class VTimelineScrubber extends BaseElement {
   }
 
   private applyEt(newEt: number, source: ScrubSource): void {
+    // Story 4.4 AC4 — the detail-variant scrubber still routes ETs
+    // through the full mission clamp (NOT clamped to the chapter
+    // window) so a user dragging the detail thumb hard against the
+    // edge can land outside the window — at which point the
+    // ChapterDirector will eventually fire `exiting` and the slide-out
+    // animates. We never want the detail variant to *prevent* leaving
+    // the chapter; we only want it to be the visual surface inside.
     const clamped = clampEt(newEt);
     if (this.clockManager !== null) {
       // Route through scrubTo (which also pauses). Subscriber fires →
@@ -494,20 +797,53 @@ export class VTimelineScrubber extends BaseElement {
    * APG Slider keyboard contract — delegated to `primitives/slider-keyboard.ts`
    * per ADR-0025 (Story 3.0 AC4 path (a)). The primitive handles the
    * Home/End/Arrows/Shift+Arrows pattern; this component supplies the
-   * Voyager-specific value source (simEt), step sizes (1 day / 10 days),
-   * mission window bounds, and the scrub-state side-effects (startScrub /
-   * applyEt / scheduleResume).
+   * Voyager-specific value source (simEt), step sizes, range bounds,
+   * and the scrub-state side-effects (startScrub / applyEt /
+   * scheduleResume).
+   *
+   * Story 4.4 AC5 (Rule 9) — for the detail variant, `stepSmall` and
+   * `stepLarge` are recomputed lazily on every keystroke via the
+   * cadence-aware-step helper. The factory snapshots its options at
+   * construction time, but we route through wrapper callbacks that
+   * read the CURRENT cursor + active chapter at handler-fire time —
+   * the factory's `getValue` already supports this lazy pattern; we
+   * apply the same discipline to the step sizes by re-creating the
+   * handler whenever the active chapter changes (or by reading the
+   * step lazily inside `onChange`).
+   *
+   * For the mission variant, the step sizes are constants (1 day / 10
+   * days) per Story 1.9 AC4.
    */
-  private onKeyDown = createSliderKeyboardHandler({
-    getValue: () => this.simEt,
-    valueMin: MISSION_START_ET,
-    valueMax: MISSION_END_ET,
-    stepSmall: ONE_DAY_SECONDS,
-    stepLarge: TEN_DAYS_SECONDS,
-    onStart: () => this.startScrub(),
-    onChange: (next: number) => this.applyEt(next, 'keyboard'),
-    onEnd: () => this.scheduleResume(),
-  });
+  private onKeyDown = (e: KeyboardEvent): void => {
+    // The factory snapshot pattern is fine for the mission variant
+    // because its steps are constants. For the detail variant we need
+    // a fresh handler per keystroke so the cadence-aware step
+    // recomputes against the current cursor position. We rebuild on
+    // every call — the construction cost is trivial (a closure over
+    // an options bag) and it keeps the cadence-tier discipline lazy
+    // per AC5.
+    let stepSmall: number;
+    let stepLarge: number;
+    if (this.variant === 'detail' && this.activeDetailChapter !== null) {
+      const tier = cadenceAwareStep(this.simEt, this.activeDetailChapter.anchorEt);
+      stepSmall = tier.stepSmall;
+      stepLarge = tier.stepLarge;
+    } else {
+      stepSmall = ONE_DAY_SECONDS;
+      stepLarge = TEN_DAYS_SECONDS;
+    }
+    const handler = createSliderKeyboardHandler({
+      getValue: () => this.simEt,
+      valueMin: this.rangeLow(),
+      valueMax: this.rangeHigh(),
+      stepSmall,
+      stepLarge,
+      onStart: () => this.startScrub(),
+      onChange: (next: number) => this.applyEt(next, 'keyboard'),
+      onEnd: () => this.scheduleResume(),
+    });
+    handler(e);
+  };
 
   private trackEl(): HTMLElement | null {
     return this.shadowRoot?.querySelector<HTMLElement>('.track') ?? null;
@@ -519,7 +855,9 @@ export class VTimelineScrubber extends BaseElement {
     const rect = track.getBoundingClientRect();
     if (rect.width <= 0) return this.simEt;
     const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return MISSION_START_ET + frac * (MISSION_END_ET - MISSION_START_ET);
+    const lo = this.rangeLow();
+    const hi = this.rangeHigh();
+    return lo + frac * (hi - lo);
   }
 
   /**
@@ -601,6 +939,28 @@ export class VTimelineScrubber extends BaseElement {
     return raw;
   }
 
+  /**
+   * Story 4.4 AC6 — fractional position of an encounter chapter's
+   * `[windowStartEt, windowEndEt]` extent within the mission window.
+   * Returns `[leftFrac, rightFrac]` ∈ [0, 1]² suitable for CSS
+   * `left: X%; right: Y%` (NOTE: `right` is `1 - rightFrac`).
+   */
+  private encounterWindowBounds(
+    chapter: ChapterSpec,
+  ): { leftFrac: number; rightFrac: number } {
+    const span = MISSION_END_ET - MISSION_START_ET;
+    if (span <= 0) return { leftFrac: 0, rightFrac: 1 };
+    const leftFrac = Math.max(
+      0,
+      Math.min(1, (chapter.windowStartEt - MISSION_START_ET) / span),
+    );
+    const rightFrac = Math.max(
+      0,
+      Math.min(1, (chapter.windowEndEt - MISSION_START_ET) / span),
+    );
+    return { leftFrac, rightFrac };
+  }
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     const track = this.trackEl();
@@ -664,16 +1024,78 @@ export class VTimelineScrubber extends BaseElement {
     // representations of the current position and value-text remain on
     // `aria-valuenow` / `aria-valuetext` because that's what screen
     // readers announce to the user.
-    const valueMin = String(MISSION_START_ET);
-    const valueMax = String(MISSION_END_ET);
+    //
+    // Story 4.4 AC1 + AC5 — the detail variant exposes the chapter
+    // window's bounds (not the mission window) and adopts a chapter-
+    // aware aria-label.
+    const valueMin = String(this.rangeLow());
+    const valueMax = String(this.rangeHigh());
     const valueNow = isoFromEt(this.simEt);
     const valueText = formatForHud(this.simEt);
-    const activeSlug =
-      this.variant === 'mission' && this.chapterDirector !== null
-        ? this.chapterDirector.activeChapter?.slug ?? null
+
+    let ariaLabel = 'Mission timeline';
+    if (this.variant === 'detail') {
+      // Story 4.4 AC5 — when an encounter chapter is active, label reads
+      // "<Chapter Name> encounter timeline" (e.g. "Voyager 1 — Jupiter
+      // encounter timeline"). The fallback for the rare case where the
+      // detail variant is rendered without an active chapter MUST NOT
+      // produce "Encounter encounter timeline" (BUG-001 latent
+      // duplicate — the previous fallback `'Encounter'` composed into
+      // "Encounter encounter timeline"). Falling back to the bare
+      // "Encounter timeline" matches production smoke evidence for the
+      // detail variant and avoids the screen-reader stutter.
+      const name = this.activeDetailChapter?.name;
+      ariaLabel = name !== undefined ? `${name} encounter timeline` : 'Encounter timeline';
+    }
+
+    const activeChapter =
+      this.chapterDirector !== null
+        ? this.chapterDirector.activeChapter
         : null;
+    const activeSlug =
+      this.variant === 'mission' && activeChapter !== null
+        ? activeChapter.slug
+        : null;
+
+    // Story 4.4 AC6 — mission scrubber highlight band rendered when the
+    // detail scrubber is open (active chapter is an encounter). The
+    // band is positioned via inline style left/right percentages.
+    let highlightBand: TemplateResult | null = null;
+    if (
+      this.variant === 'mission' &&
+      activeChapter !== null &&
+      isEncounterChapter(activeChapter)
+    ) {
+      const { leftFrac, rightFrac } = this.encounterWindowBounds(activeChapter);
+      const leftPct = `${(leftFrac * 100).toFixed(4)}%`;
+      const rightPct = `${((1 - rightFrac) * 100).toFixed(4)}%`;
+      highlightBand = html`
+        <div
+          class="highlight-band"
+          part="highlight-band"
+          aria-hidden="true"
+          style=${`left:${leftPct};right:${rightPct}`}
+        ></div>
+      `;
+    }
+
+    // Story 4.4 AC1 — detail-variant date-range labels at the track
+    // ends. Suppressed on the mission variant via CSS (`display: none`).
+    let detailRangeLabels: TemplateResult | null = null;
+    if (this.variant === 'detail') {
+      const leftLabel = monthDayLabelFromEt(this.rangeStart);
+      const rightLabel = monthDayYearLabelFromEt(this.rangeEnd);
+      detailRangeLabels = html`
+        <div class="detail-range-labels" aria-hidden="true">
+          <span class="detail-range-label-left">${leftLabel}</span>
+          <span class="detail-range-label-right">${rightLabel}</span>
+        </div>
+      `;
+    }
+
     return html`
       <div class="track" part="track">
+        ${highlightBand}
         <div class="fill" style=${`width:${fracPct}`}></div>
         <div class="chapters" part="chapters">
           ${this.variant === 'mission'
@@ -687,7 +1109,7 @@ export class VTimelineScrubber extends BaseElement {
           part="thumb"
           role="slider"
           tabindex="0"
-          aria-label="Mission timeline"
+          aria-label=${ariaLabel}
           aria-valuemin=${valueMin}
           aria-valuemax=${valueMax}
           aria-valuenow=${valueNow}
@@ -697,6 +1119,7 @@ export class VTimelineScrubber extends BaseElement {
           @keydown=${this.onKeyDown}
         ></div>
       </div>
+      ${detailRangeLabels}
     `;
   }
 

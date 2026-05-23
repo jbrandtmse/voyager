@@ -10,8 +10,17 @@ import {
 } from './body-radii';
 
 describe('Story 1.13 — BODY_RADII_KM canonical IAU table', () => {
-  it('contains exactly 10 entries — Sun, 8 planets, Moon', () => {
-    expect(Object.keys(BODY_RADII_KM)).toHaveLength(10);
+  it('contains the 10 cruise-body entries — Sun, 8 planets, Moon (Story 4.3 adds 13 moon entries on top)', () => {
+    // Story 1.13 locked the table at 10 entries (cruise bodies).
+    // Story 4.3 T4.5 extended the table with 13 outer-system moon entries
+    // (Galilean × 4, Saturn × 3, Uranus × 5, Neptune × 1 — including
+    // Hyperion 607 which has a radius but no texture slug). The 10 cruise
+    // bodies remain pinned by NAIF ID + value below; the total count
+    // checks against 10 + 13 = 23.
+    expect(Object.keys(BODY_RADII_KM)).toHaveLength(10 + 13);
+    for (const naifId of [10, 1, 2, 3, 4, 5, 6, 7, 8, 301]) {
+      expect(BODY_RADII_KM[naifId]).toBeTypeOf('number');
+    }
   });
 
   it.each(CELESTIAL_BODY_NAIF_IDS as number[])(
@@ -65,10 +74,20 @@ describe('Story 1.13 — CELESTIAL_BODY_NAIF_IDS', () => {
     expect(CELESTIAL_BODY_NAIF_IDS).toEqual([10, 1, 2, 3, 4, 5, 6, 7, 8, 301]);
   });
 
-  it('matches BODY_RADII_KM keys exactly', () => {
+  it('is a strict SUBSET of BODY_RADII_KM keys (Story 4.3 T4.5 extends with moons)', () => {
+    // Story 1.13: CELESTIAL_BODY_NAIF_IDS == BODY_RADII_KM.keys() exactly.
+    // Story 4.3 T4.5: BODY_RADII_KM gains 13 moon entries (Galilean × 4,
+    // Saturn × 3, Uranus × 5, Neptune × 1). CELESTIAL_BODY_NAIF_IDS is
+    // PRESERVED as the cruise-time always-rendered subset; the moons are
+    // loaded lazily via `MOON_NAIF_IDS_BY_PARENT` on encounter-window
+    // entry. Defense: every cruise body must still have a radius entry.
     const radiiKeys = new Set(Object.keys(BODY_RADII_KM).map(Number));
-    const idsSet = new Set(CELESTIAL_BODY_NAIF_IDS);
-    expect(idsSet).toEqual(radiiKeys);
+    for (const naifId of CELESTIAL_BODY_NAIF_IDS) {
+      expect(radiiKeys.has(naifId)).toBe(true);
+    }
+    // The cruise set is 10; the full radii table is larger (13 moons).
+    expect(CELESTIAL_BODY_NAIF_IDS.length).toBe(10);
+    expect(radiiKeys.size).toBeGreaterThan(CELESTIAL_BODY_NAIF_IDS.length);
   });
 });
 

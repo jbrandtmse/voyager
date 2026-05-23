@@ -127,6 +127,14 @@ export interface FirstPaintOptions {
 export interface FirstPaintHandle {
   titleCard: HTMLElement;
   scrubber: VTimelineScrubber;
+  /**
+   * Story 4.4 — the detail-variant scrubber that slides in above the
+   * mission scrubber during encounter chapters. `null` when no
+   * `chapterDirector` was wired (i.e., the legacy Story 1.9 test mounts
+   * that never seeded a director); also `null` when explicitly omitted.
+   * Always non-null in production (main.ts always passes a director).
+   */
+  detailScrubber: VTimelineScrubber | null;
   playButton: VPlayButton;
   speedMultiplier: VSpeedMultiplier;
   hud: VHud;
@@ -202,6 +210,27 @@ export const startFirstPaint = (
   scrubber.style.visibility = 'hidden';
   host.appendChild(scrubber);
 
+  // Story 4.4 — the detail-variant scrubber sits above the mission
+  // scrubber and slides in/out on ChapterDirector substate transitions
+  // for encounter chapters. It shares the SAME URLSync instance with
+  // the mission scrubber so URL writebacks remain single-throttled
+  // (AC4). Mounted only when a ChapterDirector is wired — the legacy
+  // Story 1.9 test mounts (no director) skip this branch.
+  let detailScrubber: VTimelineScrubber | null = null;
+  if (options.chapterDirector !== undefined) {
+    detailScrubber = document.createElement(
+      'v-timeline-scrubber',
+    ) as VTimelineScrubber;
+    detailScrubber.variant = 'detail';
+    detailScrubber.urlSync = urlSync;
+    detailScrubber.clockManager = clockManager;
+    // Wire the director BEFORE appendChild so connectedCallback's
+    // subscription wires in on the same tick the element mounts.
+    detailScrubber.chapterDirector = options.chapterDirector;
+    detailScrubber.style.visibility = 'hidden';
+    host.appendChild(detailScrubber);
+  }
+
   const playButton = document.createElement('v-play-button') as VPlayButton;
   playButton.clockManager = clockManager;
   playButton.style.visibility = 'hidden';
@@ -229,6 +258,14 @@ export const startFirstPaint = (
   hud.embedEnabled = options.embedEnabled === true;
   if (options.ephemerisService !== undefined) {
     hud.ephemerisService = options.ephemerisService;
+  }
+  // Story 4.10 BUG-006 fix — propagate ChapterDirector through the HUD so
+  // the inline `<v-hud-chapter-title>` can subscribe to chapter
+  // transitions. Set pre-mount so the title's connectedCallback sees the
+  // director on first wire-up and seeds from `activeChapter` without
+  // waiting for the next transition.
+  if (options.chapterDirector !== undefined) {
+    hud.chapterDirector = options.chapterDirector;
   }
   hud.style.visibility = 'hidden';
   host.appendChild(hud);
@@ -298,6 +335,15 @@ export const startFirstPaint = (
   const onComplete = (): void => {
     titleCard.remove();
     scrubber.style.visibility = '';
+    // Story 4.4 — the detail scrubber is hidden visually via opacity/
+    // transform per its own CSS (driven by `[data-open]`); its
+    // `style.visibility` was set for the title-card hold and is now
+    // cleared so the host can flip opacity. The detail variant remains
+    // visually hidden until ChapterDirector fires `entering` for an
+    // encounter chapter.
+    if (detailScrubber !== null) {
+      detailScrubber.style.visibility = '';
+    }
     playButton.style.visibility = '';
     speedMultiplier.style.visibility = '';
     hud.style.visibility = '';
@@ -329,6 +375,7 @@ export const startFirstPaint = (
       titleCard.remove();
     }
     scrubber.remove();
+    detailScrubber?.remove();
     playButton.remove();
     speedMultiplier.remove();
     hud.remove();
@@ -343,6 +390,7 @@ export const startFirstPaint = (
   return {
     titleCard,
     scrubber,
+    detailScrubber,
     playButton,
     speedMultiplier,
     hud,

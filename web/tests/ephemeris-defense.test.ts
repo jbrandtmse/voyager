@@ -600,13 +600,39 @@ describe('Runtime manifest.json lockfile contract (defense)', () => {
     // Story 1.13: manifest extended with 10 celestial bodies (Sun, 8
     // planet barycenters, Moon). Total bodies = 2 spacecraft + 10
     // celestial = 12.
-    expect(manifest.bodies.length).toBe(12);
+    // Story 4.11: outer-system moons procured (Io / Europa / Ganymede /
+    // Callisto + Titan / Hyperion / Iapetus + Ariel / Umbriel / Titania /
+    // Oberon / Miranda + Triton). Total bodies = 12 + 13 = 25.
+    expect(manifest.bodies.length).toBe(25);
     const v1 = manifest.bodies.find((b) => b.naifId === -31);
     const v2 = manifest.bodies.find((b) => b.naifId === -32);
     expect(v1, 'V1 (NAIF -31) missing from runtime manifest').toBeDefined();
     expect(v2, 'V2 (NAIF -32) missing from runtime manifest').toBeDefined();
-    expect(v1!.files.length).toBe(7);
-    expect(v2!.files.length).toBe(11);
+    // Story 3.1 + Story 4.0 AC2: each spacecraft also carries attitude
+    // entries. V1 has 7 SPK segments + 6 encounter cadence-band entries
+    // (Story 4.3: V1 visits Jupiter + Saturn = 2 encounters × 3 cadence
+    // bands {hourly / 1min / 10sec}) = 13 trajectory total + 3 bus_attitude
+    // (V1J, V1S, PBD) + 2 platform_attitude (V1J, V1S — V1 PBD has no
+    // platform CK coverage per docs/kernels/ckbrief-inventory.md, by
+    // design) = 18 files for V1.
+    // V2 has 11 SPK segments + 12 encounter bands (4 encounters × 3
+    // bands) = 23 trajectory total + 4 bus_attitude (V2J/V2S/V2U/V2N)
+    // + 4 platform_attitude = 31 files for V2.
+    const v1Trajectory = v1!.files.filter((f) => f.kind === 'trajectory').length;
+    const v1BusAttitude = v1!.files.filter((f) => f.kind === 'bus_attitude').length;
+    const v1PlatformAttitude = v1!.files.filter((f) => f.kind === 'platform_attitude').length;
+    expect(v1Trajectory, 'V1 trajectory file count (7 segments + 6 encounter bands)').toBe(13);
+    expect(v1BusAttitude, 'V1 bus_attitude file count').toBe(3);
+    expect(v1PlatformAttitude, 'V1 platform_attitude file count (V1 PBD platform CK absent by design)').toBe(2);
+    expect(v1!.files.length).toBe(18);
+
+    const v2Trajectory = v2!.files.filter((f) => f.kind === 'trajectory').length;
+    const v2BusAttitude = v2!.files.filter((f) => f.kind === 'bus_attitude').length;
+    const v2PlatformAttitude = v2!.files.filter((f) => f.kind === 'platform_attitude').length;
+    expect(v2Trajectory, 'V2 trajectory file count (11 segments + 12 encounter bands)').toBe(23);
+    expect(v2BusAttitude, 'V2 bus_attitude file count').toBe(4);
+    expect(v2PlatformAttitude, 'V2 platform_attitude file count').toBe(4);
+    expect(v2!.files.length).toBe(31);
 
     // Each of the 10 celestial bodies has exactly one VTRJ file (DE440 is
     // continuous; no per-segment chunking).
@@ -617,9 +643,23 @@ describe('Runtime manifest.json lockfile contract (defense)', () => {
       expect(body!.files.length).toBe(1);
     }
 
-    // Total files = 7 V1 + 11 V2 + 10 celestial = 28.
+    // Total files: 18 V1 (12 + 6 encounter) + 31 V2 (19 + 12 encounter)
+    // + 10 celestial + 13 moon (each moon emits one trajectory chunk over
+    // the full mission window, like celestial bodies) = 72 (post Story
+    // 4.11).
     const total = manifest.bodies.reduce((acc, b) => acc + b.files.length, 0);
-    expect(total).toBe(28);
+    expect(total).toBe(72);
+
+    // Story 4.11 — each of the 13 outer-system moons has exactly one
+    // trajectory VTRJ over the full mission window (same shape as the
+    // 10 celestial bodies; daily-cadence default with per-NAIF overrides
+    // for inner moons in CELESTIAL_CADENCE_OVERRIDES).
+    const moonIds = [501, 502, 503, 504, 606, 607, 608, 701, 702, 703, 704, 705, 801];
+    for (const naifId of moonIds) {
+      const body = manifest.bodies.find((b) => b.naifId === naifId);
+      expect(body, `moon NAIF ${naifId} missing from manifest`).toBeDefined();
+      expect(body!.files.length).toBe(1);
+    }
   });
 });
 

@@ -58,40 +58,43 @@ const walkTsFiles = (dir: string): string[] => {
 };
 
 // ---------------------------------------------------------------------------
-// 1. KTX2 deferral marker — Story 4.3 boundary (CELESTIAL textures only).
+// 1. KTX2 deferral marker — Story 4.3 boundary (LIFTED 2026-05-23).
 //
 // Story 3.3 (2026-05-21) INTENTIONALLY LIFTED the KTX2 deferral FOR THE
-// SPACECRAFT GLB CHAIN per ADR-0006 § Decision step 3 (KHR_texture_basisu
-// over EXT_texture_webp) — `web/src/render/spacecraft-models.ts` now
-// registers `KTX2Loader` against `GLTFLoader`. This is the architectural
-// landing point for ADR-0006's texture commitment.
+// SPACECRAFT GLB CHAIN per ADR-0006 § Decision step 3.
 //
-// The deferral REMAINS for celestial-body textures (Sun + 8 planets + Moon
-// in `texture-loader.ts` + `celestial-bodies.ts`) — Story 4.3 will swap
-// those from PNG → KTX2 as part of the 4k→8k texture upgrade.
+// Story 4.3 (2026-05-23) INTENTIONALLY LIFTS the KTX2 deferral FOR THE
+// CELESTIAL TEXTURE PIPELINE per ADR-0006 (4K + 8K KTX2-Basis for the four
+// gas giants, 2K KTX2-Basis for the 12 outer-system moons). The
+// `texture-loader.ts` service now hosts a KTX2Loader alongside the legacy
+// PNG TextureLoader; URL routing keys on the per-tier extension.
 //
-// Therefore: this defense whitelists `src/render/spacecraft-models.ts`
-// (the Story 3.3 landing surface) and continues to block KTX2Loader
-// elsewhere until Story 4.3 explicitly lifts the deferral for celestial
-// textures too.
+// The defense is preserved as a SHAPE check: KTX2Loader usage MUST be
+// confined to the two architectural landing sites below. New code that
+// imports KTX2Loader elsewhere is a HIGH-severity violation (it almost
+// certainly means a renderer module is reaching past the canonical loader
+// surface to instantiate its own KTX2 path — a pattern this defense
+// rejects).
 // ---------------------------------------------------------------------------
-const STORY_3_3_KTX2_WHITELIST = new Set<string>([
+const KTX2_WHITELIST = new Set<string>([
   // Story 3.3 ADR-0006 landing — KTX2Loader for the Voyager spacecraft GLB.
   'src\\render\\spacecraft-models.ts',
   'src/render/spacecraft-models.ts',
+  // Story 4.3 ADR-0006 landing — KTX2Loader for the celestial-body textures.
+  'src\\services\\texture-loader.ts',
+  'src/services/texture-loader.ts',
 ]);
 
-describe('Story 1.13 defense — KTX2 deferral marker (Story 4.3 boundary)', () => {
-  it('no KTX2Loader import or executable reference appears in web/src/ outside the Story-3.3 spacecraft surface', () => {
+describe('Story 4.3 defense — KTX2Loader usage confined to canonical sites', () => {
+  it('no KTX2Loader import or executable reference appears in web/src/ outside the canonical whitelist', () => {
     const tsFiles = walkTsFiles(srcRoot);
     const violations: string[] = [];
     const importPattern = /^\s*import.*\bKTX2Loader\b/;
     const usePattern = /\bKTX2Loader\b/;
     for (const file of tsFiles) {
       const rel = relative(webRoot, file);
-      // Story 3.3 ADR-0006 landing — spacecraft-models.ts is the
-      // intentional KTX2 site. Skip it from this defense.
-      if (STORY_3_3_KTX2_WHITELIST.has(rel)) continue;
+      // Skip the two canonical landing sites (Story 3.3 + Story 4.3).
+      if (KTX2_WHITELIST.has(rel)) continue;
       const contents = readFileSync(file, 'utf-8');
       const lines = contents.split(/\r?\n/);
       lines.forEach((line, idx) => {
@@ -106,17 +109,32 @@ describe('Story 1.13 defense — KTX2 deferral marker (Story 4.3 boundary)', () 
     }
     expect(
       violations,
-      'KTX2Loader usage outside the Story 3.3 whitelist. Story 4.3 has not ' +
-        'yet lifted the celestial-body texture deferral; either revert the ' +
-        'changes or update STORY_3_3_KTX2_WHITELIST in this defense test ' +
-        `if Story 4.3's lift is intentional.\nViolations:\n${violations.join('\n')}`,
+      'KTX2Loader usage outside the canonical whitelist. Add the file to ' +
+        'KTX2_WHITELIST only if the new site is an architecturally justified ' +
+        'landing point (and document the rationale in this comment block).\n' +
+        `Violations:\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 
-  it('texture-loader.ts file extension constant is "png" (locked for this story)', () => {
+  it('texture-loader.ts retains a legacy TEXTURE_FILE_EXTENSION export', () => {
+    // Story 1.13 exported `TEXTURE_FILE_EXTENSION = 'png'` as the single
+    // file-extension constant. Story 4.3 introduces a per-tier extension
+    // map (`TEXTURE_FILE_EXTENSION_BY_TIER`), but the legacy single export
+    // is retained for backward-compatibility (some external consumers
+    // hard-coded it). This test pins the legacy export at the original
+    // 2k-tier value ('png') so a future story doesn't repurpose it
+    // silently — any change would need to come with a coordinated update
+    // to the consumers that read it.
     const src = readFileSync(resolve(srcRoot, 'services/texture-loader.ts'), 'utf-8');
     expect(src).toMatch(/TEXTURE_FILE_EXTENSION\s*=\s*'png'/);
-    expect(src).not.toMatch(/TEXTURE_FILE_EXTENSION\s*=\s*'ktx2'/);
+  });
+
+  it('per-tier extension map covers 2k → png and 4k/8k → ktx2', () => {
+    const src = readFileSync(resolve(srcRoot, 'services/texture-loader.ts'), 'utf-8');
+    expect(src).toMatch(/TEXTURE_FILE_EXTENSION_BY_TIER/);
+    expect(src).toMatch(/'2k':\s*'png'/);
+    expect(src).toMatch(/'4k':\s*'ktx2'/);
+    expect(src).toMatch(/'8k':\s*'ktx2'/);
   });
 });
 

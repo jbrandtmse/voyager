@@ -1,0 +1,5 @@
+# Playwright test artifacts (Story 4.9 L4 visual regression).
+# These are diff outputs / trace.zip files written per-failure; they
+# are uploaded as CI artifacts on failure but never committed.
+test-results/
+playwright-report/

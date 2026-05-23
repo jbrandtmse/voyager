@@ -119,13 +119,24 @@ describeOrSkip('Story 1.6 AC4 — L2 hook (web-side interpolator vs SpiceyPy ref
       const manifest = await ManifestLoader.load('/data/manifest.json', {
         fetchImpl: nodeFetchShim,
       });
+      // Story 4.0 amendment: the test pre-loads every file for the body so
+      // `getStateAt` hits the synchronous-peek path. Story 4.0 AC2's type-1
+      // platform-VTRJ emission raised V2's file count to 19 (11 trajectory
+      // + 4 bus_attitude + 4 platform_attitude), exceeding the production
+      // `DEFAULT_LRU_CAPACITY` of 12 — the early-prefetched trajectory
+      // chunks get evicted by the later attitude chunks, and
+      // `getStateAt` returns null. Bump the test-tier capacity to fit the
+      // largest body's file count comfortably. The production LRU sizing
+      // is routed to `[3.2 / LOW]` deferred-work (Epic 6 perf-pass).
+      const bodyManifest = manifest.bodies.find((b) => b.naifId === naifId)!;
+      const testLruCapacity = Math.max(32, bodyManifest.files.length + 4);
       const chunkLoader = new ChunkLoader({
+        capacity: testLruCapacity,
         fetchImpl: nodeFetchShim,
       });
       const svc = new EphemerisService(manifest, chunkLoader);
 
       // Pre-load every chunk this body's samples will touch.
-      const bodyManifest = manifest.bodies.find((b) => b.naifId === naifId)!;
       for (const file of bodyManifest.files) {
         await chunkLoader.load(file);
       }

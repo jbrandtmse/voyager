@@ -72,17 +72,50 @@ The full attribution + license text lives in [`THIRD_PARTY.md`](../../../THIRD_P
 at the repository root. Distribution of this repository must preserve that
 file.
 
-## Story 4.3 follow-up
+## Story 4.3 follow-up (2026-05-23 — landed; partial)
 
-Story 4.3 (SOI entry) is responsible for:
-1. Acquiring the 4k + 8k tiers from the same Solar System Scope sources.
-2. Converting all tiers to KTX2-Basis (ETC1S for skybox, UASTC for surface
-   textures) via `toktx` from the Khronos KTX-Software toolkit.
-3. Updating `TEXTURE_FILE_EXTENSION` in `texture-loader.ts` to `ktx2`.
-4. Removing the `texture-loader.ts` Story-4.3-deferral docstring.
-5. Updating `selectTier` to actually map `'8k' | '4k'` → real tiers.
+Story 4.3 (SOI entry) was responsible for:
 
-The defense test in
+1. ~~Acquiring the 4k + 8k tiers from the same Solar System Scope sources.~~
+   **LANDED 2026-05-23 (partial)** — 4K KTX2 tier shipped for all 4 gas
+   giants. The 8K tier was DROPPED per a Rule 5 NFR-tripwire amendment:
+   Solar System Scope's "8K" files are actually 4K dimensions, and no
+   canonical upstream (NASA SVS / USGS Astrogeology / JPL Photojournal)
+   ships ≥ 4K equirectangular cylindrical maps for the gas giants. See
+   `THIRD_PARTY.md § Source-resolution cap (Story 4.3 Rule-5 amendment
+   to AC4)` for the amendment + the `web/scripts/build_textures.ts`
+   `GAS_GIANT_JOBS` docstring for the source-code breadcrumb.
+2. ~~Converting all tiers to KTX2-Basis...~~ **LANDED 2026-05-23** —
+   `web/scripts/build_textures.ts` transcodes via `toktx` UASTC + Basis
+   Universal for gas-giant surfaces (ADR-0006 § Decision step 3 — UASTC
+   for hero textures). Outputs committed as `<slug>-4k.ktx2`.
+3. ~~Updating `TEXTURE_FILE_EXTENSION` in `texture-loader.ts` to `ktx2`.~~
+   **LANDED 2026-05-23** — `TEXTURE_FILE_EXTENSION_BY_TIER` per-tier
+   routing introduced (`'2k' → 'png'`, `'4k' | '8k' → 'ktx2'`). The
+   legacy `TEXTURE_FILE_EXTENSION = 'png'` export is preserved.
+4. ~~Removing the `texture-loader.ts` Story-4.3-deferral docstring.~~
+   **LANDED 2026-05-23** — module docstring rewritten.
+5. ~~Updating `selectTier` to actually map `'8k' | '4k'` → real tiers.~~
+   **LANDED 2026-05-23 (with revision)** — `selectTier` still returns
+   `'2k'` as the CRUISE default; the 4K upgrade fires explicitly on SOI
+   entry via `RenderEngine.upgradePlanetTexture(bodyId, '4k')`. The
+   per-encounter upgrade pattern (not boot-time) is documented in the
+   `selectTier` docstring.
+
+### Still pending — moon textures
+
+The 12 outer-system moon textures (Io / Europa / Ganymede / Callisto /
+Titan / Iapetus / Hyperion / Miranda / Ariel / Umbriel / Titania /
+Oberon / Triton) are NOT yet procured. The moon 2K KTX2 tier awaits a
+follow-up procurement clarification — see the Story 4.3 file's
+"Clarification Needed (narrower — moons only)" block.
+
+### Defense test status
+
+The KTX2-deferral defense test in
 [`web/tests/celestial-bodies-defense.test.ts`](../../tests/celestial-bodies-defense.test.ts)
-locks the KTX2 deferral; it fails when Story 4.3 begins, signalling the
-hand-off.
+was rewritten by Story 4.3 to lift the deferral cleanly: `KTX2Loader`
+usage is now permitted in BOTH `src/render/spacecraft-models.ts` (Story
+3.3 landing) AND `src/services/texture-loader.ts` (this Story-4.3
+landing). New `KTX2Loader` consumers MUST be added to the whitelist with
+an inline justification.

@@ -324,3 +324,209 @@ describe('EphemerisService — referential transparency', () => {
     expect(a!.position[2]).toBeCloseTo(b!.position[2], 12);
   });
 });
+
+// === Story 4.3 AC1 — overlapping intervals (cadence-band tiers) =======
+
+describe('EphemerisService — overlapping cadence-band tiers (Story 4.3 AC1)', () => {
+  it('picks the narrowest covering window when nested bands overlap', () => {
+    // Mirror the Story 4.3 cadence-band layering: a wide per-segment chunk
+    // (cruise, daily) with a hourly band nested inside, a 1-min band nested
+    // inside that, and a 10-sec band nested at the centre. Distinct
+    // pFn outputs per chunk so we can tell which one was selected.
+    const wideSegChunk = makeChunk({
+      bodyId: -31,
+      etStart: 0,
+      cadence: 86400,
+      sampleCount: 11,
+      pFn: () => [100, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const hourlyChunk = makeChunk({
+      bodyId: -31,
+      etStart: 400_000,
+      cadence: 3600,
+      sampleCount: 3,
+      pFn: () => [200, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const oneMinChunk = makeChunk({
+      bodyId: -31,
+      etStart: 405_000,
+      cadence: 60,
+      sampleCount: 3,
+      pFn: () => [300, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const tenSecChunk = makeChunk({
+      bodyId: -31,
+      etStart: 405_100,
+      cadence: 10,
+      sampleCount: 3,
+      pFn: () => [400, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const manifest = makeManifest([
+      { url: 'data/wide-seg.bin.br', range: [0, 864_000], cadenceSec: 86400 },
+      { url: 'data/hourly.bin.br', range: [400_000, 407_200], cadenceSec: 3600 },
+      { url: 'data/1min.bin.br', range: [405_000, 405_120], cadenceSec: 60 },
+      { url: 'data/10sec.bin.br', range: [405_100, 405_120], cadenceSec: 10 },
+    ]);
+    const chunks = new Map<string, LoadedChunk>([
+      ['data/wide-seg.bin.br', wideSegChunk],
+      ['data/hourly.bin.br', hourlyChunk],
+      ['data/1min.bin.br', oneMinChunk],
+      ['data/10sec.bin.br', tenSecChunk],
+    ]);
+    const { loader } = fakeChunkLoader(chunks);
+    const svc = new EphemerisService(manifest, loader);
+
+    // At et = 405_110 — covered by all four tiers; narrowest is 10sec.
+    expect(svc.getStateAt(405_110, -31)?.position[0]).toBeCloseTo(400, 9);
+    // At et = 405_050 — outside 10sec but inside 1min, hourly, wide.
+    expect(svc.getStateAt(405_050, -31)?.position[0]).toBeCloseTo(300, 9);
+    // At et = 403_000 — outside 1min + 10sec; inside hourly + wide.
+    expect(svc.getStateAt(403_000, -31)?.position[0]).toBeCloseTo(200, 9);
+    // At et = 200_000 — only wide-seg covers.
+    expect(svc.getStateAt(200_000, -31)?.position[0]).toBeCloseTo(100, 9);
+  });
+
+  it('falls back to the wider tier when the narrower tier window has exited', () => {
+    // Scrub past the narrow band's end — the wider tier MUST still resolve.
+    const wideSegChunk = makeChunk({
+      bodyId: -31,
+      etStart: 0,
+      cadence: 86400,
+      sampleCount: 11,
+      pFn: () => [100, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const narrowChunk = makeChunk({
+      bodyId: -31,
+      etStart: 1000,
+      cadence: 10,
+      sampleCount: 11,
+      pFn: () => [999, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const manifest = makeManifest([
+      { url: 'data/wide.bin.br', range: [0, 864_000], cadenceSec: 86400 },
+      { url: 'data/narrow.bin.br', range: [1000, 1100], cadenceSec: 10 },
+    ]);
+    const chunks = new Map<string, LoadedChunk>([
+      ['data/wide.bin.br', wideSegChunk],
+      ['data/narrow.bin.br', narrowChunk],
+    ]);
+    const { loader } = fakeChunkLoader(chunks);
+    const svc = new EphemerisService(manifest, loader);
+
+    // Inside narrow band — narrow wins.
+    expect(svc.getStateAt(1050, -31)?.position[0]).toBeCloseTo(999, 9);
+    // Past narrow band — falls back to wide (the bug this test pins).
+    expect(svc.getStateAt(5000, -31)?.position[0]).toBeCloseTo(100, 9);
+  });
+});
+
+// === Story 4.3 AC2 — 10%-prefetch trigger + boundaryStalled signal ====
+
+describe('EphemerisService — Story 4.3 AC2 prefetch + boundaryStalled', () => {
+  it('fires a chunk-load prefetch for the next file when et enters the last 10% of the current window', () => {
+    const chunkA = makeChunk({
+      bodyId: -31,
+      etStart: 0,
+      cadence: 100,
+      sampleCount: 11,
+      pFn: () => [1, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const manifest = makeManifest([
+      { url: 'data/a.bin.br', range: [0, 1000], cadenceSec: 100 },
+      { url: 'data/b.bin.br', range: [1000, 2000], cadenceSec: 100 },
+    ]);
+    const chunks = new Map<string, LoadedChunk>([['data/a.bin.br', chunkA]]);
+    const { loader, loadCalls } = fakeChunkLoader(chunks);
+    const svc = new EphemerisService(manifest, loader);
+
+    // Trigger threshold is 1000 - (1000 * 0.1) = 900. Below 900 → no prefetch.
+    svc.getStateAt(500, -31);
+    expect(loadCalls).not.toContain('data/b.bin.br');
+
+    // At 950 — inside the last 10% — must fire prefetch.
+    svc.getStateAt(950, -31);
+    expect(loadCalls).toContain('data/b.bin.br');
+  });
+
+  it('does not re-trigger prefetch on subsequent calls inside the same trigger band', () => {
+    const chunkA = makeChunk({
+      bodyId: -31,
+      etStart: 0,
+      cadence: 100,
+      sampleCount: 11,
+      pFn: () => [1, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const manifest = makeManifest([
+      { url: 'data/a.bin.br', range: [0, 1000], cadenceSec: 100 },
+      { url: 'data/b.bin.br', range: [1000, 2000], cadenceSec: 100 },
+    ]);
+    const chunks = new Map<string, LoadedChunk>([['data/a.bin.br', chunkA]]);
+    const { loader, loadCalls } = fakeChunkLoader(chunks);
+    const svc = new EphemerisService(manifest, loader);
+
+    svc.getStateAt(950, -31);
+    svc.getStateAt(960, -31);
+    svc.getStateAt(970, -31);
+    // Exactly one load of data/b.bin.br across all trigger-band calls.
+    const bLoads = loadCalls.filter((u) => u === 'data/b.bin.br');
+    expect(bLoads.length).toBe(1);
+  });
+
+  it('sets boundaryStalled = true when the queried chunk is missing AND inside a covered window', () => {
+    const manifest = makeManifest([
+      { url: 'data/a.bin.br', range: [0, 1000], cadenceSec: 100 },
+    ]);
+    const chunks = new Map<string, LoadedChunk>(); // empty — no chunk in cache
+    const { loader } = fakeChunkLoader(chunks);
+    const svc = new EphemerisService(manifest, loader);
+
+    expect(svc.boundaryStalled).toBe(false); // initial state
+    expect(svc.getStateAt(500, -31)).toBeNull();
+    expect(svc.boundaryStalled).toBe(true);
+  });
+
+  it('clears boundaryStalled on next successful lookup', () => {
+    const chunk = makeChunk({
+      bodyId: -31,
+      etStart: 0,
+      cadence: 100,
+      sampleCount: 5,
+      pFn: () => [42, 0, 0],
+      vFn: () => [0, 0, 0],
+    });
+    const manifest = makeManifest([
+      { url: 'data/a.bin.br', range: [0, 400], cadenceSec: 100 },
+    ]);
+    const chunks = new Map<string, LoadedChunk>(); // missing initially
+    const { loader } = fakeChunkLoader(chunks);
+    const svc = new EphemerisService(manifest, loader);
+
+    svc.getStateAt(200, -31);
+    expect(svc.boundaryStalled).toBe(true);
+    chunks.set('data/a.bin.br', chunk);
+    const s = svc.getStateAt(200, -31);
+    expect(s).not.toBeNull();
+    expect(svc.boundaryStalled).toBe(false);
+  });
+
+  it('does NOT set boundaryStalled for ET outside every covered window (out-of-mission)', () => {
+    const manifest = makeManifest([
+      { url: 'data/a.bin.br', range: [0, 1000], cadenceSec: 100 },
+    ]);
+    const { loader } = fakeChunkLoader(new Map());
+    const svc = new EphemerisService(manifest, loader);
+
+    expect(svc.getStateAt(-500, -31)).toBeNull(); // before mission window
+    expect(svc.boundaryStalled).toBe(false);
+    expect(svc.getStateAt(99999, -31)).toBeNull(); // after mission window
+    expect(svc.boundaryStalled).toBe(false);
+  });
+});

@@ -26,8 +26,13 @@ Story 3.1 schema extension (ADR-0004 § Body Layout per Kind, amended 2026-05-21
 the same 40-byte header serializes a quaternion attitude stream when
 ``kind == "attitude"``. The discrimination is body_id-based:
 
-    body_id ∈ TRAJECTORY_BODY_IDS = {-31, -32, 10, 1..8, 301}  →  kind = "trajectory"
+    body_id ∈ TRAJECTORY_BODY_IDS = {-31, -32, 10, 1..8, 301, MOON_BODY_IDS}  →  kind = "trajectory"
     body_id ∈ ATTITUDE_BODY_IDS   = {-31000, -31100, -32000, -32100}  →  kind = "attitude"
+
+Story 4.11 (2026-05-23): MOON_BODY_IDS = {501..504, 606..608, 701..705, 801} —
+the outer-system moons procured for the encounter-chapter visibility (Galileans
+for V1J/V2J, Titan/Hyperion/Iapetus for V1S/V2S, Ariel/Umbriel/Titania/Oberon/
+Miranda for V2U, Triton for V2N). See bake_trajectories.MOON_BODIES.
 
 Per-sample body layout (attitude kind):
     [et, qw, qx, qy, qz] as 5 consecutive f64 LE values; per-sample bytes = 40.
@@ -67,7 +72,19 @@ HEADER_SIZE = 40
 
 # Story 1.13: trajectory body IDs are NAIF SPK IDs — Voyagers, Sun, eight
 # planet barycenters (NAIF 1..8), Moon (NAIF 301).
-TRAJECTORY_BODY_IDS = frozenset({-31, -32, 10, 1, 2, 3, 4, 5, 6, 7, 8, 301})
+#
+# Story 4.11 extension (2026-05-23): outer-system moons added to the allow-list
+# alongside the satellite SPK procurement (jup365.bsp/sat441.bsp/ura184_part-3.bsp/
+# nep097.bsp). The moon NAIF IDs come from `bake_trajectories.MOON_BODIES`:
+#   - Jovian Galileans: 501 (Io), 502 (Europa), 503 (Ganymede), 504 (Callisto)
+#   - Saturnian: 606 (Titan), 607 (Hyperion), 608 (Iapetus)
+#   - Uranian: 701 (Ariel), 702 (Umbriel), 703 (Titania), 704 (Oberon), 705 (Miranda)
+#   - Neptunian: 801 (Triton)
+# These IDs occupy the NAIF "satellite system" range (planet × 100 + minor id)
+# which is disjoint from CK frame structure IDs (-31000/-31100/-32000/-32100)
+# and from the Story 1.13 trajectory set, so the discriminator remains safe.
+MOON_BODY_IDS = frozenset({501, 502, 503, 504, 606, 607, 608, 701, 702, 703, 704, 705, 801})
+TRAJECTORY_BODY_IDS = frozenset({-31, -32, 10, 1, 2, 3, 4, 5, 6, 7, 8, 301}) | MOON_BODY_IDS
 
 # Story 3.1: attitude body IDs are the 5-digit SPICE CK frame structure IDs.
 # (V1 bus / V1 scan platform / V2 bus / V2 scan platform — the NA-camera IDs
@@ -156,7 +173,8 @@ def _validate_inputs(
     if body_id not in ALLOWED_BODY_IDS:
         raise ValueError(
             f"body_id must be one of {sorted(ALLOWED_BODY_IDS)} "
-            f"(trajectory: V1=-31, V2=-32, Sun=10, planet-barycenters 1..8, Moon=301; "
+            f"(trajectory: V1=-31, V2=-32, Sun=10, planet-barycenters 1..8, Moon=301, "
+            f"outer-system moons {sorted(MOON_BODY_IDS)}; "
             f"attitude: V1-bus=-31000, V1-scan=-31100, V2-bus=-32000, V2-scan=-32100); "
             f"got {body_id}"
         )

@@ -290,6 +290,24 @@ export default defineConfig({
       },
     },
   },
+  // Story 4.9 — exclude the Playwright L4 visual-regression suite from
+  // Vitest's default glob. Both suites live under `web/tests/` and both
+  // use the `.spec.ts` extension that Vitest picks up by default; this
+  // exclude keeps `npm test` (vitest run) bound to the L3 tier and
+  // routes the L4 suite exclusively through `npm run test:visual`.
+  //
+  // The Playwright config has its own `testMatch` so it ignores the
+  // L3 vitest specs — the two suites are cleanly partitioned.
+  // @ts-expect-error — `test` is the Vitest config slot (vitest extends
+  // Vite's `defineConfig` via module augmentation; the augmented type
+  // isn't visible here without a `/// <reference types="vitest" />`).
+  test: {
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/tests/visual/**',
+    ],
+  },
 });
 
 // Helper for unit tests that want to introspect the pre-rendered HTML

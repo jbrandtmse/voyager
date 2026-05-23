@@ -67,6 +67,12 @@ import {
 } from '../constants/mission';
 import type { ChapterSpec } from '../types/chapter';
 import { findChapterBySlug } from '../chapters/registry';
+import {
+  HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+  HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
+  clampHeliocentricDistanceAu,
+  clampHeliocentricElevationDeg,
+} from '../render/voyager-camera-controller';
 
 export interface ParseInitialTResult {
   /** Parsed ET if the URL was valid; otherwise `MISSION_START_ET`. */
@@ -98,6 +104,24 @@ export interface ParseInitialTResult {
  * the next frame.
  */
 export type RouteKind = 'home' | 'chapter' | 'about';
+
+/**
+ * Story 4.12 — parsed `?view=heliocentric&distance=<au>&elevation=<deg>`
+ * query parameters. When `?view=heliocentric` is absent, `enabled` is
+ * false and the distance/elevation fields default to the documented
+ * heliocentric defaults (10 AU, 20°). Distance + elevation values are
+ * clamped to documented ranges per the AC2 contract (lenient — NaN /
+ * out-of-range silently collapse to defaults, never throw).
+ *
+ * Parameter matching is case-insensitive on the `view` value
+ * (`heliocentric` / `HELIOCENTRIC` / `Heliocentric` all match) but
+ * positional naming is fixed (`view`, `distance`, `elevation`).
+ */
+export interface ParseHeliocentricViewResult {
+  enabled: boolean;
+  distanceAu: number;
+  elevationDeg: number;
+}
 
 export interface ParseInitialPathResult {
   /**
@@ -283,6 +307,44 @@ export class URLSync {
    *   - `?t=` present and parseable but outside `[MISSION_START_ET,
    *     MISSION_END_ET]` → same silent reject.
    */
+  /**
+   * Story 4.12 — read `?view=heliocentric&distance=<au>&elevation=<deg>`
+   * from the current URL.
+   *
+   * Contract per AC2:
+   *   - `?view=heliocentric` (case-insensitive on the value) enables the
+   *     heliocentric system-view camera mode at cold-load.
+   *   - `?distance=<au>` (numeric) overrides the default 10 AU framing.
+   *     Out-of-range values clamp to [1, 100] AU. NaN/missing falls back
+   *     to the default.
+   *   - `?elevation=<deg>` (numeric) overrides the default 20° elevation.
+   *     Out-of-range values clamp to [-89, 89] degrees. NaN/missing
+   *     falls back to the default.
+   *   - When `?view=heliocentric` is absent (or any other value), the
+   *     mode is disabled — distance/elevation defaults still populate
+   *     the result fields but `enabled === false` and the caller
+   *     should not invoke `applyHeliocentricFraming`.
+   *
+   * Lenient parsing — never throws, never surfaces error UI (NFR-S7).
+   */
+  parseHeliocentricView(): ParseHeliocentricViewResult {
+    const params = new URLSearchParams(this.win.location.search);
+    const viewRaw = params.get('view');
+    const enabled =
+      viewRaw !== null && viewRaw.toLowerCase() === 'heliocentric';
+    const distanceRaw = params.get('distance');
+    const elevationRaw = params.get('elevation');
+    const distanceAu =
+      distanceRaw === null || distanceRaw === ''
+        ? HELIOCENTRIC_DEFAULT_DISTANCE_AU
+        : clampHeliocentricDistanceAu(Number(distanceRaw));
+    const elevationDeg =
+      elevationRaw === null || elevationRaw === ''
+        ? HELIOCENTRIC_DEFAULT_ELEVATION_DEG
+        : clampHeliocentricElevationDeg(Number(elevationRaw));
+    return { enabled, distanceAu, elevationDeg };
+  }
+
   parseInitialT(): ParseInitialTResult {
     const params = new URLSearchParams(this.win.location.search);
     const raw = params.get('t');

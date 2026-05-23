@@ -290,23 +290,58 @@ def test_vtrj_file_size_sanity() -> None:
 
 @pytest.mark.skipif(_baked_manifest() is None, reason="bake/out/manifest.json missing")
 def test_segments_do_not_overlap() -> None:
-    """For each body in the manifest, consecutive segments' time_range_et ranges
-    are non-overlapping. Touching endpoints (seg_n.end == seg_{n+1}.start) are
-    allowed — dev clamped with a 10 ms inset so interior samples are safe.
+    """For each body in the manifest, consecutive SPK-segment chunks' time_range_et
+    ranges are non-overlapping WITHIN THE TRAJECTORY KIND. Touching endpoints
+    (seg_n.end == seg_{n+1}.start) are allowed — dev clamped with a 10 ms inset
+    so interior samples are safe.
+
+    Story 4.0 amendment: previously this check sorted ALL files (regardless of
+    `kind`) and asserted non-overlap. Story 3.1 / 4.0 added per-spacecraft
+    attitude entries (kind=bus_attitude / kind=platform_attitude) whose ETs
+    fall INSIDE the corresponding trajectory segments by design — the attitude
+    window IS supposed to be a slice of the cruise/encounter trajectory.
+    Group by kind first so the contract reads "trajectory chunks don't
+    overlap each other; attitude chunks (per kind) don't overlap each other"
+    without cross-kind false positives.
+
+    Story 4.11 amendment (2026-05-23): Story 4.3's per-encounter cadence-band
+    trajectory chunks (filename pattern `<slug>-enc-<encounter>-<cadence>.bin.br`)
+    INTENTIONALLY nest inside the broader SPK-segment chunks — the runtime
+    EphemerisService's `findSegmentFile` binary-search picks the narrower band
+    over the broader segment when both cover an ET (Story 4.3 AC1 § Cadence
+    bands keyed by tag). So for the trajectory kind, this test scopes the
+    non-overlap assertion to per-segment files only (URL contains `-seg`),
+    leaving the encounter bands to be checked by the separate
+    `test_bake_trajectories_cadence.py::test_encounter_band_nesting` suite.
     """
+    from collections import defaultdict
+
     manifest = _baked_manifest()
     assert manifest is not None
     for body in manifest["bodies"]:
         files = body["files"]
-        # Sort by et_start so the check is robust to manifest ordering.
-        ranges = sorted([tuple(fe["timeRangeEt"]) for fe in files])
-        for i in range(1, len(ranges)):
-            prev_start, prev_end = ranges[i - 1]
-            this_start, this_end = ranges[i]
-            assert this_start >= prev_end, (
-                f"{body['name']}: segment {i} overlaps previous — "
-                f"prev=[{prev_start}, {prev_end}], this=[{this_start}, {this_end}]"
-            )
+        by_kind: dict[str, list[tuple[float, float]]] = defaultdict(list)
+        for fe in files:
+            # Story 4.11 amendment: trajectory kind has two sub-categories —
+            # the SPK-segment per-segment chunks (URL contains `-seg`), and
+            # the Story 4.3 per-encounter cadence-band chunks (URL contains
+            # `-enc-`). The non-overlap contract only applies to the former.
+            # The latter intentionally nest inside the former (and inside
+            # each other across cadence tiers — hourly contains 1min contains
+            # 10sec) per the cadence-band tier policy. Encounter-band nesting
+            # is checked by `test_bake_trajectories_cadence.py`.
+            if fe["kind"] == "trajectory" and "-enc-" in fe["url"]:
+                continue
+            by_kind[fe["kind"]].append(tuple(fe["timeRangeEt"]))
+        for kind, ranges_unsorted in by_kind.items():
+            ranges = sorted(ranges_unsorted)
+            for i in range(1, len(ranges)):
+                prev_start, prev_end = ranges[i - 1]
+                this_start, this_end = ranges[i]
+                assert this_start >= prev_end, (
+                    f"{body['name']} kind={kind}: segment {i} overlaps previous — "
+                    f"prev=[{prev_start}, {prev_end}], this=[{this_start}, {this_end}]"
+                )
 
 
 # --- 4. No segment-boundary samples crossing -------------------------------

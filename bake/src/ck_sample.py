@@ -5,18 +5,33 @@ quaternions via SpiceyPy `ckgp` across a deterministic ET grid covering the
 documented CK windows, applies the sign-flip walk (ADR-0024 / quat_continuity),
 and emits VTRJ attitude binaries via `vtrj_writer.write_vtrj(kind="attitude", ...)`.
 
-Cadence schedule per AC1:
-- **10-second band:** ``[closest_approach_et - 3600, closest_approach_et + 3600]`` —
-  the highest-detail window centred on the closest-approach instant.
-- **1-minute band:** ``[encounter_start_et - 2 days, encounter_end_et + 2 days]``,
-  clamped to the ckcov interval; masked to exclude the 10-second band.
-- **Daily band:** the remaining CK coverage interval (cruise-CK coverage
-  outside the ±2-day flyby band), masked to exclude the 1-minute and
-  10-second bands.
+Cadence schedule (Story 4.0 amendment 2026-05-22; supersedes the 2026-05-21
+uniform 5-sec schedule which itself superseded the original AC1 mixed schedule
+— see ``_build_window_grid`` docstring for the full empirical history):
 
-Precedence: 10-sec > 1-min > daily. The ET grid is built by generating each
-band's grid points, then masking out the higher-priority band's ranges from
-the lower-priority bands. The result is a non-overlapping sorted ET sequence.
+- **1-second inner band:** closest_approach_et ± 4 hours (HALF_WIDTH_1S) —
+  catches fast-slew active-imaging sequences (V2 Saturn / V2 Uranus / etc.)
+  without breaching NFR-P10. Initial Story 4.0 attempt used ±1 hour; raised
+  to ±4 hours when AC8 integration smoke surfaced V2 Saturn at CA + 2.59
+  hours still breaching the 1 mrad gate at 3.3 mrad.
+- **5-second outer band:** closest_approach_et ± 2 days (HALF_WIDTH_1MIN),
+  masked to exclude the inner ±4hr band. Adequate for the lower slew rates
+  outside active imaging.
+
+Precedence: inner > outer. The grid is built by generating each band's
+grid points, then subtracting the inner band from the outer before generating
+the outer-band grid. The result is a non-overlapping sorted ET sequence.
+
+**Type-1 CK shape (platform_attitude path):** PDS Rings ISS SEDR scan-platform
+CKs are type-1 (one record per ISS shutter event; zero-duration intervals
+from ``ckcov``). For those, ``bake_attitude`` detects the type-1 shape via
+``_is_type1_coverage`` and uses ``_extract_knot_ets_in_band`` to harvest the
+discrete knot ETs directly, bypassing the continuous-cadence grid. The
+resulting VTRJ stores explicit per-sample ETs (ADR-0004 § Body Layout per
+Kind column-0 ET storage). Story 4.0 AC2 added this path; pre-Story-4.0
+the platform-attitude VTRJs were silently skipped via the
+"[SKIP] empty ET grid" path, causing the runtime to fall back to the
+synthesized HGA-Earth-pointing path for the scan platform.
 
 Quaternion convention: SpiceyPy `ckgp` returns SPICE-format quaternions
 (scalar-first ``[w, x, y, z]``; ``q = cos(θ/2) + sin(θ/2) · (x·i + y·j + z·k)``).
@@ -70,13 +85,15 @@ else:
 
 
 # Cadence bands per AC1
-CADENCE_5S = 5.0  # Story 3.1 amended 2026-05-21: post-AC8 NFR-P10 calibration.
+CADENCE_1S = 1.0  # Story 4.0 amendment 2026-05-22: inner cadence around CA (path (c)).
+CADENCE_5S = 5.0  # Story 3.1 amended 2026-05-21: outer band (±2 days) cadence.
 CADENCE_10S = 10.0  # Retained for unit-test callers; not used in production bake.
 CADENCE_1MIN = 60.0  # Retained as module constant for downstream compatibility.
 CADENCE_DAILY = 86400.0  # Retained as module constant; not used by the attitude bake.
 
 # Half-widths (seconds) for each band
-HALF_WIDTH_10S = 3600.0  # ±1 hour around closest approach
+HALF_WIDTH_10S = 3600.0  # ±1 hour around closest approach (legacy alias)
+HALF_WIDTH_1S = 14400.0  # Story 4.0 amendment: 1-sec inner band ±4 hours around CA (initial ±1hr was inadequate for V2 Saturn active imaging at CA + ~2.6 hours)
 HALF_WIDTH_1MIN = 172800.0  # ±2 days around encounter window
 
 # Reference frame for ckgp queries. J2000 is the canonical CK reference frame
@@ -143,7 +160,18 @@ def _ckcov_windows(ck_path: Path, struct_id: int) -> list[tuple[float, float]]:
 def _intersect_interval(
     band: tuple[float, float], coverage: list[tuple[float, float]]
 ) -> list[tuple[float, float]]:
-    """Return the intersection of [a, b] with each coverage interval, dropping empties."""
+    """Return the intersection of [a, b] with each coverage interval, dropping empties.
+
+    Note: this strict ``lo < hi`` filter intentionally drops zero-duration
+    intervals (``a == b``) — those are the canonical shape of type-1 CK records
+    (one per ISS shutter event for the platform structures ``-31100`` /
+    ``-32100``). Type-1 CK handling is now routed through
+    ``_extract_knot_ets_in_band`` below, which returns the discrete knot ETs
+    AS-IS rather than discarding them. The platform path in ``bake_attitude``
+    detects type-1 coverage shape and uses the discrete-knot path; the bus
+    path (continuous type-3 / type-6 coverage) continues to use this
+    intersector + the cadence-grid path unchanged.
+    """
     a, b = band
     out: list[tuple[float, float]] = []
     for cov_a, cov_b in coverage:
@@ -152,6 +180,45 @@ def _intersect_interval(
         if lo < hi:
             out.append((lo, hi))
     return out
+
+
+def _is_type1_coverage(coverage: list[tuple[float, float]]) -> bool:
+    """Heuristic: detect type-1 (discrete pointing) CK coverage shape.
+
+    Type-1 CK records (one per ISS shutter event) appear as zero-duration
+    intervals ``(t, t)`` from ``ckcov``. Detection: at least one interval where
+    ``a == b`` (strict equality on float64 — ``ckcov`` reports the SCLK tick
+    boundary at full precision so the equality is exact).
+
+    Story 4.0 AC2 (path (a) — amend `_build_window_grid` to treat type-1
+    zero-duration intervals as discrete knot ETs).
+    """
+    return any(a == b for a, b in coverage)
+
+
+def _extract_knot_ets_in_band(
+    coverage: list[tuple[float, float]],
+    band: tuple[float, float],
+) -> np.ndarray:
+    """Return the sorted, deduped ET knots (interval starts) inside ``band``.
+
+    For type-1 CK coverage where every interval is zero-duration ``(t, t)``,
+    each interval start IS a discrete knot ET — the SCLK tick at which the
+    ISS shutter event fired. This helper extracts those knot ETs, filters to
+    the encounter ±2-day band, and returns them as a float64 ndarray sorted
+    + deduped (``np.unique`` is sufficient since coverage is finite).
+
+    Story 4.0 AC2 path (a): emit a ``platform_attitude`` VTRJ with explicit
+    per-sample ETs for type-1 CKs (ADR-0004 § Body Layout per Kind column-0
+    ET storage — Story 3.1 amendment 2026-05-21).
+    """
+    band_lo, band_hi = band
+    knots = [
+        float(a) for a, _b in coverage if band_lo <= a <= band_hi
+    ]
+    if not knots:
+        return np.array([], dtype=np.float64)
+    return np.unique(np.asarray(knots, dtype=np.float64))
 
 
 def _subtract_ranges(
@@ -214,38 +281,75 @@ def _build_window_grid(
     """Compose the per-encounter ET grid from two cadence bands within the encounter window.
 
     Returns ``(grid, effective_cadence_seconds)`` where ``effective_cadence`` is
-    the FINE cadence (10-sec when the closest-approach band is non-empty,
-    otherwise 1-minute). The VTRJ header `cadence_seconds` stores this finest
-    cadence as **informational only** (ADR-0004 § Body Layout per Kind, Story 3.1
-    amendment 2026-05-21) — the on-disk body carries explicit per-sample ETs in
-    column 0, so the runtime decoder does NOT use the header cadence for knot
-    reconstruction.
+    the FINEST cadence used to build the grid (``CADENCE_1S`` when the inner
+    ±4hr CA band contributes samples, ``CADENCE_5S`` otherwise). The VTRJ
+    header ``cadence_seconds`` stores this finest cadence as **informational
+    only** (ADR-0004 § Body Layout per Kind, Story 3.1 amendment 2026-05-21) —
+    the on-disk body carries explicit per-sample ETs in column 0, so the
+    runtime decoder does NOT use the header cadence for knot reconstruction.
 
-    Cadence schedule (Story 3.1 amended 2026-05-21 — uniform 5-sec across
-    encounter ±2 days; supersedes the original AC1 mixed schedule):
+    Cadence schedule (Story 4.0 amended 2026-05-22 — variable cadence around
+    CA; supersedes the Story 3.1 amendment 2026-05-21 uniform 5-sec schedule
+    which itself superseded the original AC1 mixed schedule):
 
-        5-sec uniform across closest_approach_et ± 2 days (HALF_WIDTH_1MIN).
+        - **1-sec inner band:** closest_approach_et ± 4 hours (HALF_WIDTH_1S).
+          Catches the fast-slew imaging sequences (V2 Saturn active imaging,
+          V2 Uranus Miranda imaging, etc.) without breaching NFR-P10. Initial
+          Story 4.0 attempt used ±1 hour; raised to ±4 hours when AC8
+          integration smoke surfaced V2 Saturn at CA + 2.59 hours still
+          breaching the 1 mrad gate at 3.3 mrad (5-sec outer band).
+        - **5-sec outer band:** closest_approach_et ± 2 days (HALF_WIDTH_1MIN),
+          masked to exclude the 1-sec band so consecutive samples are never
+          duplicated. Adequate for the lower slew rates outside the active-
+          imaging band.
 
-    Empirical history (real-CK slow-tier iterations 2026-05-21):
+    Precedence: inner > outer. The grid is built by generating each band's
+    grid points, then subtracting the inner band's range from the outer band
+    via ``_subtract_ranges`` before generating the outer-band grid. The result
+    is a non-overlapping sorted ET sequence.
+
+    Empirical history (real-CK slow-tier iterations 2026-05-21 / 2026-05-22):
         - Original AC1 mixed schedule (10-sec ±1hr inside 1-min ±2-day):
           breached NFR-P10 at V2 Uranus (-4hr) by 32.6 mrad — outer band's
           1-min cadence too coarse for active Miranda imaging.
-        - 10-sec uniform across ±2 days: dropped worst case from 32.6 → 1.36
-          mrad. 6 of 7 windows passed. Only V2 Uranus -4hr (Miranda imaging
-          peak) still over the 1.0 mrad gate.
-        - **5-sec uniform across ±2 days (current):** SLERP error scales as
-          (cadence)² × angular acceleration; halving cadence quarters the
-          error → V2 Uranus expected ~0.34 mrad. Comfortable margin under
-          NFR-P10's 1 mrad gate.
+        - 10-sec uniform across ±2 days (Story 3.1 first slow-tier
+          calibration 2026-05-21): dropped worst case from 32.6 → 1.36 mrad.
+          6 of 7 windows passed. Only V2 Uranus -4hr (Miranda imaging peak)
+          still over the 1.0 mrad gate.
+        - 5-sec uniform across ±2 days (Story 3.1 amendment 2026-05-21):
+          dropped V2 Uranus to ~0.34 mrad, comfortably under NFR-P10.
+          **But:** Story 3.7's L2 fixture (2026-05-22 lead-driven smoke
+          surfaced via the L2 gate) found **V2 Saturn active imaging is
+          faster than V2 Uranus** — at ET ~-579086636 (V2 Saturn CA + a few
+          hours), neighboring 5-sec knots have pairwise angular delta = 5.8
+          mrad; SLERP mid-interval gives 3.6 mrad — 3.6× over NFR-P10.
+          V2 Saturn was not in the Story 3.1 calibration set (cadence was
+          tuned only for V2 Uranus, the previously-known worst case).
+        - **Variable cadence (current — Story 4.0 amendment 2026-05-22):**
+          1-sec inside ±4hr CA (HALF_WIDTH_1S, widened from initial ±1hr
+          when AC8 smoke surfaced V2 Saturn at CA+2.6hr — see ``HALF_WIDTH_1S``
+          constant declaration above), 5-sec elsewhere. 1-sec inner band
+          gives ~25× SLERP-error reduction inside the active-imaging window
+          (error scales as cadence² × angular acceleration); 5-sec outer band
+          preserves the Story 3.1 V2-Uranus-margin elsewhere. Path (c) from
+          the deferred-work item — preserves the original AC1 mixed-schedule
+          intent + the variable-cadence schema (already supported per
+          ADR-0004 § Body Layout per Kind explicit-ET amendment).
 
-    Storage cost: 5-sec across 4 days = 69120 samples × 40 bytes = 2.7 MB
-    per file uncompressed × 14 files ≈ 38 MB. Brotli compresses to ~5-10 MB.
-    Well within NFR-P4 (≤35 MB first paint) / NFR-P5 (≤150 MB full) budgets.
+    Storage cost (Story 4.0 amendment, post-±4hr-widening):
+        - 1-sec ±4hr CA = 28,800 samples per encounter
+        - 5-sec across 4 days minus 8hr inner = (86400×4 - 28800)/5 = 63,360
+        - Total: ~92k samples per encounter file × 40 bytes ≈ 3.7 MB
+          uncompressed per file × 14 files ≈ 52 MB uncompressed.
+        - Brotli q11 typically compresses VTRJ to ~15-25% → ~8-13 MB
+          first-paint, well within NFR-P4 (≤35 MB) / NFR-P5 (≤150 MB).
+        - AC8 integration smoke verified the actual brotli-compressed total
+          to be ~14 MB for all 13 attitude files (bus + platform).
 
-    The original AC1 wording ("1-minute during flyby ±2 days; 10-second
-    during closest approach ±1 hour") was inadequate against real CK content;
-    the epics.md AC1 wording is amended in place (voyager-skill-rules.md
-    Rule 5 — planning artifacts updated where reality diverges).
+    Path (c) preserves the spirit of AC1's original mixed-schedule design
+    (per voyager-skill-rules.md Rule 5 — planning artifacts amended in place
+    rather than worked around). The epics.md AC1 wording is amended in
+    parallel with this docstring as part of the Story 4.0 change-set.
 
     The ``encounter_start_et`` / ``encounter_end_et`` parameters are retained
     in the signature for caller-context discoverability but are NOT consumed
@@ -256,24 +360,54 @@ def _build_window_grid(
     closest_approach ± 2 days — no daily-cadence cruise samples. NFR-P10 is
     "in encounter windows" per PRD; cruise periods use synthesized HGA
     attitude (AttitudeService, Story 3.2), not baked CK data.
+
+    **V2 Saturn — load-bearing surfacing case for Story 4.0:** Story 3.7's L2
+    fixture surfaced V2 Saturn (CA 1981-08-25) at 3.6 mrad against NFR-P10's
+    1 mrad gate when this function ran at uniform 5-sec cadence. The 1-sec
+    inner-band addition closes that gate. See `_bmad-output/implementation-
+    artifacts/3-7-smoke-evidence/local-real-data-output.txt` for the failing
+    knot's ET (-579086636.4) and the Story 4.0 closure smoke under
+    `_bmad-output/implementation-artifacts/4-0-smoke-evidence/`.
     """
     if not coverage:
-        return np.array([], dtype=np.float64), CADENCE_5S
+        return np.array([], dtype=np.float64), CADENCE_1S
 
-    # Story 3.1 amendment (2026-05-21): single 5-sec band across closest_approach ± 2 days.
     del encounter_start_et, encounter_end_et  # explicitly unused; see docstring
-    band = (closest_approach_et - HALF_WIDTH_1MIN, closest_approach_et + HALF_WIDTH_1MIN)
-    band_clipped = _intersect_interval(band, coverage)
 
-    grids: list[np.ndarray] = []
-    for lo, hi in band_clipped:
-        grids.append(_et_grid_for_interval(lo, hi, CADENCE_5S))
+    inner_band = (
+        closest_approach_et - HALF_WIDTH_1S,
+        closest_approach_et + HALF_WIDTH_1S,
+    )
+    outer_band = (
+        closest_approach_et - HALF_WIDTH_1MIN,
+        closest_approach_et + HALF_WIDTH_1MIN,
+    )
 
-    if not grids:
-        return np.array([], dtype=np.float64), CADENCE_5S
+    # Inner: 1-sec across ±4hr CA (HALF_WIDTH_1S), clipped to coverage.
+    inner_clipped = _intersect_interval(inner_band, coverage)
+    inner_grids: list[np.ndarray] = []
+    for lo, hi in inner_clipped:
+        inner_grids.append(_et_grid_for_interval(lo, hi, CADENCE_1S))
 
-    combined = np.unique(np.concatenate(grids))  # sorted + de-duplicated
-    return combined, CADENCE_5S
+    # Outer: 5-sec across ±2 days, clipped to coverage MINUS the inner band
+    # (so we don't double-sample the inner ±4hr at both cadences).
+    outer_clipped = _intersect_interval(outer_band, coverage)
+    outer_minus_inner = _subtract_ranges(outer_clipped, [inner_band])
+    outer_grids: list[np.ndarray] = []
+    for lo, hi in outer_minus_inner:
+        outer_grids.append(_et_grid_for_interval(lo, hi, CADENCE_5S))
+
+    all_grids = inner_grids + outer_grids
+    if not all_grids:
+        # Coverage exists but lies entirely outside ±2 days of CA — no samples.
+        # Cadence label is the finest *would-have-been* cadence (1-sec) for
+        # diagnostic consistency; the empty-grid signal is the caller's gate.
+        return np.array([], dtype=np.float64), CADENCE_1S
+
+    combined = np.unique(np.concatenate(all_grids))  # sorted + de-duplicated
+    # Effective cadence = finest band that contributed samples.
+    effective_cadence = CADENCE_1S if inner_grids else CADENCE_5S
+    return combined, effective_cadence
 
 
 def sample_window(
@@ -418,14 +552,19 @@ def bake_attitude(
 
     For each ENCOUNTERS row × (bus_id, scan_id), this function:
     1. Walks `ckcov` over each CK kernel to find the structure's coverage windows.
-    2. Builds the ET grid per AC1's cadence schedule (10-sec ± 1hr around closest
-       approach, 1-min over the encounter ±2-day band, daily over remaining CK
-       cruise segments).
+    2. Builds the ET grid (Story 4.0 amendment 2026-05-22): 1-sec inside
+       closest-approach ±4 hours (HALF_WIDTH_1S — widened from initial ±1hr
+       per AC8 smoke surfacing V2 Saturn at CA+2.6hr), 5-sec across
+       closest-approach ±2 days (with the inner band masked out).
+       For type-1 platform CKs (PDS Rings ISS
+       SEDR — zero-duration intervals per shutter event), uses the discrete
+       knot ETs in the ±2-day band directly (AC2 path (a)).
     3. Samples quaternions via SpiceyPy `ckgp` + `m2q` at every grid ET.
     4. Applies `quat_continuity.walk_signs` to remove sign-flip discontinuities.
     5. Writes the walked quaternions via `vtrj_writer.write_vtrj(kind="attitude")`.
     6. Emits one VTRJ per (encounter, kind) tuple; skips emission when ckcov
-       returns no coverage for that (CK, struct_id) tuple.
+       returns no coverage for that (CK, struct_id) tuple OR when the encounter
+       ±2-day band has no coverage overlap.
     7. Updates / writes `bake/out/manifest.json` so attitude entries appear
        alongside trajectory entries (the trajectory entries are preserved if
        the manifest already exists from a prior `just bake` run; see
@@ -508,12 +647,43 @@ def bake_attitude(
                     else:
                         merged.append((c_lo, c_hi))
 
-                grid, effective_cadence = _build_window_grid(
-                    coverage=merged,
-                    encounter_start_et=encounter_start_et,
-                    encounter_end_et=encounter_end_et,
-                    closest_approach_et=closest_approach_et,
-                )
+                # Story 4.0 AC2 (path (a)): type-1 platform CKs report
+                # zero-duration `(t, t)` intervals (one per ISS shutter event).
+                # `_intersect_interval` (and therefore `_build_window_grid`)
+                # strictly filter `lo < hi`, so the type-1 platform coverage
+                # union appears empty → no `platform_attitude` VTRJ is emitted
+                # → the runtime falls back to the synthesized HGA-Earth-pointing
+                # path for the scan platform → Story 3.7's L2 platform gate is
+                # inactive.
+                #
+                # Handling: detect the type-1 shape (any zero-duration interval)
+                # and extract the discrete knot ETs in the encounter ±2-day
+                # band as-is. The ET grid then contains exactly the SCLK ticks
+                # at which the CK has a record; the explicit-ET VTRJ schema
+                # (ADR-0004 § Body Layout per Kind column-0 ET storage)
+                # consumes them directly via the `ets=` parameter of
+                # `vtrj_writer.write_vtrj`. The cadence header in this case is
+                # informational only (no fixed cadence — type-1 records are
+                # event-timed).
+                if _is_type1_coverage(merged):
+                    band_2day = (
+                        closest_approach_et - HALF_WIDTH_1MIN,
+                        closest_approach_et + HALF_WIDTH_1MIN,
+                    )
+                    grid = _extract_knot_ets_in_band(merged, band_2day)
+                    # Effective cadence for the header: the median inter-knot
+                    # gap is a meaningful diagnostic, but for byte-stability +
+                    # determinism we report a fixed convention — CADENCE_1S
+                    # since type-1 records are event-rate (typically much
+                    # finer than 1 sec during active imaging).
+                    effective_cadence = CADENCE_1S
+                else:
+                    grid, effective_cadence = _build_window_grid(
+                        coverage=merged,
+                        encounter_start_et=encounter_start_et,
+                        encounter_end_et=encounter_end_et,
+                        closest_approach_et=closest_approach_et,
+                    )
 
                 if grid.size == 0:
                     print(
@@ -543,8 +713,9 @@ def bake_attitude(
                 et_end = float(kept_grid[-1])
                 # Cadence for the VTRJ header — INFORMATIONAL ONLY for attitude
                 # (ADR-0004 § Body Layout per Kind, Story 3.1 amendment 2026-05-21).
-                # The variable-cadence schedule (10-sec ±1hr CA / 1-min ±2-day
-                # encounter / daily cruise) is preserved inline by the per-sample
+                # The variable-cadence schedule (Story 4.0 amendment 2026-05-22 —
+                # 1-sec ±4hr CA (HALF_WIDTH_1S), 5-sec ±2-day; type-1 platform CKs use discrete
+                # event-rate knots per AC2) is preserved inline by the per-sample
                 # ETs stored in column 0 of the on-disk body. The runtime decoder
                 # reads explicit ETs as SLERP knots; this `cadence_seconds` value
                 # is the finest cadence band that contributed to the file, useful

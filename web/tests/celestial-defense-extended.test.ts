@@ -64,6 +64,15 @@ const texturesDir = resolve(webRoot, 'public/textures');
 
 const EXPECTED_NAIF_IDS = [10, 1, 2, 3, 4, 5, 6, 7, 8, 301] as const;
 const SPACECRAFT_NAIF_IDS = [-31, -32] as const;
+// Story 4.11 — outer-system moons procured (jup365 + sat441 + ura184_part-3 + nep097
+// satellite SPKs). The bake pipeline now emits a trajectory chunk per moon, so
+// the manifest body set extends from 12 (Story 1.13) to 25 (12 + 13 moons).
+const EXPECTED_MOON_NAIF_IDS = [
+  501, 502, 503, 504, // Galileans: Io / Europa / Ganymede / Callisto
+  606, 607, 608,      // Saturnians: Titan / Hyperion / Iapetus
+  701, 702, 703, 704, 705, // Uranians: Ariel / Umbriel / Titania / Oberon / Miranda
+  801,                // Neptunian: Triton
+] as const;
 
 /** LFS pointer detector — first ~134 bytes contain `version https://git-lfs`. */
 const isLfsPointer = (filePath: string): boolean => {
@@ -189,16 +198,20 @@ const loadManifest = (): Manifest =>
   JSON.parse(readFileSync(resolve(webRoot, 'public/data/manifest.json'), 'utf-8')) as Manifest;
 
 describe('Story 1.13 QA-extended — manifest.json body coverage', () => {
-  it('manifest.bodies[].naifId is the union of {2 spacecraft + 10 celestial} (12 total)', () => {
+  it('manifest.bodies[].naifId is the union of {2 spacecraft + 10 celestial + 13 moons} (25 total post-Story-4.11)', () => {
     const manifest = loadManifest();
     const ids = new Set(manifest.bodies.map((b) => b.naifId));
-    const expected = new Set<number>([...SPACECRAFT_NAIF_IDS, ...EXPECTED_NAIF_IDS]);
+    const expected = new Set<number>([
+      ...SPACECRAFT_NAIF_IDS,
+      ...EXPECTED_NAIF_IDS,
+      ...EXPECTED_MOON_NAIF_IDS,
+    ]);
     expect(
       ids,
-      `manifest body set drifted from the expected 12-body union. ` +
+      `manifest body set drifted from the expected 25-body union. ` +
         `Got: ${[...ids].sort((a, b) => a - b).join(', ')}`,
     ).toEqual(expected);
-    expect(manifest.bodies.length).toBe(12);
+    expect(manifest.bodies.length).toBe(25);
   });
 
   it('every celestial body in the manifest has at least one trajectory file with non-empty timeRange', () => {
@@ -317,20 +330,22 @@ const stripCommentsAndStrings = (src: string): string => {
   return out;
 };
 
-describe('Story 1.13 QA-extended — KTX2 deferral (executable code only)', () => {
-  // Story 3.3 lifted the KTX2 deferral for the SPACECRAFT GLB (ADR-0006);
-  // the deferral remains for celestial-body textures (Story 4.3 territory).
-  // Whitelist mirrors `celestial-bodies-defense.test.ts`.
-  const STORY_3_3_KTX2_WHITELIST = new Set<string>([
+describe('Story 4.3 QA-extended — KTX2Loader usage confined to canonical sites (executable code only)', () => {
+  // Story 3.3 (ADR-0006 step 3) landed KTX2Loader for the spacecraft GLB.
+  // Story 4.3 (ADR-0006 + AC4 + AC5) lands KTX2Loader for celestial-body
+  // textures. The whitelist mirrors `celestial-bodies-defense.test.ts`.
+  const KTX2_WHITELIST = new Set<string>([
     'src\\render\\spacecraft-models.ts',
     'src/render/spacecraft-models.ts',
+    'src\\services\\texture-loader.ts',
+    'src/services/texture-loader.ts',
   ]);
-  it('no executable KTX2Loader reference in web/src/ outside the Story-3.3 spacecraft surface', () => {
+  it('no executable KTX2Loader reference in web/src/ outside the canonical whitelist', () => {
     const tsFiles = walkTsFiles(srcRoot);
     const violations: string[] = [];
     for (const file of tsFiles) {
       const rel = relative(webRoot, file);
-      if (STORY_3_3_KTX2_WHITELIST.has(rel)) continue;
+      if (KTX2_WHITELIST.has(rel)) continue;
       const stripped = stripCommentsAndStrings(readFileSync(file, 'utf-8'));
       if (/\bKTX2Loader\b/.test(stripped)) {
         violations.push(rel);
@@ -338,8 +353,8 @@ describe('Story 1.13 QA-extended — KTX2 deferral (executable code only)', () =
     }
     expect(
       violations,
-      'KTX2Loader usage outside the Story 3.3 whitelist. Files: ' +
-        `${violations.join(', ')}. Update STORY_3_3_KTX2_WHITELIST if Story 4.3 lifts the celestial-textures deferral.`,
+      'KTX2Loader usage outside the canonical whitelist. Files: ' +
+        `${violations.join(', ')}. Add new site to KTX2_WHITELIST only if architecturally justified.`,
     ).toEqual([]);
   });
 });
@@ -512,28 +527,32 @@ describe('Story 1.13 QA-extended — zero new SphereGeometry constructions on th
 });
 
 // ===========================================================================
-// 10. GPU tier fall-through + Story-4.3 TODO marker.
+// 10. GPU tier — Story 4.3 lands KTX2 + 4k/8k tiers.
+//
+// Story 1.13 — selectTier returned '2k' unconditionally + a "deferred to
+// Story 4.3" marker comment lived inside the function body.
+//
+// Story 4.3 — selectTier still returns '2k' as the CRUISE default (the
+// upgrade is driven by RenderEngine.upgradePlanetTexture on SOI entry,
+// not by selectTier's cruise-time call), but the 4k/8k tiers now route
+// through real KTX2 file URLs. The Story 4.3 marker remains as a forward-
+// looking ADR-0006 / NFR-C6 reference inside selectTier's docstring.
 // ===========================================================================
-describe('Story 1.13 QA-extended — GPU tier fall-through to 2k + Story 4.3 marker', () => {
-  it('selectTier({recommendedTextureTier: "4k"}) returns "2k"', () => {
+describe('Story 4.3 QA-extended — cruise-default tier + ADR-0006 marker', () => {
+  it('selectTier({recommendedTextureTier: "4k"}) returns "2k" (cruise default)', () => {
     expect(selectTier({ recommendedTextureTier: '4k' })).toBe('2k');
   });
 
-  it('selectTier({recommendedTextureTier: "8k"}) returns "2k"', () => {
+  it('selectTier({recommendedTextureTier: "8k"}) returns "2k" (cruise default)', () => {
     expect(selectTier({ recommendedTextureTier: '8k' })).toBe('2k');
   });
 
-  it('texture-loader.ts contains a Story 4.3 TODO marker inside selectTier', () => {
+  it('texture-loader.ts cites the Story 4.3 / ADR-0006 / NFR-C6 contract', () => {
     const src = readFileSync(resolve(srcRoot, 'services/texture-loader.ts'), 'utf-8');
-    // Find selectTier body.
-    const idx = src.indexOf('export const selectTier');
-    expect(idx).toBeGreaterThan(0);
-    // Take 600 chars after — generous slice covering the body.
-    const slice = src.slice(idx, idx + 600);
-    expect(
-      slice,
-      'selectTier should mention Story 4.3 in a comment so the deferral is discoverable',
-    ).toMatch(/Story\s*4\.3/i);
+    // selectTier's docstring + module docstring together should mention
+    // Story 4.3 — this protects against a future refactor stripping the
+    // architectural breadcrumb out of the file.
+    expect(src).toMatch(/Story\s*4\.3/i);
   });
 });
 
@@ -552,8 +571,9 @@ describe('Story 1.13 QA-extended — texture URL templates carry the -<tier> suf
     expect(textureUrlForSlug(SKYBOX_SLUG, '2k')).toBe('/textures/milky-way-2k.png');
   });
 
-  it('non-2k tier (forward-looking for Story 4.3) also gets a tier suffix', () => {
-    expect(textureUrlForSlug('jupiter', '4k')).toBe('/textures/jupiter-4k.png');
+  it('non-2k tier (Story 4.3 KTX2 path) also gets a tier suffix', () => {
+    expect(textureUrlForSlug('jupiter', '4k')).toBe('/textures/jupiter-4k.ktx2');
+    expect(textureUrlForSlug('jupiter', '8k')).toBe('/textures/jupiter-8k.ktx2');
   });
 });
 

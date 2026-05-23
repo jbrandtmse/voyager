@@ -343,6 +343,57 @@ jobs:
           path: web/dist/
           retention-days: 7
 
+  # --- L4 Playwright visual regression (Story 4.9 — FR55) -------------------
+  #
+  # Runs the 9-scene visual-regression suite at `web/tests/visual/` against
+  # the production build emitted by the `build` job. Catches any unintended
+  # change to the rendered output before merge.
+  #
+  # Wall-clock budget: ≤ 3 minutes for the 9 scenes serially (NFR-M4 caps
+  # L4+L5 total at 15 minutes; this job is the L4 half).
+  #
+  # On failure: uploads the `test-results/` artifact (diff PNGs + trace.zip)
+  # so reviewers can inspect what diverged from the baseline.
+  l4-visual-regression:
+    name: L4 visual regression (Story 4.9 — FR55)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: [build]
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: download dist (production build)
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+      - name: install Playwright Chromium (pinned per @playwright/test version)
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: run L4 visual-regression suite
+        working-directory: web
+        run: npx playwright test --config tests/visual/playwright.config.ts
+      - name: upload diff artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-l4-diffs
+          path: |
+            web/test-results/
+            web/playwright-report/
+          retention-days: 14
+
   # --- Deploy to Cloudflare Pages (main + push only) ------------------------
   #
   # Gated on `github.ref == 'refs/heads/main' && github.event_name == 'push'`
@@ -354,7 +405,7 @@ jobs:
     name: deploy (Cloudflare Pages)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    needs: [lint-bake, lint-web, typecheck-web, bake, validate-l1, test-bake, test-web, build-glb, build]
+    needs: [lint-bake, lint-web, typecheck-web, bake, validate-l1, test-bake, test-web, build-glb, build, l4-visual-regression]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
