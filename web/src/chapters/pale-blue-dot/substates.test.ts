@@ -35,17 +35,17 @@ describe('Story 5.1 AC2 — PBD_SUBSTATE_ORDER chronological sequence', () => {
     expect(PBD_SUBSTATE_ORDER.length).toBe(11);
   });
 
-  it('declares substates in the AC2 chronological order', () => {
+  it('declares substates in the AC2 chronological order (amended by Story 5.3 — composite_active is the 30s Earth-plate hold after sweeping_earth)', () => {
     expect([...PBD_SUBSTATE_ORDER]).toEqual([
       PbdSubstate.idle,
       PbdSubstate.turning,
       PbdSubstate.sweeping_venus,
       PbdSubstate.sweeping_earth,
+      PbdSubstate.composite_active,
       PbdSubstate.sweeping_jupiter,
       PbdSubstate.sweeping_saturn,
       PbdSubstate.sweeping_uranus,
       PbdSubstate.sweeping_neptune,
-      PbdSubstate.composite_active,
       PbdSubstate.composite_decay,
       PbdSubstate.passed,
     ]);

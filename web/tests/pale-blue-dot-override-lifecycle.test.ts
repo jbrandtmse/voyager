@@ -115,25 +115,41 @@ describe('Story 5.2 QA gap-fill — PBD override lifecycle', () => {
   });
 
   describe('Gap 1 — override deactivates on substate-exit transition', () => {
-    it('sweeping_neptune → composite_active transition: override returns non-null DURING sweeping_neptune, then null after the transition fires', () => {
-      // Enter sweeping_neptune at 112.5s offset (substate peak per Story 5.1
-      // timings). Override should be non-null.
-      pbd.update(PBD_ANCHOR_ET + 112.5);
+    it('sweeping_neptune → composite_decay transition: override returns non-null DURING sweeping_neptune, then null after the transition fires', () => {
+      // After Story 5.3 Rule-5 amendment, sweeping_neptune peak is at
+      // +142.5s and composite_decay starts at +150s.
+      pbd.update(PBD_ANCHOR_ET + 142.5);
       expect(pbd.currentSubstate).toBe(PbdSubstate.sweeping_neptune);
-      const inNeptune = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 112.5);
+      const inNeptune = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 142.5);
       expect(inNeptune).not.toBe(null);
 
-      // Advance into composite_active. The transition fires; the choreography
-      // engine receives `setActiveSubstate(composite_active, null)` and the
+      // Advance into composite_decay. The transition fires; the choreography
+      // engine receives `setActiveSubstate(composite_decay, null)` and the
       // override must now return null.
-      pbd.update(PBD_ANCHOR_ET + 135);
-      expect(pbd.currentSubstate).toBe(PbdSubstate.composite_active);
-      const afterTransition = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 135);
+      pbd.update(PBD_ANCHOR_ET + 165);
+      expect(pbd.currentSubstate).toBe(PbdSubstate.composite_decay);
+      const afterTransition = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 165);
       expect(afterTransition).toBe(null);
       expect(pbd.currentTargetNaifId).toBe(null);
     });
 
-    it('sweeping_earth → sweeping_jupiter transition: override stays non-null and target body advances', () => {
+    it('sweeping_earth → composite_active transition: override goes null after entering the 30-second Earth-plate hold (Story 5.3 Rule-5 amendment)', () => {
+      // Enter sweeping_earth peak — override active, target = Earth.
+      pbd.update(PBD_ANCHOR_ET + 52.5);
+      expect(pbd.currentSubstate).toBe(PbdSubstate.sweeping_earth);
+      expect(pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 52.5)).not.toBe(null);
+
+      // Advance into the 30-second Earth-plate hold (composite_active).
+      // Per the Rule-5 amendment the scan platform stops actively re-aiming
+      // (override returns null) — the composite layer keeps the Earth plate
+      // visible across both sweeping_earth and composite_active.
+      pbd.update(PBD_ANCHOR_ET + 75);
+      expect(pbd.currentSubstate).toBe(PbdSubstate.composite_active);
+      expect(pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 75)).toBe(null);
+      expect(pbd.currentTargetNaifId).toBe(null);
+    });
+
+    it('sweeping_venus → sweeping_earth transition: override stays non-null and target body advances', () => {
       // Both endpoints are sweeping substates — the override should stay
       // non-null across the transition (the body just changes which target
       // it's aimed at). This is the "happy-path" SLERP transition.
@@ -141,22 +157,28 @@ describe('Story 5.2 QA gap-fill — PBD override lifecycle', () => {
       // Note: with the wall clock pinned at 1000ms, the SLERP elapsed is
       // 0 immediately after the substate transition, so `tick()` returns
       // the SLERPed-at-t=0 value which equals the PREVIOUS endpoint
-      // (Earth's aim). The contract is that the latched ENDPOINT advances
-      // to Jupiter's aim — assert via `currentTargetNaifId` and via the
+      // (Venus's aim). The contract is that the latched ENDPOINT advances
+      // to Earth's aim — assert via `currentTargetNaifId` and via the
       // post-SLERP-window tick (which we exercise in turn-choreography.test.ts).
       // Here we only pin: (a) the override stays non-null across the
       // transition, and (b) `currentTargetNaifId` advances correctly.
+      //
+      // We exercise Venus→Earth (not Earth→Jupiter) because the Story 5.3
+      // Rule-5 amendment inserts composite_active between Earth and Jupiter,
+      // so the next sweeping-to-sweeping transition after Earth is via the
+      // composite_active hold. Venus→Earth is the cleanest sweeping↔sweeping
+      // happy-path pair.
+      pbd.update(PBD_ANCHOR_ET + 37.5); // sweeping_venus peak
+      expect(pbd.currentSubstate).toBe(PbdSubstate.sweeping_venus);
+      const inVenus = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 37.5);
+      expect(inVenus).not.toBe(null);
+      expect(pbd.currentTargetNaifId).toBe(2);
+
       pbd.update(PBD_ANCHOR_ET + 52.5); // sweeping_earth peak
       expect(pbd.currentSubstate).toBe(PbdSubstate.sweeping_earth);
       const inEarth = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 52.5);
       expect(inEarth).not.toBe(null);
       expect(pbd.currentTargetNaifId).toBe(3);
-
-      pbd.update(PBD_ANCHOR_ET + 67.5); // sweeping_jupiter peak
-      expect(pbd.currentSubstate).toBe(PbdSubstate.sweeping_jupiter);
-      const inJupiter = pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 67.5);
-      expect(inJupiter).not.toBe(null);
-      expect(pbd.currentTargetNaifId).toBe(5);
     });
 
     it('turning → sweeping_venus: override is null during turning, then non-null after entering sweeping_venus', () => {
@@ -177,8 +199,9 @@ describe('Story 5.2 QA gap-fill — PBD override lifecycle', () => {
       // Walk through the full arc then past `passed`. Even though main.ts
       // would stop calling update() on chapter exit, the choreography
       // correctly tears down when an explicit non-sweeping update arrives.
-      pbd.update(PBD_ANCHOR_ET + 112.5); // sweeping_neptune
-      expect(pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 112.5)).not.toBe(null);
+      // sweeping_neptune peak after Story 5.3 Rule-5 amendment is +142.5s.
+      pbd.update(PBD_ANCHOR_ET + 142.5); // sweeping_neptune
+      expect(pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 142.5)).not.toBe(null);
 
       pbd.update(PBD_ANCHOR_ET + 200); // passed (post-arc)
       expect(pbd.currentSubstate).toBe(PbdSubstate.passed);
@@ -213,8 +236,9 @@ describe('Story 5.2 QA gap-fill — PBD override lifecycle', () => {
     });
 
     it('reverse scrub past anchor: sweeping_jupiter → idle (pre-anchor) tears down the override', () => {
-      pbd.update(PBD_ANCHOR_ET + 67.5); // sweeping_jupiter
-      expect(pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 67.5)).not.toBe(null);
+      // sweeping_jupiter peak after Story 5.3 Rule-5 amendment is +97.5s.
+      pbd.update(PBD_ANCHOR_ET + 97.5); // sweeping_jupiter
+      expect(pbd.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 97.5)).not.toBe(null);
 
       pbd.update(PBD_ANCHOR_ET - 10); // idle (pre-anchor)
       expect(pbd.currentSubstate).toBe(PbdSubstate.idle);

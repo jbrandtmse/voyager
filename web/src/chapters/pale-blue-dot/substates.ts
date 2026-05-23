@@ -62,8 +62,21 @@ import { etFromIso } from '../../math/et-conversions';
  *   toward the inner solar system. Story 5.2 owns the choreography.
  * `sweeping_<body>` — the scan platform sweeps across the named target;
  *   Story 5.3 fades the photo-plate composite in at the peak ET.
- * `composite_active` — all six photo-plates are visible simultaneously.
- * `composite_decay` — the composites fade out; the chapter is winding
+ * `composite_active` — the 30-second "thirty-second pause" success-criterion
+ *   hold AFTER the Earth narrow-angle frame fades in. The Earth plate is
+ *   visible throughout this substate; the scan platform is at rest at the
+ *   Earth aim quaternion from the preceding `sweeping_earth` substate.
+ *   Per Story 5.3 AC4 at most ONE plate is visible at any moment — during
+ *   `composite_active` that one is Earth (the PBD). After this hold the
+ *   sweep continues with Jupiter → Saturn → Uranus → Neptune.
+ *   Amended in place by Story 5.3 dev (Rule 5) to match the epic spec
+ *   line 2141 ("composite_active (during the Earth plate) holds long
+ *   enough at 1× chapter playback for the thirty-second pause success
+ *   criterion to be possible"). Original Story 5.1 wording had this
+ *   substate at the END of the arc holding all six plates simultaneously
+ *   — directly contradicting Story 5.3 AC4. See "Story 5.3 Rule-5
+ *   amendment" docstring section in this file's `PBD_SUBSTATE_TIMINGS`.
+ * `composite_decay` — the final plate fades out; the chapter is winding
  *   down toward `passed`.
  * `passed` — the internal timeline is complete; the outer ChapterDirector
  *   will fire `held → exiting → passed` when ET crosses windowEndEt.
@@ -73,11 +86,11 @@ export const PbdSubstate = Object.freeze({
   turning: 'turning',
   sweeping_venus: 'sweeping_venus',
   sweeping_earth: 'sweeping_earth',
+  composite_active: 'composite_active',
   sweeping_jupiter: 'sweeping_jupiter',
   sweeping_saturn: 'sweeping_saturn',
   sweeping_uranus: 'sweeping_uranus',
   sweeping_neptune: 'sweeping_neptune',
-  composite_active: 'composite_active',
   composite_decay: 'composite_decay',
   passed: 'passed',
 } as const);
@@ -96,11 +109,14 @@ export const PBD_SUBSTATE_ORDER: readonly PbdSubstate[] = Object.freeze([
   PbdSubstate.turning,
   PbdSubstate.sweeping_venus,
   PbdSubstate.sweeping_earth,
+  // Story 5.3 Rule-5 amendment: composite_active is the 30-second hold
+  // DURING the Earth-plate display window — not a terminal "all six
+  // plates visible" state. See PBD_SUBSTATE_TIMINGS docstring below.
+  PbdSubstate.composite_active,
   PbdSubstate.sweeping_jupiter,
   PbdSubstate.sweeping_saturn,
   PbdSubstate.sweeping_uranus,
   PbdSubstate.sweeping_neptune,
-  PbdSubstate.composite_active,
   PbdSubstate.composite_decay,
   PbdSubstate.passed,
 ]);
@@ -142,24 +158,66 @@ export interface PbdSubstateTimingOffset {
  * choreographed turn quaternion emission cadence.
  *
  * Sequence rationale (chronological imaging order Venus → Earth →
- * Jupiter → Saturn → Uranus → Neptune):
+ * Jupiter → Saturn → Uranus → Neptune, with the Earth-plate pause hold
+ * inserted between Earth and Jupiter per the Story 5.3 Rule-5 amendment):
  *
- *   - `idle`         starts at the window's lower bound (-1 day from
- *                    anchor) and ends at the anchor ET — the chapter
- *                    enters its choreographed arc at the anchor.
- *   - `turning`      runs anchor + [0, +30s] — 30 seconds of cinematic
- *                    turn-back rotation.
- *   - `sweeping_*`   six 15-second sweeps from +30s to +120s, one per
- *                    target body in the published frame order.
- *   - `composite_active` +120s..+150s — all six plates visible.
- *   - `composite_decay`  +150s..+180s — plates fade out.
- *   - `passed`       +180s and onward — internal timeline complete;
- *                    chapter will exit on windowEndEt (+1 day).
+ *   - `idle`             starts at the window's lower bound (-1 day from
+ *                        anchor) and ends at the anchor ET — the chapter
+ *                        enters its choreographed arc at the anchor.
+ *   - `turning`          anchor + [0, +30s] — 30 seconds of cinematic
+ *                        turn-back rotation.
+ *   - `sweeping_venus`   +30s..+45s — Venus plate fades in at peak.
+ *   - `sweeping_earth`   +45s..+60s — Earth plate (the Pale Blue Dot)
+ *                        fades in at peak. THIS is the hero shot.
+ *   - `composite_active` +60s..+90s — 30-SECOND HOLD of the Earth plate.
+ *                        This is the success-criterion "thirty-second
+ *                        pause" (per epic spec line 2141 and PRD §Pale
+ *                        Blue Dot). Earth remains visible at opacity 1
+ *                        throughout this substate.
+ *   - `sweeping_jupiter` +90s..+105s — Earth plate fades out, Jupiter
+ *                        plate fades in at peak.
+ *   - `sweeping_saturn`  +105s..+120s
+ *   - `sweeping_uranus`  +120s..+135s
+ *   - `sweeping_neptune` +135s..+150s
+ *   - `composite_decay`  +150s..+180s — final plate (Neptune) fades out.
+ *   - `passed`           +180s and onward — internal timeline complete;
+ *                        chapter will exit on windowEndEt (+1 day).
  *
  * Each `peak` is the substate's midpoint. Story 5.2 may tune these
- * per-substate (the turn-back has a fast initial yaw + slow settle
- * the literal midpoint won't represent); the placeholder midpoint is
+ * per-substate (the turn-back has a fast initial yaw + slow settle the
+ * literal midpoint won't represent); the placeholder midpoint is
  * deterministic and a valid Rule-5-compliant first cut.
+ *
+ * ## Story 5.3 Rule-5 amendment (2026-05-23)
+ *
+ * The original Story 5.1 wording placed `composite_active` AT THE END
+ * of the arc (+120s..+150s) with the docstring "all six photo-plates
+ * are visible simultaneously". Story 5.3 AC4 directly contradicts that
+ * — "at any moment, at most ONE plate is visible" — and Story 5.3 AC6
+ * cited epic line 2141 ("composite_active (during the Earth plate)
+ * holds long enough at 1× chapter playback for the thirty-second pause
+ * success criterion to be possible").
+ *
+ * Per Rule 5 (NFR tripwire response in `_bmad/custom/voyager-skill-rules.md`)
+ * this file is amended in place rather than papering over with code
+ * comments in the composite layer. The amendment:
+ *
+ *   1. `composite_active` is repositioned in chronological order to
+ *      sit BETWEEN `sweeping_earth` (Earth plate fade-in) and
+ *      `sweeping_jupiter` (Earth fades out, Jupiter fades in).
+ *   2. The Earth plate is visible during BOTH `sweeping_earth` and
+ *      `composite_active` (15s sweep-in + 30s hold = 45s of Earth
+ *      visibility — exceeds the 30-second success-criterion pause).
+ *   3. The total cinematic arc length stays 180s (30 turning + 6×15s
+ *      sweeping + 30s composite_active + 30s composite_decay) so
+ *      Story 5.2's 50× speedup-factor recomputation (epics.md
+ *      line 2062-2070) is preserved without re-derivation.
+ *   4. `targetNaifIdForSubstate(composite_active)` still returns null
+ *      — the choreography engine does not actively re-aim during the
+ *      hold (the scan platform stays at its sweeping_earth aim). The
+ *      composite layer (Story 5.3) holds the Earth plate visible by
+ *      keeping its own substate→plate map sticky across
+ *      sweeping_earth + composite_active.
  */
 export const PBD_SUBSTATE_TIMINGS: Readonly<
   Record<PbdSubstate, PbdSubstateTimingOffset>
@@ -168,11 +226,13 @@ export const PBD_SUBSTATE_TIMINGS: Readonly<
   turning: Object.freeze({ start: 0, peak: 15, end: 30 }),
   sweeping_venus: Object.freeze({ start: 30, peak: 37.5, end: 45 }),
   sweeping_earth: Object.freeze({ start: 45, peak: 52.5, end: 60 }),
-  sweeping_jupiter: Object.freeze({ start: 60, peak: 67.5, end: 75 }),
-  sweeping_saturn: Object.freeze({ start: 75, peak: 82.5, end: 90 }),
-  sweeping_uranus: Object.freeze({ start: 90, peak: 97.5, end: 105 }),
-  sweeping_neptune: Object.freeze({ start: 105, peak: 112.5, end: 120 }),
-  composite_active: Object.freeze({ start: 120, peak: 135, end: 150 }),
+  // Story 5.3 Rule-5 amendment — 30-second Earth-plate hold (the
+  // "thirty-second pause" success criterion).
+  composite_active: Object.freeze({ start: 60, peak: 75, end: 90 }),
+  sweeping_jupiter: Object.freeze({ start: 90, peak: 97.5, end: 105 }),
+  sweeping_saturn: Object.freeze({ start: 105, peak: 112.5, end: 120 }),
+  sweeping_uranus: Object.freeze({ start: 120, peak: 127.5, end: 135 }),
+  sweeping_neptune: Object.freeze({ start: 135, peak: 142.5, end: 150 }),
   composite_decay: Object.freeze({ start: 150, peak: 165, end: 180 }),
   passed: Object.freeze({ start: 180, peak: 180, end: 86_400 }),
 });

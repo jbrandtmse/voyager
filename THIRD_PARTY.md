@@ -338,3 +338,81 @@ Two source files needed in-flight normalization (handled by
 - `triton-2k.ktx2` — ~1.3 MB
 
 Plus ~19 MB of source files under `web/textures-src/moons/`.
+
+## NASA Photojournal PBD photo plates (Story 5.3)
+
+Story 5.3 composites six historical narrow-angle frames from Voyager 1's
+1990-02-14 "Family Portrait" imaging sequence at the corresponding PBD
+substate peaks (Venus → Earth → Jupiter → Saturn → Uranus → Neptune per
+`web/src/chapters/pale-blue-dot/substates.ts`). The plates appear as
+small alpha-blended overlays anchored to the NA boresight projection
+during each `sweeping_<body>` substate (FR28).
+
+### Sources per body (Story 5.3)
+
+All six plates are derived from two canonical NASA Planetary
+Photojournal entries (verified at `photojournal.jpl.nasa.gov`,
+2026-05-23 acquisition):
+
+- **Earth — PIA00452** — "The Pale Blue Dot." NASA/JPL, Voyager 1
+  narrow-angle Earth frame, 1990-02-14. The canonical Sagan-1994 image.
+  Source URL:
+  <https://photojournal.jpl.nasa.gov/catalog/PIA00452> →
+  redirects to
+  <https://science.nasa.gov/photojournal/solar-system-portrait-earth-as-pale-blue-dot>.
+  Direct image:
+  <https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia00/pia00452/PIA00452.jpg>.
+- **Venus / Jupiter / Saturn / Uranus / Neptune — PIA00453** — "Solar
+  System Portrait — Views of 6 Planets." NASA/JPL, six Voyager 1
+  narrow-angle frames laid out 3×2 (Venus, Earth, Jupiter / Saturn,
+  Uranus, Neptune in published reading order). 1990-02-14.
+  Source URL:
+  <https://photojournal.jpl.nasa.gov/catalog/PIA00453> →
+  redirects to
+  <https://science.nasa.gov/photojournal/solar-system-portrait-views-of-6-planets>.
+  Direct image:
+  <https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia00/pia00453/PIA00453.jpg>.
+  The build pipeline at `web/scripts/build_pbd_plates.ts` crops PIA00453
+  into the five per-body cells (Venus, Jupiter, Saturn, Uranus, Neptune)
+  and uses the dedicated PIA00452 frame for Earth so the iconic
+  light-streak composition is preserved at the highest fidelity NASA
+  publishes.
+
+### License — NASA public domain
+
+Both PIAs are produced by NASA / JPL-Caltech and released under
+[NASA's Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/)
+— public domain in the United States; attribution to "NASA/JPL-Caltech"
+is requested but not legally required. This `THIRD_PARTY.md` section +
+the `<v-attribution-panel>` runtime surface satisfy the requested
+attribution.
+
+### Build pipeline (Story 5.3 T1)
+
+`web/scripts/build_pbd_plates.ts` (invoked via `npm run build-pbd-plates`)
+downloads PIA00452 + PIA00453 from `assets.science.nasa.gov`, crops the
+six per-body cells, resizes each to 128×128 px (next power-of-2 above
+the 96×96 cinematic target — friendlier to browser texture caching),
+encodes as PNG, and writes content-hashed filenames under
+`web/public/images/pbd/` matching the Story 1.14 immutable-asset
+discipline. The pipeline also emits `plate-manifest.json` that maps each
+body to its hashed filename so the runtime composite layer doesn't have
+to hard-code the per-build hash.
+
+The source JPGs are cached locally as `_pia00452-earth-pbd.jpg` and
+`_pia00453-six-planets.jpg` under the same directory — these are
+gitignored (the build is reproducible from the URLs).
+
+### Cinematic compromise on plate size
+
+The actual angular size of each body in Voyager 1's narrow-angle camera
+at PBD distances (3.7 billion miles) is sub-pixel — Earth was 0.12 of a
+pixel, Venus 0.11. The composite plate is NOT at true angular scale; it
+shows the historical NASA frame as a visual reference at 128×128 px
+(~10% of a 1280×720 viewport height — readable, but doesn't obscure the
+simulation). The story spec records the rationale.
+
+### LFS / footprint
+
+Each plate PNG is ~20-30 KB; six plates total ~150 KB. Well below LFS
+thresholds, so no LFS tracking; committed directly to the repo.

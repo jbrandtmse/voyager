@@ -244,15 +244,18 @@ describe('Story 5.2 — PBD choreographed turn integration', () => {
     // This test exercises the substate-state-machine correctness by
     // sampling ETs at multiple per-speed cadences.
 
+    // Story 5.3 Rule-5 amendment: composite_active is repositioned to
+    // sit BETWEEN sweeping_earth and sweeping_jupiter (the 30-second
+    // Earth-plate hold per epic spec line 2141).
     const expectedSequence: PbdSubstate[] = [
       PbdSubstate.turning,
       PbdSubstate.sweeping_venus,
       PbdSubstate.sweeping_earth,
+      PbdSubstate.composite_active,
       PbdSubstate.sweeping_jupiter,
       PbdSubstate.sweeping_saturn,
       PbdSubstate.sweeping_uranus,
       PbdSubstate.sweeping_neptune,
-      PbdSubstate.composite_active,
       PbdSubstate.composite_decay,
       PbdSubstate.passed,
     ];
@@ -328,12 +331,27 @@ describe('Story 5.2 — PBD choreographed turn integration', () => {
     it('manual scrub: pbdSubstateAt at arbitrary in-window ETs resolves the correct substate', () => {
       // Scrubbing is just a direct call to pbdSubstateAt; verify a
       // selection of ETs land on the expected substates.
+      // Substate boundaries after Story 5.3 Rule-5 amendment:
+      //   idle              < +0
+      //   turning           [0, 30)
+      //   sweeping_venus    [30, 45)
+      //   sweeping_earth    [45, 60)
+      //   composite_active  [60, 90)    ← Rule-5 amendment (Earth-plate hold)
+      //   sweeping_jupiter  [90, 105)
+      //   sweeping_saturn   [105, 120)
+      //   sweeping_uranus   [120, 135)
+      //   sweeping_neptune  [135, 150)
+      //   composite_decay   [150, 180)
+      //   passed            [180, ∞)
       expect(pbdSubstateAt(PBD_ANCHOR_ET - 1)).toBe(PbdSubstate.idle);
       expect(pbdSubstateAt(PBD_ANCHOR_ET + 0)).toBe(PbdSubstate.turning);
       expect(pbdSubstateAt(PBD_ANCHOR_ET + 30)).toBe(PbdSubstate.sweeping_venus);
-      expect(pbdSubstateAt(PBD_ANCHOR_ET + 60)).toBe(PbdSubstate.sweeping_jupiter);
-      expect(pbdSubstateAt(PBD_ANCHOR_ET + 105)).toBe(PbdSubstate.sweeping_neptune);
-      expect(pbdSubstateAt(PBD_ANCHOR_ET + 130)).toBe(PbdSubstate.composite_active);
+      expect(pbdSubstateAt(PBD_ANCHOR_ET + 60)).toBe(PbdSubstate.composite_active);
+      expect(pbdSubstateAt(PBD_ANCHOR_ET + 75)).toBe(PbdSubstate.composite_active);
+      expect(pbdSubstateAt(PBD_ANCHOR_ET + 90)).toBe(PbdSubstate.sweeping_jupiter);
+      expect(pbdSubstateAt(PBD_ANCHOR_ET + 105)).toBe(PbdSubstate.sweeping_saturn);
+      expect(pbdSubstateAt(PBD_ANCHOR_ET + 130)).toBe(PbdSubstate.sweeping_uranus);
+      expect(pbdSubstateAt(PBD_ANCHOR_ET + 140)).toBe(PbdSubstate.sweeping_neptune);
       expect(pbdSubstateAt(PBD_ANCHOR_ET + 165)).toBe(PbdSubstate.composite_decay);
       expect(pbdSubstateAt(PBD_ANCHOR_ET + 200)).toBe(PbdSubstate.passed);
     });

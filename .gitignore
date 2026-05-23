@@ -51,3 +51,13 @@ web/public/data/*.bin.br.part
 # committed PNG textures live under web/public/textures/.
 .toolchain/
 .ktx-venv/
+
+# Story 5.3 — local cache of the NASA Planetary Photojournal source
+# JPEGs that `web/scripts/build_pbd_plates.ts` downloads and crops into
+# the six per-body PBD plates. The cropped + content-hashed PNGs under
+# web/public/images/pbd/ ARE committed (they're the runtime asset);
+# only the upstream-source-JPEG caches are gitignored — they're trivially
+# re-downloaded via `npm run build-pbd-plates`. The caches live under
+# web/textures-src/pbd-plates/ (NOT web/public/) so Vite does NOT copy
+# them into the runtime bundle.
+web/textures-src/pbd-plates/_pia*.jpg

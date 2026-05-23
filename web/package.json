@@ -9,6 +9,7 @@
     "build:og": "node --import tsx scripts/og-cards.ts",
     "build-glb": "node --import tsx scripts/build_glb.ts",
     "build-textures": "node --import tsx scripts/build_textures.ts",
+    "build-pbd-plates": "node --import tsx scripts/build_pbd_plates.ts",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:visual": "playwright test --config tests/visual/playwright.config.ts",

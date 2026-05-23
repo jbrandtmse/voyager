@@ -293,8 +293,10 @@ describe('Story 5.2 AC3 — PaleBlueDot.getPlatformQuatOverride', () => {
 
   it('returns null during composite_active / composite_decay / passed substates', () => {
     const m = buildModule();
-    m.update(PBD_ANCHOR_ET + 135); // composite_active peak
-    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 135)).toBe(null);
+    // composite_active peak — repositioned to +75s by Story 5.3 Rule-5
+    // amendment (now the Earth-plate hold AFTER sweeping_earth).
+    m.update(PBD_ANCHOR_ET + 75); // composite_active peak (amended)
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 75)).toBe(null);
 
     m.update(PBD_ANCHOR_ET + 165); // composite_decay peak
     expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 165)).toBe(null);
@@ -314,7 +316,14 @@ describe('Story 5.2 AC3 — PaleBlueDot.getPlatformQuatOverride', () => {
 
   it('returns a non-null quaternion during each of the six sweeping substates', () => {
     const m = buildModule();
-    const peaks = [37.5, 52.5, 67.5, 82.5, 97.5, 112.5];
+    // Peak offsets after Story 5.3 Rule-5 amendment:
+    //   sweeping_venus    = 37.5
+    //   sweeping_earth    = 52.5
+    //   sweeping_jupiter  = 97.5
+    //   sweeping_saturn   = 112.5
+    //   sweeping_uranus   = 127.5
+    //   sweeping_neptune  = 142.5
+    const peaks = [37.5, 52.5, 97.5, 112.5, 127.5, 142.5];
     for (const peak of peaks) {
       m.update(PBD_ANCHOR_ET + peak);
       const q = m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + peak);
@@ -330,7 +339,8 @@ describe('Story 5.2 AC3 — PaleBlueDot.getPlatformQuatOverride', () => {
     m.update(PBD_ANCHOR_ET + 45); // sweeping_earth
     expect(m.currentTargetNaifId).toBe(3);
 
-    m.update(PBD_ANCHOR_ET + 75); // sweeping_saturn
+    // Story 5.3 Rule-5 amendment: sweeping_saturn now starts at +105.
+    m.update(PBD_ANCHOR_ET + 105); // sweeping_saturn
     expect(m.currentTargetNaifId).toBe(6);
 
     m.update(PBD_ANCHOR_ET + 200); // passed

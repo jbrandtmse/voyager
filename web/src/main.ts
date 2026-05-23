@@ -30,6 +30,7 @@ import { URLRouter } from './services/url-router';
 import { EmbedModeState } from './services/embed-mode-state';
 import { ALL_CHAPTERS } from './chapters/registry';
 import { PaleBlueDot } from './chapters/pale-blue-dot';
+import { PbdCompositeLayer } from './chapters/pale-blue-dot/composite-layer';
 import { RenderEngine } from './render/render-engine';
 import { VoyagerCameraController } from './render/voyager-camera-controller';
 import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
@@ -204,6 +205,50 @@ const bootstrap = (): void => {
   // (Story 5.1 amendment block) per AC3's "either way, the choice is
   // recorded" obligation.
   const paleBlueDot = new PaleBlueDot();
+
+  // Story 5.3 AC2 + AC3 — PBD photo-plate composite layer. Path A (HTML
+  // overlay) per ADR-0008 (the layer sits OUTSIDE the WebGL canvas as a
+  // sibling DOM container). Constructed at boot so its container is in
+  // the DOM well before the manifest lands; the manifest fetch is
+  // deferred to first activation (per `kickoffManifestLoad`).
+  //
+  // The host element is the canvas's parent so the layer participates in
+  // the same DOM subtree the canvas + HUD live in; pointer-events: none
+  // keeps it from intercepting gestures (see composite-layer docstring).
+  //
+  // The composite layer subscribes to the SAME `paleBlueDot.subscribe`
+  // API that Story 5.1's Path A subscribers use; we re-use the wire
+  // rather than introducing a parallel topology (per Story 5.3 Dev Notes).
+  //
+  // The `resolveScanPlatform` closure is forward-referenced through
+  // `spacecraftModelsRef` because SpacecraftModels is constructed later
+  // in this same function but the load resolves the SCAN_PLATFORM node
+  // only after the GLB chain lands. The closure tolerates pre-load
+  // null returns (the layer centers the plate as a fallback).
+  let spacecraftModelsRef: SpacecraftModels | null = null;
+  const pbdCompositeLayer = new PbdCompositeLayer({
+    host: canvas.parentElement ?? document.body,
+    resolveScanPlatform: () => {
+      if (spacecraftModelsRef === null) return null;
+      const handle = spacecraftModelsRef.getHandle('voyager-1');
+      // The boresight-renderer's resolveScanPlatform helper duplicates
+      // the LOD-aware lookup pattern from `boresight-renderer.ts:373-384`.
+      // Inline a minimal version here so the composite layer doesn't
+      // need a runtime dependency on that module.
+      if (handle.lod !== null) {
+        const level = handle.lod.getCurrentLevel();
+        if (level >= 0) {
+          const scene = handle.lod.levels[level]?.object;
+          if (scene !== undefined) {
+            return scene.getObjectByName('SCAN_PLATFORM') ?? null;
+          }
+        }
+      }
+      return handle.group.getObjectByName('SCAN_PLATFORM') ?? null;
+    },
+  });
+  pbdCompositeLayer.subscribeTo(paleBlueDot);
+
   let paleBlueDotActive = false;
   chapterDirector.subscribe((event) => {
     if (event.chapter.slug !== 'pale-blue-dot') return;
@@ -225,6 +270,11 @@ const bootstrap = (): void => {
     // pre-Story-5.1 baseline identical at every non-PBD frame.
     if (paleBlueDotActive) {
       paleBlueDot.update(et);
+      // Story 5.3 AC2 + AC3 — per-frame composite layer tick. Drives
+      // the opacity fade tween + the screen-space projection of the
+      // active plate. Inactive-frame safe but gated to keep per-frame
+      // work zero outside the PBD window.
+      pbdCompositeLayer.update(paleBlueDot.currentSubstate, engine.camera);
     }
   });
 
@@ -253,6 +303,13 @@ const bootstrap = (): void => {
       ...(w.__voyagerDebug ?? {}),
       chapterDirector,
       paleBlueDot,
+      // Story 5.3 AC9 — DEV surface for the lead-driven Chrome DevTools
+      // MCP smoke. The smoke probes
+      //   __voyagerDebug.pbdCompositeLayer.currentActivePlate -> string|null
+      //   __voyagerDebug.pbdCompositeLayer.getPlateOpacity('earth') -> number
+      //   __voyagerDebug.pbdCompositeLayer.rootElement -> HTMLDivElement
+      // and asserts on the layer's at-peak-ET state per AC9.
+      pbdCompositeLayer,
     };
   }
 
@@ -562,6 +619,13 @@ const bootstrap = (): void => {
   // TrajectoryLines construction is deferred until the EphemerisService is
   // available (it samples the polyline at construction).
   const spacecraftModels = new SpacecraftModels();
+  // Story 5.3 — wire the live SpacecraftModels into the composite layer's
+  // forward-referenced resolveScanPlatform closure. Before this assignment
+  // the closure returns null and the composite layer falls back to
+  // centering the plate in the viewport. After this assignment + the
+  // post-load LOD population the closure returns the live SCAN_PLATFORM
+  // node and the layer projects to the boresight position per-frame.
+  spacecraftModelsRef = spacecraftModels;
   engine.worldGroup.add(spacecraftModels.root);
 
   // Story 3.3 AC9 — DEV debug surface for the lead-driven Chrome DevTools MCP
