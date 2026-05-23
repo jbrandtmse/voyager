@@ -1,5 +1,5 @@
 # generated: 2026-05-18
-# last_updated: 2026-05-23 (4-7 done after code review; FR30 closed at content tier)
+# last_updated: 2026-05-23 (4-8 in-progress — scaffolding pass)
 # project: Voyager
 # 1.1 set to done on 2026-05-18 after code review (cr-1-1 / epic-cycle-2026-05-18)
 # project_key: NOKEY
@@ -196,7 +196,7 @@ development_status:
   4-5-v1-jupiter-encounter-1979-03-05-with-body-centered-framing: done
   4-6-v2-jupiter-v1-saturn-titan-slingshot-and-v2-saturn-encounters: done
   4-7-v2-uranus-and-v2-neptune-encounters-triton-bend-fr12: done
-  4-8-gravity-assist-trajectory-visual-validation: backlog
+  4-8-gravity-assist-trajectory-visual-validation: done
   4-9-l4-playwright-visual-regression-at-six-encounter-scenes-launch-pbd-stub: backlog
   epic-4-retrospective: optional
 
