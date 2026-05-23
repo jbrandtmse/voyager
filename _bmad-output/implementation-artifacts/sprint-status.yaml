@@ -199,7 +199,7 @@ development_status:
   4-8-gravity-assist-trajectory-visual-validation: done
   4-9-l4-playwright-visual-regression-at-six-encounter-scenes-launch-pbd-stub: backlog
   4-10-bug-fixes-from-2026-05-23-review: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   # Epic 5: Pale Blue Dot — the Hero Scene
   epic-5: backlog
