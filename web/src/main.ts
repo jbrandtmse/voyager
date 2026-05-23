@@ -424,6 +424,14 @@ const bootstrap = (): void => {
     w.__voyagerDebug = {
       ...(w.__voyagerDebug ?? {}),
       scrubber: firstPaintHandle.scrubber,
+      // Story 4.4 AC8 — expose both scrubber instances (mission + detail)
+      // as an array so the lead's Chrome DevTools MCP smoke can introspect
+      // both at once. The detail-variant entry is null in test mounts
+      // that didn't wire a ChapterDirector; production always has both.
+      timelineScrubbers: [
+        firstPaintHandle.scrubber,
+        firstPaintHandle.detailScrubber,
+      ].filter((s): s is NonNullable<typeof s> => s !== null),
       // Story 2.5 — null in embed mode (chapter-index is not mounted).
       // The MCP smoke must tolerate the missing key by checking embedMode
       // directly when verifying AC2.

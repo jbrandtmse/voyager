@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 
-import { etFromIso, isoFromEt, formatForHud, dateForHud } from './et-conversions';
+import {
+  etFromIso,
+  isoFromEt,
+  formatForHud,
+  dateForHud,
+  monthDayLabelFromEt,
+  monthDayYearLabelFromEt,
+} from './et-conversions';
 
 // Reference values produced by SpiceyPy 8.1.0 + naif0012.tls via
 // `bake/.venv/Scripts/python.exe -c "import spiceypy as sp; sp.furnsh(...);
@@ -118,6 +125,54 @@ describe('Story 1.9 Task 1 — et-conversions', () => {
 
     it('returns empty string for Infinity', () => {
       expect(dateForHud(Number.POSITIVE_INFINITY)).toBe('');
+    });
+  });
+
+  describe('Story 4.4 — monthDayLabelFromEt() — "MMM D" uppercase', () => {
+    it('renders the V1 Jupiter window start label (FEB 3, 1979 - per ±30d window)', () => {
+      // V1 Jupiter anchor 1979-03-05 minus 30 days lands on 1979-02-03.
+      const et = etFromIso('1979-02-03T12:05:00Z');
+      expect(monthDayLabelFromEt(et)).toBe('FEB 3');
+    });
+
+    it('zero-strips the day (no leading zero)', () => {
+      const et = etFromIso('1979-03-05T00:00:00Z');
+      expect(monthDayLabelFromEt(et)).toBe('MAR 5');
+    });
+
+    it('preserves two-digit day', () => {
+      const et = etFromIso('1979-03-12T00:00:00Z');
+      expect(monthDayLabelFromEt(et)).toBe('MAR 12');
+    });
+
+    it('returns empty string for NaN', () => {
+      expect(monthDayLabelFromEt(Number.NaN)).toBe('');
+    });
+
+    it('returns empty string for Infinity', () => {
+      expect(monthDayLabelFromEt(Number.POSITIVE_INFINITY)).toBe('');
+    });
+  });
+
+  describe('Story 4.4 — monthDayYearLabelFromEt() — "MMM D, YYYY" uppercase', () => {
+    it('renders the V1 Jupiter window end label (MAR 12, 1979)', () => {
+      const et = etFromIso('1979-04-04T12:05:00Z');
+      // 1979-03-05 + 30 days = 1979-04-04 (not 1979-03-12 - the story example
+      // uses a tightened window; we cover the registry's actual ±30d here).
+      expect(monthDayYearLabelFromEt(et)).toBe('APR 4, 1979');
+    });
+
+    it('matches story example MAR 12, 1979 for a March-12 instant', () => {
+      const et = etFromIso('1979-03-12T00:00:00Z');
+      expect(monthDayYearLabelFromEt(et)).toBe('MAR 12, 1979');
+    });
+
+    it('returns empty string for NaN', () => {
+      expect(monthDayYearLabelFromEt(Number.NaN)).toBe('');
+    });
+
+    it('returns empty string for Infinity', () => {
+      expect(monthDayYearLabelFromEt(Number.POSITIVE_INFINITY)).toBe('');
     });
   });
 

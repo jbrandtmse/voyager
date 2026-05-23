@@ -175,3 +175,58 @@ export const dateForHud = (et: number): string => {
   const iso = isoFromEt(et);
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
 };
+
+const MONTH_ABBREVIATIONS: ReadonlyArray<string> = [
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
+];
+
+/**
+ * Story 4.4 AC1 — month + day label for the *left* end of the detail-
+ * scrubber's date range (e.g. `"FEB 28"`). Year is intentionally omitted
+ * on the left to avoid redundancy with the right label.
+ *
+ * Format: uppercase three-letter month + zero-stripped day number.
+ *
+ * Returns the empty string for non-finite ET (mirrors `isoFromEt`).
+ */
+export const monthDayLabelFromEt = (et: number): string => {
+  if (!Number.isFinite(et)) return '';
+  const iso = isoFromEt(et);
+  if (iso === '') return '';
+  const month = parseInt(iso.slice(5, 7), 10);
+  const day = parseInt(iso.slice(8, 10), 10);
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return '';
+  const monthIdx = month - 1;
+  if (monthIdx < 0 || monthIdx >= MONTH_ABBREVIATIONS.length) return '';
+  return `${MONTH_ABBREVIATIONS[monthIdx]} ${day}`;
+};
+
+/**
+ * Story 4.4 AC1 — month + day + year label for the *right* end of the
+ * detail-scrubber's date range (e.g. `"MAR 12, 1979"`). Year is included
+ * on the right because a chapter window may span two calendar years
+ * (e.g. V1 Jupiter's ±30-day window crosses 1979 → 1979 but a longer
+ * future encounter window could cross a year boundary), and the right-
+ * hand label is the canonical year anchor for the user.
+ *
+ * Returns the empty string for non-finite ET (mirrors `isoFromEt`).
+ */
+export const monthDayYearLabelFromEt = (et: number): string => {
+  if (!Number.isFinite(et)) return '';
+  const md = monthDayLabelFromEt(et);
+  if (md === '') return '';
+  const iso = isoFromEt(et);
+  const year = iso.slice(0, 4);
+  return `${md}, ${year}`;
+};
