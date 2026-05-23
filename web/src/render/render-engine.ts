@@ -99,6 +99,17 @@ export class RenderEngine {
   // this).
   private viewFrame: ViewFrameService | null;
   private chapterDirector: ChapterDirector | null;
+  // Story 4.2 AC2 — flips to `true` the moment VoyagerCameraController sees
+  // a user gesture on the canvas, and back to `false` when the restore
+  // animation completes (R shortcut or restore-button click). While true,
+  // chapter-driven framing must NOT write to camera.position /
+  // camera.quaternion — the controller owns the local transform. The
+  // RenderEngine itself reads this flag for the CSS attribute promotion
+  // contract (the host element gets a `data-manual-camera` attribute that
+  // promotes `<button class="restore-camera">` from display:none to
+  // inline-flex per AC4). Wiring to the host attribute is performed by
+  // first-paint.ts; the engine just owns the boolean.
+  private _manualCameraActive = false;
   private lastTickMs: number | null = null;
   private running = false;
 
@@ -137,6 +148,57 @@ export class RenderEngine {
   get depthMode(): 'reverse-z' | 'logarithmic' {
     return this._depthMode;
   }
+
+  /**
+   * Story 4.2 AC2 — public getter mirroring `setManualCameraActive`. Read
+   * by `<button class="restore-camera">` mount logic in `first-paint.ts`
+   * (the button is `display: none` by default and promotes to
+   * `inline-flex` when this flag is `true` via a `data-manual-camera`
+   * attribute on the host element). Defaults to `false` (chapter-driven
+   * framing owns the camera at boot).
+   */
+  get manualCameraActive(): boolean {
+    return this._manualCameraActive;
+  }
+
+  /**
+   * Story 4.2 AC2 — flip the manual-camera ownership flag. Called by
+   * `VoyagerCameraController.onPointerDown` (true) and by the controller's
+   * restore-animation completion path (false). Listeners (passed via
+   * `onManualCameraChange`) fire only when the value actually transitions,
+   * so an idempotent `setManualCameraActive(true)` on a still-active
+   * gesture stream doesn't churn the host's `data-manual-camera`
+   * attribute or trigger redundant DOM mutations.
+   */
+  setManualCameraActive(value: boolean): void {
+    if (this._manualCameraActive === value) return;
+    this._manualCameraActive = value;
+    for (const cb of this.manualCameraListeners) {
+      try {
+        cb(value);
+      } catch (err) {
+        console.error('[RenderEngine] manualCamera listener threw:', err);
+      }
+    }
+  }
+
+  /**
+   * Story 4.2 AC2 + AC4 — subscribe to manual-camera transitions. Returns
+   * an unsubscribe function. `first-paint.ts` subscribes so the host's
+   * `data-manual-camera` attribute (and therefore the restore button's
+   * `display: inline-flex` rule) tracks the flag. Listeners that throw
+   * are logged and swallowed (mirroring the ChapterDirector + ChunkLoader
+   * notify-hardening pattern).
+   */
+  onManualCameraChange(cb: (value: boolean) => void): () => void {
+    this.manualCameraListeners.push(cb);
+    return () => {
+      const idx = this.manualCameraListeners.indexOf(cb);
+      if (idx >= 0) this.manualCameraListeners.splice(idx, 1);
+    };
+  }
+
+  private manualCameraListeners: Array<(value: boolean) => void> = [];
 
   /**
    * Story 3.3 — public read-only accessor for the underlying WebGLRenderer.

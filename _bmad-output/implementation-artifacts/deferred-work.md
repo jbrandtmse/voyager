@@ -729,3 +729,27 @@ The following LOW-severity items surfaced during Story 4.1 code review (`/epic-c
    **Routing:** any future hardening pass on `view-frame.ts`, or the next QA/code-review iteration if an MCP smoke ever surfaces a NaN-poisoned worldGroup state.
 
 
+
+## Deferred from: code review of 4-2-voyagercameracontroller-manual-override-and-restore-default (2026-05-22)
+
+The following items surfaced during Story 4.2 code review (`/epic-cycle 4` code-review stage) and were not auto-resolved inline. MED-1 / LOW-1 / LOW-3 / LOW-6 from the same review WERE auto-resolved into `web/src/render/voyager-camera-controller.ts`; only the items below remain.
+
+1. **[4.2 / MED]** Pinch-to-zoom (two-finger touch) not implemented (AC1 partial coverage).
+
+   **What's missing:** AC1 names "wheel/pinch → zoom (log-scale step per notch)". The controller wires `wheel` against the canvas but does NOT handle two-finger touch pinch. The internal `GestureState` is single-pointer (`pointerId: number`, not a Map), so multi-touch isn't tracked. Touch-device users have no zoom path today.
+
+   **Why deferred:** Implementing pinch requires extending the gesture-state machine to track 2+ pointer IDs simultaneously (compute the inter-pointer distance delta as the zoom factor), which is a non-trivial design change beyond a code-review inline patch. The Pointer Events primitive already plumbs `pointerType: 'touch'` + `pointerId`, so the wiring exists; the controller's state machine needs extension.
+
+   **Suggested resolution:** Either (a) amend AC1 to scope-cut pinch to a follow-up story (e.g. 4.5 or a dedicated touch-coverage story in Epic 6) with the rationale that touch is rare for Voyager's desktop-first audience, OR (b) author a follow-up story that extends `GestureState` to track multiple active pointers and computes the pinch-distance delta. Decision belongs to the lead; both paths are valid per the project's "no pre-declared scope cuts" rule.
+
+   **Routing:** Lead to triage at Story 4.2 close or Epic 4 retro; if (b), add to Story 4.5 / 4.7 scope or a dedicated Epic 6 story.
+
+2. **[4.2 / LOW]** No probe test for non-degenerate scene matrix at zoom clamp bounds (AC5 partial coverage).
+
+   **What's missing:** AC5 says "verified by a probe test at both clamp distances (camera.position magnitude == clamp bound; render produces a non-degenerate scene matrix)". Existing tests pin that wheel zoom can't push the camera past the clamps (`web/src/render/voyager-camera-controller.test.ts:166-187`), but no test positions the camera AT the clamp distances and asserts `camera.matrixWorldInverse` / `camera.projectionMatrix` have finite, non-NaN entries.
+
+   **Why deferred:** The reverse-Z precision-stability guarantee is structurally inherited from Story 1.5's reverse-Z precision suite (`render-engine.test.ts` precision section). The MISSING probe test is a defensive belt-and-braces verification that would have caught matrix corruption AT THE CLAMP BOUNDS specifically — but Story 1.5 already pins this for the broader reverse-Z range, and Story 4.2's clamps are well inside that range. Code-review LOW because the underlying precision guarantee is intact.
+
+   **Suggested resolution:** Add a small unit test in `voyager-camera-controller.test.ts` that constructs a camera, positions it at exactly `MIN_ZOOM_DISTANCE_KM` and `MAX_ZOOM_DISTANCE_KM` from origin, calls `camera.updateMatrixWorld()`, and asserts every element of `camera.matrixWorldInverse.elements` is `Number.isFinite`. ~10 lines; trivial to add but adds belt-and-braces redundancy on a Story-1.5-guaranteed surface.
+
+   **Routing:** Any future story that touches `voyager-camera-controller.ts`, or a defensive-test sweep pass at Epic 4 retro.

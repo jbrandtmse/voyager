@@ -14,6 +14,12 @@ import './styles/about.css';
 // DOM, so tokens cascade directly). Loaded unconditionally because the
 // component is part of the simulation surface, not chrome.
 import './styles/chapter-copy.css';
+// Story 4.2 — restore-camera affordance stylesheet. The button is a Light-
+// DOM native `<button>` (no Lit shadow root); CSS lives outside the
+// component graph and is loaded here so the `[data-manual-camera="true"]`
+// attribute selector resolves regardless of which boot path mounted the
+// button.
+import './styles/restore-camera.css';
 
 import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
@@ -24,6 +30,9 @@ import { URLRouter } from './services/url-router';
 import { EmbedModeState } from './services/embed-mode-state';
 import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
+import { VoyagerCameraController } from './render/voyager-camera-controller';
+import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
+import { worldVec3, type WorldVec3 } from './types/branded';
 import {
   isPrecisionSmokeMode,
   startPrecisionSmoke,
@@ -327,6 +336,76 @@ const bootstrap = (): void => {
     }
   });
 
+  // Story 4.2 — VoyagerCameraController + restore affordance.
+  //
+  // The controller is constructed here (post-firstPaint so the canvas
+  // parent + speed-multiplier are mounted), but its `getActiveTarget`
+  // and `getViewFrameOrigin` closures reference services that join
+  // post-manifest. We track those services through mutable refs and the
+  // closures null-check; before the manifest lands the controller treats
+  // every gesture as cruise (Sun-at-origin pivot) which is the correct
+  // behavior anyway (the chapter director is also empty pre-manifest).
+  //
+  // The restore affordance mounts adjacent to `<v-speed-multiplier>` (the
+  // canvas's parent hosts both). `attributeHost` is the same parent so
+  // the `[data-manual-camera="true"]` CSS selector promotes the button
+  // when the controller flips the engine's manual-camera flag.
+  let ephemerisServiceRef: EphemerisService | null = null;
+  let viewFrameServiceRef: ViewFrameService | null = null;
+  const cameraController = new VoyagerCameraController({
+    camera: engine.camera,
+    domElement: canvas,
+    renderEngine: engine,
+    getActiveTarget: (): WorldVec3 | null => {
+      const active = chapterDirector.activeChapter;
+      if (active === null) return null;
+      if (active.targetBody === undefined) return null;
+      if (ephemerisServiceRef === null) return null;
+      const bodyPos = ephemerisServiceRef.getPosition(
+        clockManager.simTimeEt,
+        active.targetBody,
+      );
+      if (bodyPos === null) return null;
+      // The controller orbits in the shifted-render-space frame (post-
+      // floating-origin); subtract the ViewFrame origin offset so the
+      // pivot tracks the body in the same frame the camera lives in.
+      const off =
+        viewFrameServiceRef !== null
+          ? viewFrameServiceRef.getTransform(
+              clockManager.simTimeEt,
+              active,
+            ).originOffsetWorld
+          : null;
+      if (off === null) return bodyPos;
+      return worldVec3(
+        bodyPos[0] - off[0],
+        bodyPos[1] - off[1],
+        bodyPos[2] - off[2],
+      );
+    },
+    getViewFrameOrigin: (): WorldVec3 => {
+      if (viewFrameServiceRef === null) {
+        return worldVec3(0, 0, 0);
+      }
+      return viewFrameServiceRef.getTransform(
+        clockManager.simTimeEt,
+        chapterDirector.activeChapter,
+      ).originOffsetWorld;
+    },
+  });
+  cameraController.attach();
+
+  const restoreAffordance = mountCameraRestoreAffordance({
+    host: canvas.parentElement ?? document.body,
+    attributeHost: canvas.parentElement ?? document.body,
+    controller: cameraController,
+    renderEngine: engine,
+  });
+  // Reference the dispose handle so the linter doesn't flag the unused
+  // local; the SPA lifetime is the document, so we never explicitly
+  // dispose (the page unload tears everything down).
+  void restoreAffordance;
+
   // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
   // the lead's Chrome DevTools MCP smoke can read
   // `window.__voyagerDebug.scrubber` and assert on marker DOM state.
@@ -359,6 +438,12 @@ const bootstrap = (): void => {
       // Story 2.5 — expose the boot-time embed flag so the lead-driven
       // MCP smoke can assert AC1 (`enabled === true` for `?embed=true`).
       embedMode,
+      // Story 4.2 AC8 — expose the VoyagerCameraController + RenderEngine
+      // for the lead's Chrome DevTools MCP smoke (probe
+      // `__voyagerDebug.cameraController.restore()` and
+      // `__voyagerDebug.renderEngine.manualCameraActive`).
+      cameraController,
+      renderEngine: engine,
     };
   }
 
@@ -425,6 +510,12 @@ const bootstrap = (): void => {
       // the central `prefers-reduced-motion: reduce` media query.
       const viewFrameService = new ViewFrameService(ephemerisService);
       engine.setViewFrame(viewFrameService, chapterDirector);
+      // Story 4.2 — promote the camera-controller closures to the live
+      // services now that they exist. The controller's closures read
+      // these refs on every gesture, so a simple ref assignment is all
+      // that's needed — no re-construction.
+      ephemerisServiceRef = ephemerisService;
+      viewFrameServiceRef = viewFrameService;
       firstPaintHandle.hud.ephemerisService = ephemerisService;
       // Story 3.6 — wire AttitudeService into <v-hud> so the inline
       // <v-attitude-indicator> can read getBusProvenance(activeSpacecraftId, et)
