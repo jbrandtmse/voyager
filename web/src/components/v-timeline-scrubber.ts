@@ -1035,8 +1035,17 @@ export class VTimelineScrubber extends BaseElement {
 
     let ariaLabel = 'Mission timeline';
     if (this.variant === 'detail') {
-      const name = this.activeDetailChapter?.name ?? 'Encounter';
-      ariaLabel = `${name} encounter timeline`;
+      // Story 4.4 AC5 — when an encounter chapter is active, label reads
+      // "<Chapter Name> encounter timeline" (e.g. "Voyager 1 — Jupiter
+      // encounter timeline"). The fallback for the rare case where the
+      // detail variant is rendered without an active chapter MUST NOT
+      // produce "Encounter encounter timeline" (BUG-001 latent
+      // duplicate — the previous fallback `'Encounter'` composed into
+      // "Encounter encounter timeline"). Falling back to the bare
+      // "Encounter timeline" matches production smoke evidence for the
+      // detail variant and avoids the screen-reader stutter.
+      const name = this.activeDetailChapter?.name;
+      ariaLabel = name !== undefined ? `${name} encounter timeline` : 'Encounter timeline';
     }
 
     const activeChapter =

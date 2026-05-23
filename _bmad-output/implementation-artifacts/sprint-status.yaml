@@ -1,5 +1,5 @@
 # generated: 2026-05-18
-# last_updated: 2026-05-23 (4-8 in-progress — scaffolding pass)
+# last_updated: 2026-05-23 (4-10 review — bug-fix sweep)
 # project: Voyager
 # 1.1 set to done on 2026-05-18 after code review (cr-1-1 / epic-cycle-2026-05-18)
 # project_key: NOKEY
@@ -198,6 +198,7 @@ development_status:
   4-7-v2-uranus-and-v2-neptune-encounters-triton-bend-fr12: done
   4-8-gravity-assist-trajectory-visual-validation: done
   4-9-l4-playwright-visual-regression-at-six-encounter-scenes-launch-pbd-stub: backlog
+  4-10-bug-fixes-from-2026-05-23-review: done
   epic-4-retrospective: optional
 
   # Epic 5: Pale Blue Dot — the Hero Scene

@@ -753,13 +753,29 @@ const bootstrap = (): void => {
       // Suppression: if the user has somehow already flipped the
       // manual-camera flag (e.g. a gesture fired during the manifest
       // load), respect that and don't override.
+      //
+      // Story 4.10 BUG-003 fix (2026-05-23): also fire the cold-load
+      // replay when NO chapter is active (cruise period — e.g.
+      // `/?t=1980-01-01T00:00:00Z`). Without this branch the camera
+      // stays at (0, 0, 0) (world origin = Sun barycenter) and the
+      // viewport shows only the Milky Way skybox; the visible promise
+      // of "visitor sees both Voyagers along their heliocentric
+      // trajectories" (FR31) is broken on every non-encounter
+      // timestamp. The controller's built-in `defaultFramingFallback`
+      // resolves to the cruise default (Sun-centered ~10 AU on +Z
+      // looking at origin) when `getActiveTarget()` returns null —
+      // which it does in cruise — so we just call
+      // `applyDefaultFraming` and let the existing cascade handle it.
       const initialActiveChapter = chapterDirector.activeChapter;
-      if (
-        initialActiveChapter !== null &&
-        initialActiveChapter.defaultFraming !== undefined &&
-        !engine.manualCameraActive
-      ) {
-        cameraController.applyDefaultFraming({ animated: false });
+      if (!engine.manualCameraActive) {
+        if (initialActiveChapter === null) {
+          // Cruise cold-load (BUG-003): no active chapter; controller's
+          // cruise-default fallback frames the heliocentric system.
+          cameraController.applyDefaultFraming({ animated: false });
+        } else if (initialActiveChapter.defaultFraming !== undefined) {
+          // Encounter cold-load: chapter carries explicit defaultFraming.
+          cameraController.applyDefaultFraming({ animated: false });
+        }
       }
 
       trajectoryLines = new TrajectoryLines(

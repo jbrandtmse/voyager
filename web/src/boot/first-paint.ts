@@ -259,6 +259,14 @@ export const startFirstPaint = (
   if (options.ephemerisService !== undefined) {
     hud.ephemerisService = options.ephemerisService;
   }
+  // Story 4.10 BUG-006 fix — propagate ChapterDirector through the HUD so
+  // the inline `<v-hud-chapter-title>` can subscribe to chapter
+  // transitions. Set pre-mount so the title's connectedCallback sees the
+  // director on first wire-up and seeds from `activeChapter` without
+  // waiting for the next transition.
+  if (options.chapterDirector !== undefined) {
+    hud.chapterDirector = options.chapterDirector;
+  }
   hud.style.visibility = 'hidden';
   host.appendChild(hud);
 
