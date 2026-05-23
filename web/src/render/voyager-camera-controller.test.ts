@@ -20,10 +20,20 @@ import {
   MIN_ZOOM_DISTANCE_KM,
   MAX_ZOOM_DISTANCE_KM,
   CRUISE_DEFAULT_DISTANCE_KM,
+  HELIOCENTRIC_MIN_DISTANCE_AU,
+  HELIOCENTRIC_MAX_DISTANCE_AU,
+  HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+  HELIOCENTRIC_MIN_ELEVATION_DEG,
+  HELIOCENTRIC_MAX_ELEVATION_DEG,
+  HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
   clampZoomDistance,
+  clampHeliocentricDistanceAu,
+  clampHeliocentricElevationDeg,
+  buildHeliocentricFraming,
   defaultFramingFallback,
   type ManualCameraHost,
 } from './voyager-camera-controller';
+import { KM_PER_AU } from '../math/constants';
 import type { WorldVec3 } from '../types/branded';
 import { worldVec3 } from '../types/branded';
 
@@ -398,6 +408,234 @@ describe('VoyagerCameraController — attach / detach idempotency', () => {
     controller.attach();
     dispatchPointer(domElement, 'pointerdown');
     expect(engine.manualCameraActive).toBe(true);
+    controller.detach();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────
+// Story 4.12 — Heliocentric System-View Camera Mode (T1.4)
+// ───────────────────────────────────────────────────────────────────────
+
+describe('Story 4.12 — clampHeliocentricDistanceAu', () => {
+  it('passes through valid AU values in [1, 100]', () => {
+    expect(clampHeliocentricDistanceAu(1)).toBe(1);
+    expect(clampHeliocentricDistanceAu(10)).toBe(10);
+    expect(clampHeliocentricDistanceAu(35)).toBe(35);
+    expect(clampHeliocentricDistanceAu(100)).toBe(100);
+  });
+
+  it('clamps below 1 AU to 1', () => {
+    expect(clampHeliocentricDistanceAu(0)).toBe(HELIOCENTRIC_MIN_DISTANCE_AU);
+    expect(clampHeliocentricDistanceAu(-10)).toBe(HELIOCENTRIC_MIN_DISTANCE_AU);
+    expect(clampHeliocentricDistanceAu(0.5)).toBe(HELIOCENTRIC_MIN_DISTANCE_AU);
+  });
+
+  it('clamps above 100 AU to 100', () => {
+    expect(clampHeliocentricDistanceAu(200)).toBe(HELIOCENTRIC_MAX_DISTANCE_AU);
+    expect(clampHeliocentricDistanceAu(1e6)).toBe(HELIOCENTRIC_MAX_DISTANCE_AU);
+  });
+
+  it('collapses NaN/Infinity to the default 10 AU (lenient parse)', () => {
+    expect(clampHeliocentricDistanceAu(Number.NaN)).toBe(
+      HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+    );
+    expect(clampHeliocentricDistanceAu(Number.POSITIVE_INFINITY)).toBe(
+      HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+    );
+    expect(clampHeliocentricDistanceAu(Number.NEGATIVE_INFINITY)).toBe(
+      HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+    );
+  });
+});
+
+describe('Story 4.12 — clampHeliocentricElevationDeg', () => {
+  it('passes through valid degrees in [-89, 89]', () => {
+    expect(clampHeliocentricElevationDeg(0)).toBe(0);
+    expect(clampHeliocentricElevationDeg(20)).toBe(20);
+    expect(clampHeliocentricElevationDeg(-30)).toBe(-30);
+    expect(clampHeliocentricElevationDeg(89)).toBe(89);
+    expect(clampHeliocentricElevationDeg(-89)).toBe(-89);
+  });
+
+  it('clamps to documented range', () => {
+    expect(clampHeliocentricElevationDeg(90)).toBe(
+      HELIOCENTRIC_MAX_ELEVATION_DEG,
+    );
+    expect(clampHeliocentricElevationDeg(-90)).toBe(
+      HELIOCENTRIC_MIN_ELEVATION_DEG,
+    );
+    expect(clampHeliocentricElevationDeg(1e6)).toBe(
+      HELIOCENTRIC_MAX_ELEVATION_DEG,
+    );
+  });
+
+  it('collapses NaN/Infinity to the default 20 degrees', () => {
+    expect(clampHeliocentricElevationDeg(Number.NaN)).toBe(
+      HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
+    );
+  });
+});
+
+describe('Story 4.12 — buildHeliocentricFraming math', () => {
+  it('at distance=10 AU, elevation=0°: camera sits on +Z radial', () => {
+    const framing = buildHeliocentricFraming({ distanceAu: 10, elevationDeg: 0 });
+    expect(framing.position.x).toBeCloseTo(0, 5);
+    expect(framing.position.y).toBeCloseTo(0, 5);
+    expect(framing.position.z).toBeCloseTo(10 * KM_PER_AU, 0);
+  });
+
+  it('at distance=12 AU, elevation=30° (V1S Titan-slingshot framing): northward tilt', () => {
+    const framing = buildHeliocentricFraming({
+      distanceAu: 12,
+      elevationDeg: 30,
+    });
+    const expectedKm = 12 * KM_PER_AU;
+    // (0, sin(30°)*d, cos(30°)*d) — Y component is half of distance.
+    expect(framing.position.x).toBeCloseTo(0, 5);
+    expect(framing.position.y).toBeCloseTo(expectedKm * 0.5, 0);
+    expect(framing.position.z).toBeCloseTo(expectedKm * Math.sqrt(3) / 2, 0);
+    // Magnitude is exactly the requested distance.
+    expect(framing.position.length()).toBeCloseTo(expectedKm, 0);
+  });
+
+  it('at distance=35 AU, elevation=-30° (V2N Triton-bend framing): southward tilt', () => {
+    const framing = buildHeliocentricFraming({
+      distanceAu: 35,
+      elevationDeg: -30,
+    });
+    const expectedKm = 35 * KM_PER_AU;
+    expect(framing.position.y).toBeCloseTo(expectedKm * -0.5, 0);
+    expect(framing.position.z).toBeCloseTo(expectedKm * Math.sqrt(3) / 2, 0);
+    // Below the ecliptic plane.
+    expect(framing.position.y).toBeLessThan(0);
+  });
+
+  it('quaternion orients camera to look at world origin', () => {
+    const framing = buildHeliocentricFraming({
+      distanceAu: 12,
+      elevationDeg: 30,
+    });
+    // Forward axis = camera-local -Z applied to the quaternion. Should
+    // point from camera position toward origin.
+    const forward = new Vector3(0, 0, -1).applyQuaternion(framing.quaternion);
+    const toOrigin = framing.position.clone().negate().normalize();
+    expect(forward.dot(toOrigin)).toBeGreaterThan(0.999);
+  });
+
+  it('clamps out-of-range distance + elevation parameters', () => {
+    const framing = buildHeliocentricFraming({
+      distanceAu: -5,
+      elevationDeg: 200,
+    });
+    // Clamped distance = 1 AU, clamped elevation = 89°.
+    expect(framing.position.length()).toBeCloseTo(KM_PER_AU, 0);
+    // Y component ≈ KM_PER_AU * sin(89°) ≈ KM_PER_AU * 0.9998.
+    expect(framing.position.y / KM_PER_AU).toBeCloseTo(Math.sin((89 * Math.PI) / 180), 4);
+  });
+});
+
+describe('Story 4.12 — applyHeliocentricFraming behaviour', () => {
+  it('instant path snaps camera to expected position + orientation', () => {
+    const { controller, engine, camera } = makeController({
+      activeTarget: null,
+      reducedMotion: true,
+    });
+    engine.setManualCameraActive(true);
+    // User-positioned the camera at some arbitrary point.
+    camera.position.set(1e6, 1e6, 1e6);
+
+    controller.applyHeliocentricFraming({
+      distanceAu: 12,
+      elevationDeg: 30,
+      animated: false,
+    });
+
+    // Camera magnitude ≈ 12 AU in km.
+    const distanceKm = camera.position.length();
+    expect(distanceKm).toBeCloseTo(12 * KM_PER_AU, 0);
+    // Elevation tilt matches: asin(y / |pos|) = 30°.
+    const elevationRad = Math.asin(camera.position.y / distanceKm);
+    expect((elevationRad * 180) / Math.PI).toBeCloseTo(30, 4);
+    // manualCameraActive flipped to false after framing landed.
+    expect(engine.manualCameraActive).toBe(false);
+    controller.detach();
+  });
+
+  it('animated path starts a restore-animation tween; tickAnimation advances it', () => {
+    let now = 0;
+    const { controller, camera } = makeController({
+      activeTarget: null,
+      reducedMotion: false,
+      restoreDurationMs: 400,
+      nowMs: () => now,
+    });
+    camera.position.set(0, 0, 0);
+
+    controller.applyHeliocentricFraming({
+      distanceAu: 10,
+      elevationDeg: 20,
+      animated: true,
+    });
+    expect(controller.isRestoring).toBe(true);
+
+    now = 400;
+    controller.tickAnimation();
+    expect(controller.isRestoring).toBe(false);
+    // Final position lands at expected target.
+    const expectedKm = 10 * KM_PER_AU;
+    expect(camera.position.length()).toBeCloseTo(expectedKm, 0);
+    controller.detach();
+  });
+
+  it('reducedMotion collapses animated=true to instant', () => {
+    const { controller, camera } = makeController({
+      activeTarget: null,
+      reducedMotion: true,
+    });
+    controller.applyHeliocentricFraming({
+      distanceAu: 10,
+      elevationDeg: 20,
+      animated: true,
+    });
+    expect(controller.isRestoring).toBe(false);
+    expect(camera.position.length()).toBeCloseTo(10 * KM_PER_AU, 0);
+    controller.detach();
+  });
+
+  it('manualCameraSuspended === true: applyHeliocentricFraming is a no-op (PBD carve-out)', () => {
+    const { controller, engine, camera } = makeController({
+      activeTarget: null,
+      reducedMotion: true,
+    });
+    camera.position.set(123, 456, 789);
+    controller.manualCameraSuspended = true;
+
+    controller.applyHeliocentricFraming({
+      distanceAu: 10,
+      elevationDeg: 20,
+      animated: false,
+    });
+
+    // Camera position unchanged.
+    expect(camera.position.x).toBe(123);
+    expect(camera.position.y).toBe(456);
+    expect(camera.position.z).toBe(789);
+    // setManualCameraActive should not have been called (no flip).
+    expect(engine.setManualCameraActive).not.toHaveBeenCalled();
+    controller.detach();
+  });
+
+  it('lenient clamping: out-of-range parameters produce a valid frame', () => {
+    const { controller, camera } = makeController({
+      reducedMotion: true,
+    });
+    controller.applyHeliocentricFraming({
+      distanceAu: -50,
+      elevationDeg: 250,
+      animated: false,
+    });
+    // Distance clamped to 1 AU, elevation clamped to 89°.
+    expect(camera.position.length()).toBeCloseTo(KM_PER_AU, 0);
     controller.detach();
   });
 });

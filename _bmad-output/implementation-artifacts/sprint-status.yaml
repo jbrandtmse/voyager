@@ -1,5 +1,5 @@
 # generated: 2026-05-18
-# last_updated: 2026-05-23 (4-9 dev complete — L4 Playwright visual regression)
+# last_updated: 2026-05-23 (4-12 dev complete → review — heliocentric system-view camera mode)
 # project: Voyager
 # 1.1 set to done on 2026-05-18 after code review (cr-1-1 / epic-cycle-2026-05-18)
 # project_key: NOKEY
@@ -200,7 +200,7 @@ development_status:
   4-9-l4-playwright-visual-regression-at-six-encounter-scenes-launch-pbd-stub: done
   4-10-bug-fixes-from-2026-05-23-review: done
   4-11-satellite-spk-kernels-procurement-for-moon-visibility: done
-  4-12-heliocentric-system-view-camera-mode: backlog
+  4-12-heliocentric-system-view-camera-mode: done
   epic-4-retrospective: done
 
   # Epic 5: Pale Blue Dot — the Hero Scene

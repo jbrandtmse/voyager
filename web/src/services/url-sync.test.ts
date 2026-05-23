@@ -154,6 +154,80 @@ describe('Story 1.9 Task 4 — URLSync.parseInitialT()', () => {
   });
 });
 
+describe('Story 4.12 — URLSync.parseHeliocentricView()', () => {
+  it('returns enabled=false / defaults when no view param present', () => {
+    const { win } = makeWin('');
+    const sync = new URLSync(win);
+    const r = sync.parseHeliocentricView();
+    expect(r.enabled).toBe(false);
+    expect(r.distanceAu).toBe(10);
+    expect(r.elevationDeg).toBe(20);
+  });
+
+  it('returns enabled=true with explicit distance + elevation', () => {
+    const { win } = makeWin('?view=heliocentric&distance=12&elevation=30');
+    const sync = new URLSync(win);
+    const r = sync.parseHeliocentricView();
+    expect(r.enabled).toBe(true);
+    expect(r.distanceAu).toBe(12);
+    expect(r.elevationDeg).toBe(30);
+  });
+
+  it('returns enabled=true with default distance + elevation when only ?view=heliocentric', () => {
+    const { win } = makeWin('?view=heliocentric');
+    const sync = new URLSync(win);
+    const r = sync.parseHeliocentricView();
+    expect(r.enabled).toBe(true);
+    expect(r.distanceAu).toBe(10);
+    expect(r.elevationDeg).toBe(20);
+  });
+
+  it('clamps distance to [1, 100] AU lenient (no throw on out-of-range)', () => {
+    const { win: winLow } = makeWin('?view=heliocentric&distance=-5');
+    expect(new URLSync(winLow).parseHeliocentricView().distanceAu).toBe(1);
+    const { win: winHigh } = makeWin('?view=heliocentric&distance=999');
+    expect(new URLSync(winHigh).parseHeliocentricView().distanceAu).toBe(100);
+  });
+
+  it('clamps elevation to [-89, 89] degrees lenient', () => {
+    const { win: winLow } = makeWin('?view=heliocentric&elevation=-180');
+    expect(new URLSync(winLow).parseHeliocentricView().elevationDeg).toBe(-89);
+    const { win: winHigh } = makeWin('?view=heliocentric&elevation=200');
+    expect(new URLSync(winHigh).parseHeliocentricView().elevationDeg).toBe(89);
+  });
+
+  it('falls back to defaults on NaN distance / elevation', () => {
+    const { win } = makeWin('?view=heliocentric&distance=foo&elevation=bar');
+    const r = new URLSync(win).parseHeliocentricView();
+    expect(r.distanceAu).toBe(10);
+    expect(r.elevationDeg).toBe(20);
+  });
+
+  it('matches view value case-insensitively', () => {
+    const { win } = makeWin('?view=Heliocentric');
+    expect(new URLSync(win).parseHeliocentricView().enabled).toBe(true);
+    const { win: win2 } = makeWin('?view=HELIOCENTRIC');
+    expect(new URLSync(win2).parseHeliocentricView().enabled).toBe(true);
+  });
+
+  it('returns enabled=false for other view values', () => {
+    const { win } = makeWin('?view=geocentric');
+    expect(new URLSync(win).parseHeliocentricView().enabled).toBe(false);
+  });
+
+  it('coexists with ?t= parameter (parsed independently)', () => {
+    const { win } = makeWin(
+      '?view=heliocentric&distance=12&elevation=30&t=1989-08-25T09:23:00Z',
+    );
+    const sync = new URLSync(win);
+    const view = sync.parseHeliocentricView();
+    const t = sync.parseInitialT();
+    expect(view.enabled).toBe(true);
+    expect(view.distanceAu).toBe(12);
+    expect(t.valid).toBe(true);
+  });
+});
+
 describe('Story 1.9 Task 4 — URLSync.writeEtImmediate()', () => {
   it('calls history.replaceState with ?t=<iso> and pathname preserved', () => {
     const { win, replaceCalls } = makeWin('', '/voyager/', '#chapter-3');

@@ -7,27 +7,27 @@
 > ("the gravity-assist mechanism is visually apparent at each encounter")
 > beyond the numerical-accuracy gate NFR-P9 already covers.
 >
-> **Scope note (Rule 5 amendment to AC1, 2026-05-23).** Each per-encounter
-> section embeds an annotated screenshot captured in the **body-centered
-> chapter framing** that ships in production today — the same view a
-> user gets when navigating to `/c/<slug>`. The original AC1 wording
-> called for heliocentric (sun-at-origin) framing because the inbound +
-> closest-approach + outbound geometry of a gravity-assist is most
-> legible from a system-wide perspective. The current production app
-> doesn't expose a clean heliocentric system-view camera mode — the only
-> auto-applied framing is the body-centered `applyDefaultFraming`
-> subscriber landed in Stories 4.5–4.7. The body-centered shots DO show
-> the encounter at the moment of closest approach (planet at center,
-> spacecraft visible nearby); the system-wide bend visualisation is
-> deferred to a future story that introduces a heliocentric camera mode
-> (Epic 6 polish candidate). The V1S Titan-slingshot ecliptic-exit (FR11
-> dramatic moment) and V2N Triton-bend (FR12) are described in prose
-> below; the canonical screenshot evidence for those bends will land
-> alongside the heliocentric-camera-mode story.
+> **Scope note (Rule 5 amendment to AC1, 2026-05-23; Story 4.12 follow-up
+> 2026-05-23).** Each per-encounter section embeds an annotated screenshot
+> captured in the **body-centered chapter framing** that ships in
+> production today — the same view a user gets when navigating to
+> `/c/<slug>`. Story 4.12 added a heliocentric (sun-at-origin) system-view
+> camera mode via the URL query parameter
+> `?view=heliocentric&distance=<au>&elevation=<deg>`; the V1S
+> Titan-slingshot ecliptic-exit (FR11 dramatic moment) and V2N Triton-bend
+> (FR12) sections now embed the canonical post-encounter heliocentric
+> screenshots alongside the body-centered closest-approach shots.
 >
-> This is a Rule 5 in-place amendment: original-vs-amended wording is
-> documented inline above; Story 4.8's AC1 in the implementation-artifact
-> story file is updated to match.
+> The body-centered shots show the encounter at the moment of closest
+> approach (planet at center, spacecraft visible nearby); the
+> heliocentric shots show the cumulative bend in the spacecraft's
+> heliocentric trajectory — the geometric signature of the gravity assist
+> visible at the AU scale.
+>
+> This is a Rule 5 in-place amendment: the Story 4.8 deferral text was
+> replaced in-place with the Story 4.12 follow-up embeds; the
+> implementation-artifact story file for Story 4.8 stays as the
+> historical record of the original-vs-amended wording.
 >
 > The document is a **living artifact** per Story 4.8 AC4: when Epic 7's
 > friendly-user testing (or earlier feedback) surfaces an encounter whose
@@ -83,17 +83,22 @@ planetary approach to Saturn followed eighteen hours later at
 referenced from Story 4.6 AC4 + Story 4.8 — Voyager 1 climbs out of the
 plane of the planets toward interstellar space.
 
-**Post-encounter bend visualization deferred.** A separate screenshot
-showing V1's heliocentric trajectory continuing northward out of the
-ecliptic plane (anchor `~1981-06-01`) requires a heliocentric system-
-view camera mode that the current production app doesn't expose. The
-Titan-slingshot ecliptic-exit is the simulation's first irreversible
-plane change; the canonical evidence frame for FR11's "dramatic moment"
-will land in the future heliocentric-camera-mode story (see scope
-note in the introduction).
+### Post-encounter heliocentric view (FR11 dramatic moment)
 
-_Commentary captured at body-centered closest-approach framing per
-the Rule 5 amendment to AC1._
+![v1-saturn post-encounter heliocentric view](screenshots/v1-saturn-post-encounter.png)
+
+_Heliocentric framing — `/c/v1-saturn?view=heliocentric&distance=12&elevation=30&t=1981-06-01T00:00:00Z` — captured by Story 4.12 follow-up._
+
+Captured ~6 months past the Titan slingshot, this heliocentric system-view
+frame shows V1's trajectory continuing **northward out of the ecliptic
+plane**. The bend originates at the closest-approach point shown in the
+body-centered frame above; this frame shows the cumulative angular
+deflection of V1's heliocentric path. Compare the inbound leg (in-plane,
+from the inner solar system) with the outbound leg (rising above the
+ecliptic) — the geometric signature of the Titan-priority deflection
+that ended V1's planetary tour and committed it to interstellar space.
+
+_Commentary subject to lead's screenshot-review pass per AC3._
 
 ## Voyager 2 — Saturn (1981-08-26)
 
@@ -145,18 +150,24 @@ plane** — the final gravity assist of the mission and the largest
 plane-change of either spacecraft's trajectory (FR12) [MISSION_FACTS.md
 § Triton gravity-assist bend (FR12)].
 
-**Post-encounter bend visualization deferred (FR12).** The southern bend
-develops over the post-encounter cruise era (1990 onwards) rather than
-inside the ±5d V2N chapter window. The long-baseline heliocentric
-framing that would render FR12 legible requires a system-view camera
-mode that the current production app doesn't expose — same constraint as
-the V1S Titan-slingshot post-encounter frame. The canonical FR12 screenshot
-will land in the future heliocentric-camera-mode story; this section's
-body-centered closest-approach frame captures the moment of the bend's
-gravitational origin but not the bend's full angular sweep.
+### Post-encounter heliocentric view (FR12)
 
-_Commentary captured at body-centered closest-approach framing per
-the Rule 5 amendment to AC1._
+![v2-neptune post-encounter heliocentric view](screenshots/v2-neptune-post-encounter.png)
+
+_Heliocentric framing — `/c/v2-neptune?view=heliocentric&distance=35&elevation=-30&t=1995-01-01T00:00:00Z` — captured by Story 4.12 follow-up._
+
+Captured ~5 years past the Triton flyby, this heliocentric system-view
+frame shows V2's trajectory bending **southward out of the ecliptic
+plane** — the largest plane-change of either spacecraft's mission per
+FR12. The southern elevation of the camera (−30° below the ecliptic)
+puts the viewer on the same side as V2's outbound heading so the
+post-encounter heading change is legible against the in-plane Saturn →
+Uranus → Neptune chain. The body-centered closest-approach shot above
+captures the bend's gravitational origin (Triton flyby at 09:10:00Z);
+this frame shows the cumulative angular sweep — the full geometric
+signature of the Voyager 2 mission's final gravity assist.
+
+_Commentary subject to lead's screenshot-review pass per AC3._
 
 ## Update protocol
 

@@ -1918,6 +1918,8 @@ So that FR55 (L4) is operational and PRD §Layer-4 commitment is met.
 
 A visitor reaches 1990-02-14; the spacecraft physically turns toward the inner solar system; the narrow-angle camera frustum sweeps Venus → Earth → Jupiter → Saturn → Uranus → Neptune in historical sequence; original NASA photo plates composite into the scene at the corresponding instants. The visitor pauses for thirty seconds — the success criterion.
 
+**Implementation guidance from Epic 4 (retro Action #4, 2026-05-23):** when Story 5.1 + 5.2 introduce a chapter-activation framing trigger for the PBD turn-and-photograph sequence, **use the Story 4.5 `applyDefaultFraming` pattern as the canonical wire-up**. Story 4.5 cycle 2 established the subscriber + cold-load replay pair that auto-applies a chapter's `defaultFraming` on `ChapterDirector` `held` transition AND on cold-load via `main.ts`. Stories 4.6 + 4.7 reused the pattern across 5 more encounter chapters with ZERO new wire-up code. The Story 4.12 `applyHeliocentricFraming` follow-up extracted a shared `_applyFraming(target, animated)` private helper on `VoyagerCameraController`, so PBD's choreographed turn can drive it directly via either the existing `applyDefaultFraming({animated})` path OR a new PBD-specific public method that delegates to the same helper. Do NOT reinvent the trigger pattern — Story 4.5's defense tests (12 cycle-5 cases) and Story 4.12's integration test pin the contract. See `web/src/main.ts` for the subscriber + cold-load replay; `web/src/render/voyager-camera-controller.ts` for the `_applyFraming` shared helper.
+
 ### Story 5.1: PBD Dedicated Module and Internal Substates
 
 As the project maintainer,

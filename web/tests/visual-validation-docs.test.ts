@@ -34,21 +34,25 @@ const MISSION_FACTS_PATH = resolve(repoRoot, 'MISSION_FACTS.md');
 const SCREENSHOTS_DIR = resolve(repoRoot, 'docs/visual-validation/screenshots');
 
 /**
- * Rule 5 amendment (Story 4.8 AC1 scope reduction, 2026-05-23): the original
- * eight-screenshot deliverable (six encounter frames + V1S/V2N post-encounter
- * frames) was scoped down to six encounter frames only. The post-encounter
- * heliocentric system-view frames require a camera mode that the current
- * production app doesn't expose; deferred to a future heliocentric-camera-mode
- * story. The doc reflects this in its scope-note + per-section deferral
- * markers.
+ * Story 4.12 follow-up to Story 4.8 (2026-05-23): the V1S + V2N
+ * post-encounter heliocentric system-view screenshots are now REQUIRED
+ * (un-deferred from the Story-4.8 Rule 5 amendment). Story 4.12 landed
+ * the heliocentric camera mode via the URL query parameter
+ * `?view=heliocentric&distance=<au>&elevation=<deg>`; the lead's smoke
+ * captured the two post-encounter frames alongside the six body-centered
+ * closest-approach frames. The deferral markers in
+ * `docs/visual-validation/gravity-assists.md` were replaced in-place with
+ * the heliocentric screenshot embeds + commentary.
  */
 const EXPECTED_SCREENSHOTS = [
   'v1-jupiter.png',
   'v2-jupiter.png',
   'v1-saturn.png',
+  'v1-saturn-post-encounter.png',
   'v2-saturn.png',
   'v2-uranus.png',
   'v2-neptune.png',
+  'v2-neptune-post-encounter.png',
 ] as const;
 
 const FULL_MODE = process.env.VISUAL_VALIDATION_FULL === '1';
@@ -62,41 +66,50 @@ describe('Story 4.8 / AC6 — visual-validation doc references real artifacts', 
       ).toBe(true);
     });
 
-    it('document references the six required encounter screenshots inline', () => {
+    it('document references the eight required encounter screenshots inline (six body-centered + two post-encounter heliocentric)', () => {
       const doc = readFileSync(DOC_PATH, 'utf-8');
-      // Every per-encounter section embeds a `![alt](screenshots/<slug>.png)` reference.
+      // Six per-encounter body-centered closest-approach screenshots PLUS
+      // the two Story-4.12-landed post-encounter heliocentric frames
+      // (V1S Titan-slingshot ecliptic-exit + V2N Triton-bend FR12).
       const requiredCorePngs = [
         'screenshots/v1-jupiter.png',
         'screenshots/v2-jupiter.png',
         'screenshots/v1-saturn.png',
+        'screenshots/v1-saturn-post-encounter.png',
         'screenshots/v2-saturn.png',
         'screenshots/v2-uranus.png',
         'screenshots/v2-neptune.png',
+        'screenshots/v2-neptune-post-encounter.png',
       ];
       for (const png of requiredCorePngs) {
         expect(
           doc.includes(png),
-          `Expected document to reference ${png}. Story 4.8 AC2 + AC8 require all six per-encounter screenshots embedded inline.`,
+          `Expected document to reference ${png}. Story 4.8 AC2 + AC8 + Story 4.12 AC3 require all eight per-encounter screenshots embedded inline.`,
         ).toBe(true);
       }
     });
 
-    it('document documents the V1S + V2N post-encounter deferral (Rule 5 amendment to AC1)', () => {
+    it('document records the Story 4.12 follow-up that closed the V1S + V2N post-encounter deferral', () => {
       const doc = readFileSync(DOC_PATH, 'utf-8');
-      // Original AC1 / AC7 required two post-encounter screenshots (V1S Titan
-      // slingshot ecliptic-exit; V2N Triton-bend FR12). The current production
-      // app doesn't expose a heliocentric system-view camera mode so the
-      // canonical bend visualisations are deferred to a future story. The
-      // document MUST acknowledge this deferral inline so a future contributor
-      // doesn't mistake the missing frames for an oversight.
+      // The Story 4.8 Rule 5 amendment originally deferred the V1S + V2N
+      // post-encounter heliocentric frames to a future heliocentric-camera-
+      // mode story. Story 4.12 landed that mode and captured the two frames.
+      // The doc body MUST acknowledge the follow-up (not the deferral) so a
+      // future contributor reading the document sees the historical arc.
+      expect(
+        doc.includes('Story 4.12 follow-up'),
+        'Expected the doc to reference the Story 4.12 follow-up that landed the heliocentric camera mode + closed the V1S + V2N post-encounter deferral.',
+      ).toBe(true);
+      expect(
+        doc.includes('?view=heliocentric'),
+        'Expected the doc to name the URL query parameter (?view=heliocentric) used to capture the post-encounter frames — discoverability for future contributors refreshing the screenshots.',
+      ).toBe(true);
+      // Sanity: the old "Post-encounter bend visualization deferred"
+      // marker MUST be gone (replaced in-place with the screenshot embed).
       expect(
         doc.includes('Post-encounter bend visualization deferred'),
-        'Expected per-section deferral marker for the V1S + V2N post-encounter frames. The Rule 5 amendment to AC1 lives in the doc body; the test pins the marker so future regressions surface.',
-      ).toBe(true);
-      expect(
-        doc.includes('heliocentric-camera-mode story'),
-        'Expected the deferral marker to name the follow-up work (a future heliocentric-camera-mode story).',
-      ).toBe(true);
+        'Expected the Story 4.8 deferral marker to be REMOVED (replaced by the Story 4.12 follow-up embeds). If this assertion fails, the dev forgot to delete the deferral text.',
+      ).toBe(false);
     });
 
     it('each cited MISSION_FACTS.md section header exists in the live MISSION_FACTS.md (AC2 / AC6)', () => {

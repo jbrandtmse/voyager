@@ -767,8 +767,25 @@ const bootstrap = (): void => {
       // which it does in cruise — so we just call
       // `applyDefaultFraming` and let the existing cascade handle it.
       const initialActiveChapter = chapterDirector.activeChapter;
+      // Story 4.12 AC2 — `?view=heliocentric` overrides the chapter-default
+      // body-centered framing on cold-load. The URL parameter is read once
+      // at boot from the URLSync; subsequent navigations honour the chapter's
+      // own body-centered framing unless the URL is re-loaded with the
+      // parameter still present.
+      const heliocentricView = urlSync.parseHeliocentricView();
       if (!engine.manualCameraActive) {
-        if (initialActiveChapter === null) {
+        if (heliocentricView.enabled) {
+          // Story 4.12 cold-load — frame the Sun-at-origin system view
+          // regardless of which chapter (if any) is currently active. The
+          // instant path matches the body-centered cold-load branches
+          // below: cameras start at world origin; a 400ms tween from
+          // origin would be a jarring pull-back.
+          cameraController.applyHeliocentricFraming({
+            distanceAu: heliocentricView.distanceAu,
+            elevationDeg: heliocentricView.elevationDeg,
+            animated: false,
+          });
+        } else if (initialActiveChapter === null) {
           // Cruise cold-load (BUG-003): no active chapter; controller's
           // cruise-default fallback frames the heliocentric system.
           cameraController.applyDefaultFraming({ animated: false });

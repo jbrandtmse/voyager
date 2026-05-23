@@ -101,6 +101,99 @@ export const MAX_ZOOM_DISTANCE_KM = 200 * KM_PER_AU;
 export const CRUISE_DEFAULT_DISTANCE_KM = 10 * KM_PER_AU;
 
 /**
+ * Story 4.12 — clamps + defaults for the heliocentric system-view camera
+ * mode. The mode parks the camera at `distanceAu * AU_KM` from the world
+ * origin (Sun-at-origin per Story 1.13) and tilts up by `elevationDeg`
+ * from the ecliptic plane, looking back at the origin. The clamps match
+ * the URL-parameter contract (AC2): lenient clamping rather than rejection
+ * so deep-link typos still produce a viewable framing.
+ *
+ * Distance range chosen as [1, 100] AU:
+ *   - lower 1 AU keeps the camera outside Earth's orbit so the inner
+ *     planets remain visible without occlusion;
+ *   - upper 100 AU stays inside the controller's hard zoom clamp
+ *     (200 AU) with comfortable headroom.
+ *
+ * Elevation range chosen as [-89, 89] degrees: keeps the camera off the
+ * Y-axis singularity (±90° would put the camera directly above/below the
+ * origin and degenerate the lookAt basis with the +Y up vector).
+ */
+export const HELIOCENTRIC_MIN_DISTANCE_AU = 1;
+export const HELIOCENTRIC_MAX_DISTANCE_AU = 100;
+export const HELIOCENTRIC_DEFAULT_DISTANCE_AU = 10;
+export const HELIOCENTRIC_MIN_ELEVATION_DEG = -89;
+export const HELIOCENTRIC_MAX_ELEVATION_DEG = 89;
+export const HELIOCENTRIC_DEFAULT_ELEVATION_DEG = 20;
+
+/**
+ * Clamp the heliocentric distance parameter (in AU) to the documented
+ * range. Lenient: NaN / Infinity collapse to the documented default
+ * rather than throwing so URL deep-link typos still produce a viewable
+ * frame (NFR-S7 silent-reject discipline).
+ */
+export const clampHeliocentricDistanceAu = (distanceAu: number): number => {
+  if (!Number.isFinite(distanceAu)) return HELIOCENTRIC_DEFAULT_DISTANCE_AU;
+  if (distanceAu < HELIOCENTRIC_MIN_DISTANCE_AU) {
+    return HELIOCENTRIC_MIN_DISTANCE_AU;
+  }
+  if (distanceAu > HELIOCENTRIC_MAX_DISTANCE_AU) {
+    return HELIOCENTRIC_MAX_DISTANCE_AU;
+  }
+  return distanceAu;
+};
+
+/**
+ * Clamp the heliocentric elevation parameter (in degrees) to the documented
+ * range. Lenient: NaN / Infinity collapse to the documented default.
+ */
+export const clampHeliocentricElevationDeg = (elevationDeg: number): number => {
+  if (!Number.isFinite(elevationDeg)) return HELIOCENTRIC_DEFAULT_ELEVATION_DEG;
+  if (elevationDeg < HELIOCENTRIC_MIN_ELEVATION_DEG) {
+    return HELIOCENTRIC_MIN_ELEVATION_DEG;
+  }
+  if (elevationDeg > HELIOCENTRIC_MAX_ELEVATION_DEG) {
+    return HELIOCENTRIC_MAX_ELEVATION_DEG;
+  }
+  return elevationDeg;
+};
+
+/**
+ * Story 4.12 — build the heliocentric default framing. Camera sits at
+ * `distanceAu * KM_PER_AU` from the world origin, tilted up by
+ * `elevationDeg` from the ecliptic plane. Math: position = (0, sin(e),
+ * cos(e)) * distanceKm where +Z is the ecliptic-normal-projected radial
+ * axis and +Y is the ecliptic normal. The camera looks back at the
+ * origin with `up = (0, 1, 0)`.
+ *
+ * Exported pure for unit testing — the controller's
+ * `applyHeliocentricFraming` calls this to compute the target frame
+ * before handing off to the shared animation path.
+ */
+export const buildHeliocentricFraming = (params: {
+  distanceAu: number;
+  elevationDeg: number;
+}): DefaultFramingTarget => {
+  const distanceAu = clampHeliocentricDistanceAu(params.distanceAu);
+  const elevationDeg = clampHeliocentricElevationDeg(params.elevationDeg);
+  const distanceKm = distanceAu * KM_PER_AU;
+  const elevationRad = (elevationDeg * Math.PI) / 180;
+  // Camera position: rotate +Z radial by `elevationRad` about the +X axis
+  // so positive elevation tilts the camera "northward" out of the
+  // ecliptic plane (matching the FR11 V1S Titan-slingshot description in
+  // gravity-assists.md). Trig identity: rotating (0, 0, d) by angle e
+  // about +X yields (0, d*sin(e), d*cos(e)).
+  const position = new Vector3(
+    0,
+    distanceKm * Math.sin(elevationRad),
+    distanceKm * Math.cos(elevationRad),
+  );
+  const origin = new Vector3(0, 0, 0);
+  const up = new Vector3(0, 1, 0);
+  const quaternion = lookAtQuaternion(position, origin, up);
+  return { position, quaternion };
+};
+
+/**
  * Default body-centered camera distance when a chapter doesn't supply
  * `defaultCameraDistanceKm`. Chosen as 10 body-radii equivalent for the
  * gas giants (Jupiter R ~71.5 Mm → ~715 Mm); the per-chapter override
@@ -453,12 +546,6 @@ export class VoyagerCameraController {
   applyDefaultFraming(options: { animated: boolean }): void {
     if (this.manualCameraSuspended) return;
 
-    // Cancel any in-flight animation; the new framing takes precedence.
-    // We intentionally do NOT resolve the previous animation's promise
-    // here — the awaiter is awaiting THIS call to complete, not the
-    // cancelled one.
-    this.cancelAnimation();
-
     const activeTargetWorld = this.getActiveTarget();
     const activeTargetVec3 =
       activeTargetWorld !== null ? worldToVector3(activeTargetWorld) : null;
@@ -471,10 +558,75 @@ export class VoyagerCameraController {
       defaultFramingFallback(activeTargetVec3) ??
       buildCruiseDefaultFraming();
 
+    this._applyFraming(target, options.animated);
+  }
+
+  /**
+   * Story 4.12 AC1 — drive the camera to a heliocentric (Sun-at-origin)
+   * system-view framing. Independent of the body-centered chapter
+   * `defaultFraming` path; bypasses the `resolveDefaultFraming` callback
+   * + the `getActiveTarget()` body offset.
+   *
+   * Math:
+   *   - camera position = `(0, sin(e)*d, cos(e)*d)` in render-space km
+   *     where `e = elevationDeg` (in radians) and `d = distanceAu *
+   *     KM_PER_AU` — i.e., distance-AU radial from origin tilted up by
+   *     elevation degrees out of the ecliptic plane (+Y is the
+   *     ecliptic-normal up axis per Story 1.13);
+   *   - camera orientation = `lookAt(0, 0, 0)` with `up = (0, 1, 0)`.
+   *
+   * The `distanceAu` and `elevationDeg` parameters are clamped to
+   * `[HELIOCENTRIC_MIN_DISTANCE_AU, HELIOCENTRIC_MAX_DISTANCE_AU]` and
+   * `[HELIOCENTRIC_MIN_ELEVATION_DEG, HELIOCENTRIC_MAX_ELEVATION_DEG]`
+   * respectively (lenient clamping, not rejection — matches the
+   * AC2 / NFR-S7 URL silent-reject discipline).
+   *
+   * Behaviour:
+   *   - No-op when `manualCameraSuspended === true` (PBD carve-out,
+   *     same as `applyDefaultFraming`).
+   *   - Animated path: SLERP + LERP over `--v-duration-slow` (the
+   *     shared restore-animation path, identical to R-key restore).
+   *   - Instant path: direct position + quaternion assignment.
+   *
+   * After the framing lands `manualCameraActive` is set to `false` —
+   * the camera is in chapter / system-view controlled state, not
+   * user-manual state. The user can still grab the camera via gesture
+   * (and `R` then restores back to the chapter's body-centered
+   * `defaultFraming` per Story 4.5).
+   */
+  applyHeliocentricFraming(options: {
+    distanceAu: number;
+    elevationDeg: number;
+    animated: boolean;
+  }): void {
+    if (this.manualCameraSuspended) return;
+
+    const target = buildHeliocentricFraming({
+      distanceAu: options.distanceAu,
+      elevationDeg: options.elevationDeg,
+    });
+
+    this._applyFraming(target, options.animated);
+  }
+
+  /**
+   * Story 4.12 shared framing-application path — used by both
+   * `applyDefaultFraming` (body-centered, resolver-driven) and
+   * `applyHeliocentricFraming` (Sun-at-origin, AU-scale). Extracted so
+   * the animation / reduced-motion / cancel semantics match exactly
+   * (per AC1: "the `animated: true` path reuses the existing restore-
+   * animation interpolator").
+   */
+  private _applyFraming(target: DefaultFramingTarget, animated: boolean): void {
+    // Cancel any in-flight animation; the new framing takes precedence.
+    // We intentionally do NOT resolve the previous animation's promise
+    // here — the awaiter is awaiting THIS call to complete, not the
+    // cancelled one.
+    this.cancelAnimation();
+
     const fromPosition = this.camera.position.clone();
     const fromQuaternion = this.camera.quaternion.clone();
 
-    const animated = options.animated;
     if (!animated || this.reducedMotion() || this.restoreDurationMs <= 0) {
       // Instant cut — collapse the animation to a single state assignment.
       this.camera.position.copy(target.position);
