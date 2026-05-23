@@ -29,6 +29,7 @@ import { URLSync } from './services/url-sync';
 import { URLRouter } from './services/url-router';
 import { EmbedModeState } from './services/embed-mode-state';
 import { ALL_CHAPTERS } from './chapters/registry';
+import { PaleBlueDot } from './chapters/pale-blue-dot';
 import { RenderEngine } from './render/render-engine';
 import { VoyagerCameraController } from './render/voyager-camera-controller';
 import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
@@ -188,17 +189,60 @@ const bootstrap = (): void => {
   // entirely the onFrame callback below, which is the established
   // Story 1.15 pattern for ET fan-out.
   const chapterDirector = new ChapterDirector(ALL_CHAPTERS);
+
+  // Story 5.1 AC3 — Pale Blue Dot dedicated module per ADR-0014.
+  // Path A integration topology: the ChapterDirector itself remains
+  // unchanged (no `register(spec | module)` overload — that would be
+  // Path B); instead we wire a subscriber here that flips an activation
+  // flag on `held` enter / `exiting` exit, and the per-frame block
+  // below conditionally calls `paleBlueDot.update(et)` only while
+  // active. Outside the PBD window the module's per-frame work is
+  // zero — the simulation behaves identically to pre-Story-5.1 baseline.
+  //
+  // The choice of Path A (over Path B's director extension) is
+  // documented in `docs/adr/0014-hybrid-chapter-definition-spec-for-10-module-for-pbd.md`
+  // (Story 5.1 amendment block) per AC3's "either way, the choice is
+  // recorded" obligation.
+  const paleBlueDot = new PaleBlueDot();
+  let paleBlueDotActive = false;
+  chapterDirector.subscribe((event) => {
+    if (event.chapter.slug !== 'pale-blue-dot') return;
+    if (event.to === 'held') {
+      paleBlueDotActive = true;
+    } else if (event.from === 'held') {
+      // Leaving the held window in either direction (exiting forward
+      // or entering reverse). Deactivate to keep the per-frame work
+      // zero outside the PBD window.
+      paleBlueDotActive = false;
+    }
+  });
+
   engine.onFrame((et: number) => {
     chapterDirector.update(et);
+    // Story 5.1 AC3 — drive the PBD module only while it's active
+    // (the director's `held` window for `pale-blue-dot`). The module
+    // is itself inactive-frame safe, but gating here keeps the
+    // pre-Story-5.1 baseline identical at every non-PBD frame.
+    if (paleBlueDotActive) {
+      paleBlueDot.update(et);
+    }
   });
 
   // Integration AC8 (Story 2.1) — DEV-only debug surface so the lead's
   // Chrome DevTools MCP smoke can read `window.__voyagerDebug.chapterDirector`
   // and assert on the active chapter at a scrubbed ET. Stripped from
   // production builds by Vite's `import.meta.env.DEV` constant folding.
+  //
+  // Story 5.1 AC7 — extended with `paleBlueDot` so the lead's PBD smoke
+  // can probe `__voyagerDebug.paleBlueDot.currentSubstate` to verify
+  // `idle` on cold-load at the PBD anchor ET.
   if (import.meta.env.DEV) {
     const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
-    w.__voyagerDebug = { ...(w.__voyagerDebug ?? {}), chapterDirector };
+    w.__voyagerDebug = {
+      ...(w.__voyagerDebug ?? {}),
+      chapterDirector,
+      paleBlueDot,
+    };
   }
 
   // Story 1.13 AC5 — FPS readout dev-mode (?perf=fps). Attached to the

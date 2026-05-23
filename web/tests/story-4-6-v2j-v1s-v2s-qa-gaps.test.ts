@@ -543,19 +543,29 @@ describe('Story 4.6 QA gap 5 — copyForChapter dispatch coverage across V1J / V
     expect(slug).toBe('v2-heliopause');
   });
 
-  it('non-encounter chapters (launches / PBD) leave the copy panel empty (V2U / V2N now populated post-Story-4.7, FR30 closed)', async () => {
+  it('launch chapters leave the copy panel empty (Story 5.1 populated PBD copy; launches remain copy-less)', async () => {
+    // Amended in place per Rule 5: Story 5.1 added PBD copy via the
+    // dedicated module's re-exported ChapterSpec. The remaining
+    // chapters without copy (excluding heliopauses, which route
+    // through heliopauseCopyForSlug) are the two launch chapters.
     const unpopulatedSlugs = [
       'launch-v1',
       'launch-v2',
-      'pale-blue-dot',
     ];
     for (const slug of unpopulatedSlugs) {
       const displayed = await displayedSlugAtAnchor(slug);
       expect(
         displayed,
-        `${slug} unexpectedly rendered copy — only the six gas-giant encounters carry copy after FR30 closure`,
+        `${slug} unexpectedly rendered copy — launches do not carry copy`,
       ).toBeNull();
     }
+  });
+
+  it('PBD resolves to non-null copy (Story 5.1 — PBD copy landed via dedicated module)', async () => {
+    // Story 5.1 added PBD copy. Pin the assertion here so any future
+    // regression that drops the spec-carried copy field surfaces.
+    const slug = await displayedSlugAtAnchor('pale-blue-dot');
+    expect(slug).toBe('pale-blue-dot');
   });
 
   it('V2U resolves to non-null copy (Story 4.7 — FR30 closed)', async () => {

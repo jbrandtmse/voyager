@@ -811,3 +811,27 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
    **Suggested resolution:** Either restate as "Callisto (1979-07-08 12:21 UT)" / "Io (1979-07-09 23:17 UT)" or drop the parenthetical entirely (the table immediately above already cites both instants in ISO form). Trivial when MISSION_FACTS is next edited.
 
    **Routing:** Any future MISSION_FACTS editorial pass (Story 4.7's V2U / V2N additions are the obvious next opportunity).
+
+---
+
+## Deferred from: code review of story 5-1 (2026-05-23)
+
+1. **[5.1 / LOW]** AC5 "idle on cold-load" interpretation has a half-open-on-right boundary tension with `pbdSubstateAt(PBD_ANCHOR_ET) === turning`.
+
+   **What's the issue:** AC5 states "the dedicated module's `idle` substate is active ... for the anchor ET cold-load when no playback is active per the substate's chronological position — `idle` precedes `turning` in the PBD_SUBSTATE_ORDER chronology." The Dev Agent Record's completion note interprets this as: "ANY ET below the anchor is `idle`, and the cinematic arc begins AT the anchor with `turning`." `pbdSubstateAt(PBD_ANCHOR_ET) === turning` is pinned by `substates.test.ts:99`. The `PaleBlueDot` instance starts at `_currentSubstate = idle` (the constructor default at `index.ts:126`), so the DEV `__voyagerDebug.paleBlueDot.currentSubstate` accessor reads `idle` at cold-load BEFORE the first `paleBlueDot.update(et)` call lands — which only happens once the Path A subscriber flips `paleBlueDotActive = true` AND the engine's onFrame block ticks. If the engine's onFrame fires at all on a paused cold-load (i.e. ticking the render loop with the same paused ET each frame), the PaleBlueDot's substate will advance to `turning` on that first tick.
+
+   **Why deferred:** The empirical resolution is the lead's AC7 Chrome DevTools MCP smoke — it reads `__voyagerDebug.paleBlueDot.currentSubstate` at cold-load and either confirms `idle` (the as-documented Dev Agent Record interpretation, which would be the case if onFrame DOES NOT tick on paused cold-load) or surfaces `turning` (which would be the as-implemented behaviour, requiring the test/AC interpretation to converge). Story 5.1's substate-machine + module logic is internally consistent regardless of which the smoke shows — only the interpretation of AC5's specific wording would need to be amended (Rule 5) if the smoke shows `turning`. The integration tests pass with the current interpretation.
+
+   **Suggested resolution:** Lead's AC7 MCP smoke will resolve this empirically. If the cold-load smoke shows `turning` (i.e., onFrame ticks on paused cold-load → module's first update is at the anchor ET → substate flips to `turning`), amend AC5's wording per Rule 5 to read "the substate at the cold-load PAUSED anchor ET is `turning` (the first substate of the cinematic arc); `idle` precedes the arc and is observable only when scrubbing BEFORE the anchor." If the smoke shows `idle`, the Dev Agent Record interpretation stands and this deferral can be dismissed.
+
+   **Routing:** Resolved by the lead's AC7 Chrome DevTools MCP smoke. If amendment needed, fold into the Story 5.1 smoke evidence's notes.
+
+2. **[5.1 / LOW]** `pale-blue-dot-integration.test.ts:148-172` reverse-scrub re-entry test exercises only `director.update`, not the gated per-frame block.
+
+   **What's the issue:** The reverse-scrub re-entry test ("module activates on reverse-scrub re-entry to the PBD window") drives `director.update(et)` directly to verify that the Path A subscriber re-flips `paleBlueDotActive = true` on reverse re-entry. It does NOT exercise the actual per-frame gate (`if (paleBlueDotActive) paleBlueDot.update(et)`) — it only asserts on the subscriber-controlled `active` boolean. The test name says "module activates" but the assertion is on the subscriber's local variable, not on the module's substate.
+
+   **Why deferred:** The two adjacent tests (`:78-118` "module update fires ONLY while chapter is in held state" and `:120-146` "module update does NOT fire outside the PBD window") together DO exercise the gated per-frame path including the activation flag. The reverse-scrub test's purpose is to verify the subscriber's reverse-direction semantics (that the `held` re-entry transition from `passed` correctly flips active back to `true`), which is a director-side property — the gated per-frame loop is incidental to that contract.
+
+   **Suggested resolution:** Optionally extend the reverse-scrub test to also wire the per-frame gate (mirror the `tick()` helper from the `:93` test) and assert on `pbd.currentSubstate` after the reverse re-entry tick. ~10 lines. Not load-bearing; the existing coverage is sufficient.
+
+   **Routing:** Story 5.2 or 5.3 (which will add their own reverse-scrub integration tests on top of the same subscriber) — address inline if convenient.

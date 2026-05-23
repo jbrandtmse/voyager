@@ -173,3 +173,51 @@ export interface ChapterTransitionEvent {
   readonly to: ChapterState;
   readonly et: number;
 }
+
+/**
+ * Story 5.1 AC3 — shared interface for chapters with imperative timeline
+ * behaviour (currently the Pale Blue Dot module per ADR-0014).
+ *
+ * `ChapterModule` is a superset of `ChapterSpec`: the module exposes the
+ * spec-shape so the existing `ChapterDirector` + `ALL_CHAPTERS` registry
+ * + `URLRouter` + scrubber-marker + OG-card-generator stack treats it
+ * uniformly (the "registration unification" obligation in ADR-0014).
+ * The `update(et)` method is the imperative-behaviour surface: the
+ * outer FSM still owns `out / entering / held / exiting / passed`, and
+ * the module's internal substate machine runs inside the `held` window.
+ *
+ * Per Path A integration topology (Story 5.1 AC3): `ChapterDirector` is
+ * unchanged; the module's `update(et)` is wired from `web/src/main.ts`
+ * via a dedicated subscriber that activates on `held` enter and
+ * deactivates on `exiting`. This keeps the director pure (no
+ * PBD-specific knowledge) while honouring ADR-0014's commitment that
+ * "Both register through the same ChapterDirector.register(spec | module)"
+ * — the registration is via the re-exported `ChapterSpec` default
+ * export (which `ALL_CHAPTERS` already consumes); the module's
+ * `update(et)` is the imperative escape hatch.
+ */
+export interface ChapterModule {
+  /**
+   * The spec-shape view of the chapter — slug, anchor ET, window, copy,
+   * etc. This is what the `ALL_CHAPTERS` registry consumes; consumers
+   * that only need the declarative surface (scrubber markers, URL
+   * routing, OG cards) read this without touching the imperative
+   * behaviour.
+   */
+  readonly spec: ChapterSpec;
+
+  /**
+   * Per-frame advance. Called by the main.ts subscriber while the
+   * outer FSM has the chapter in `held` state. The module's internal
+   * substate machine reads `currentEt` and updates its own state;
+   * downstream consumers (e.g. a Lit reactive controller subscribed to
+   * the module per Story 5.2 / 5.3) observe substate transitions via
+   * the module's own subscribe API or by polling.
+   *
+   * Implementations MUST be safe to call when inactive (the subscriber
+   * pattern may call `update` with an out-of-window ET during cold-load
+   * or rapid scrub before the held-state activation fires); the module
+   * is responsible for its own inactive-frame no-op.
+   */
+  update(currentEt: number): void;
+}

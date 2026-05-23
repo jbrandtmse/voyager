@@ -165,15 +165,20 @@ describe('Story 2.1 QA — cross-spec consistency', () => {
     expect(pbd.windowEndEt).toBe(pbd.anchorEt + SECONDS_PER_DAY);
   });
 
-  it('PBD spec file carries the AC3 "do not add choreography" stop-sign', () => {
-    // AC3 contract — verbatim comment must remain so future contributors
-    // hitting this file see the Epic 5 boundary before adding behaviour.
+  it('PBD spec file is now a re-export shim into the Story-5.1 module (Epic 5 boundary crossed)', () => {
+    // Story 5.1 amended this assertion in place per Rule 5: the
+    // pre-Story-5.1 stop-sign ("Placeholder per Story 2.1 ... Do NOT
+    // add PBD-specific choreography here") was a forward-looking
+    // guard against premature PBD work. Story 5.1 IS the Epic 5 PBD
+    // module landing, so the spec/ file now re-exports from
+    // web/src/chapters/pale-blue-dot/ per ADR-0014 § Story 5.1
+    // amendment block.
     const src = readFileSync(
       resolve(webRoot, 'src/chapters/specs/pale-blue-dot.ts'),
       'utf-8',
     );
-    expect(src).toMatch(/Placeholder per Story 2\.1/);
-    expect(src).toMatch(/Full PBD module is Epic 5/);
-    expect(src).toMatch(/Do NOT add PBD-specific choreography here/);
+    expect(src).toMatch(/re-export shim/);
+    expect(src).toMatch(/Story 5\.1/);
+    expect(src).toMatch(/from '\.\.\/pale-blue-dot'/);
   });
 });

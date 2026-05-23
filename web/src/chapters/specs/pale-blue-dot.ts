@@ -1,39 +1,28 @@
 /**
- * Placeholder per Story 2.1. Full PBD module is Epic 5 (Story 5.1+).
- * Do NOT add PBD-specific choreography here.
+ * Pale Blue Dot chapter spec — re-export shim (Story 5.1 AC1).
  *
- * Pale Blue Dot chapter — V1 captured the "family portrait" mosaic
- * (including the PBD frame) on 1990-02-14. This placeholder is just
- * enough metadata to (a) appear in `ALL_CHAPTERS` so the scrubber gets
- * its PBD vertebra (Story 2.2), (b) resolve a `/chapter/pale-blue-dot`
- * URL slug (Story 2.4), and (c) seed the build-time OG-card generator
- * (Story 2.6). The richer PBD module (turn choreography, photo-plate
- * compositing, internal substates) ships in Epic 5 and replaces this
- * spec's runtime hooks while keeping the slug/anchor stable.
+ * Per ADR-0014 (Hybrid Chapter Definition — Spec for 10, Module for PBD),
+ * the Pale Blue Dot chapter is a dedicated module rather than a flat
+ * declarative spec. The canonical PBD definition lives at
+ * `web/src/chapters/pale-blue-dot/` (introduced by Story 5.1). The
+ * `ALL_CHAPTERS` registry (`web/src/chapters/registry.ts`) imports
+ * from this `specs/` location for parity with the other 10 chapters;
+ * this file re-exports the module's `ChapterSpec`-compatible default
+ * so the registry-uniformity surface (scrubber-marker, URL-routing,
+ * OG-card-generator, `<v-chapter-copy>`, Story 5.0 production smoke)
+ * resolves PBD without code change.
  *
- * Window: ±1 day around the anchor. PBD is a precise instant, not a
- * multi-day encounter — the wider encounter window would force the FSM
- * to enter `held` for PBD far longer than the moment warrants and would
- * overlap nothing else regardless (the closest neighbour is V2 Neptune
- * 1989-08-25, six months earlier).
+ * The slug + anchor ET + window + spacecraft are preserved exactly
+ * from the pre-Story-5.1 placeholder so the existing Stories 2.1 /
+ * 2.2 / 2.4 / 2.6 / 2.9 / 5.0 wire-ups remain valid. Story 5.1
+ * additionally populates `copy` (the 80-120-word PBD prose) on the
+ * spec view.
+ *
+ * Consumers that need the PBD module's imperative behaviour (Story 5.2
+ * turn choreography, Story 5.3 photo-plate compositing) import the
+ * `PaleBlueDot` class directly from `web/src/chapters/pale-blue-dot/`.
  */
 
-import type { ChapterSpec } from '../../types/chapter';
-import { etFromIso } from '../../math/et-conversions';
+import paleBlueDot from '../pale-blue-dot';
 
-const SECONDS_PER_DAY = 86_400;
-const ANCHOR_ET = etFromIso('1990-02-14T00:00:00Z');
-
-const spec: ChapterSpec = {
-  slug: 'pale-blue-dot',
-  name: 'Pale Blue Dot',
-  markerLabel: 'PBD',
-  anchorEt: ANCHOR_ET,
-  windowStartEt: ANCHOR_ET - SECONDS_PER_DAY,
-  windowEndEt: ANCHOR_ET + SECONDS_PER_DAY,
-  spacecraft: 'v1',
-  ogDescription:
-    'Voyager 1 turns to capture Earth from beyond Neptune on 14 February 1990 — the Pale Blue Dot.',
-};
-
-export default spec;
+export default paleBlueDot;
