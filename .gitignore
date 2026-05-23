@@ -31,6 +31,10 @@ bake/out/validation-report.md
 # `bake/src/manifest_writer.py` can merge the `models[]` section into
 # `bake/out/manifest.json`. Regenerable via `just bake-glb`; not source.
 bake/out/models-manifest-fragment.json
+# Story 4.0 L2 attitude fixture — bake-side intermediate; the
+# web-side canonical copy lives at `web/public/data/l2-attitude-fixture.json`
+# (committed). Regenerable via `just bake-l2`.
+bake/out/l2-attitude-fixture.json
 
 # Web public/data — manifest.json is the runtime contract (committed). The
 # brotli VTRJ binaries are regenerable via `just bake && just copy-bake-to-web`
