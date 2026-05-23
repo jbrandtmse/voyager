@@ -64,6 +64,15 @@ const texturesDir = resolve(webRoot, 'public/textures');
 
 const EXPECTED_NAIF_IDS = [10, 1, 2, 3, 4, 5, 6, 7, 8, 301] as const;
 const SPACECRAFT_NAIF_IDS = [-31, -32] as const;
+// Story 4.11 — outer-system moons procured (jup365 + sat441 + ura184_part-3 + nep097
+// satellite SPKs). The bake pipeline now emits a trajectory chunk per moon, so
+// the manifest body set extends from 12 (Story 1.13) to 25 (12 + 13 moons).
+const EXPECTED_MOON_NAIF_IDS = [
+  501, 502, 503, 504, // Galileans: Io / Europa / Ganymede / Callisto
+  606, 607, 608,      // Saturnians: Titan / Hyperion / Iapetus
+  701, 702, 703, 704, 705, // Uranians: Ariel / Umbriel / Titania / Oberon / Miranda
+  801,                // Neptunian: Triton
+] as const;
 
 /** LFS pointer detector — first ~134 bytes contain `version https://git-lfs`. */
 const isLfsPointer = (filePath: string): boolean => {
@@ -189,16 +198,20 @@ const loadManifest = (): Manifest =>
   JSON.parse(readFileSync(resolve(webRoot, 'public/data/manifest.json'), 'utf-8')) as Manifest;
 
 describe('Story 1.13 QA-extended — manifest.json body coverage', () => {
-  it('manifest.bodies[].naifId is the union of {2 spacecraft + 10 celestial} (12 total)', () => {
+  it('manifest.bodies[].naifId is the union of {2 spacecraft + 10 celestial + 13 moons} (25 total post-Story-4.11)', () => {
     const manifest = loadManifest();
     const ids = new Set(manifest.bodies.map((b) => b.naifId));
-    const expected = new Set<number>([...SPACECRAFT_NAIF_IDS, ...EXPECTED_NAIF_IDS]);
+    const expected = new Set<number>([
+      ...SPACECRAFT_NAIF_IDS,
+      ...EXPECTED_NAIF_IDS,
+      ...EXPECTED_MOON_NAIF_IDS,
+    ]);
     expect(
       ids,
-      `manifest body set drifted from the expected 12-body union. ` +
+      `manifest body set drifted from the expected 25-body union. ` +
         `Got: ${[...ids].sort((a, b) => a - b).join(', ')}`,
     ).toEqual(expected);
-    expect(manifest.bodies.length).toBe(12);
+    expect(manifest.bodies.length).toBe(25);
   });
 
   it('every celestial body in the manifest has at least one trajectory file with non-empty timeRange', () => {

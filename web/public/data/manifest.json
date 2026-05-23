@@ -1,6 +1,6 @@
 {
-  "bakeCommit": "56c1045b3dfb37b7db330565bfccb1ec40db34b0",
-  "bakeTimestamp": "2026-05-22T21:24:50Z",
+  "bakeCommit": "00de870cfa7aacbfe14011fc76bfe6e9edfc9030",
+  "bakeTimestamp": "2026-05-23T15:40:33Z",
   "bodies": [
     {
       "files": [
@@ -103,8 +103,8 @@
         {
           "cadenceSec": 60.00948448515734,
           "kind": "trajectory",
-          "sha256": "ef93866c602dd9b5aac73ee09267e3a30bd86cb9bc24e40a6d99beacdd84baae",
-          "sizeBytes": 131170,
+          "sha256": "0892b6454250d01eb5c1b110381af5b902865aeb9e0e233f84e2ab66f8a97d83",
+          "sizeBytes": 131195,
           "timeRangeEt": [
             -705788847.817,
             -705544249.1582385
@@ -114,8 +114,8 @@
         {
           "cadenceSec": 6522.464030617455,
           "kind": "trajectory",
-          "sha256": "524f290b5f75b18b34bb9fa43a7064600af6cfff2e95c4e113861fa8dfc5cf5a",
-          "sizeBytes": 344359,
+          "sha256": "09f1d056e89a5babb3daf6f59571d56b5f1b9b7d5ff3999cc6c466abed524e98",
+          "sizeBytes": 344379,
           "timeRangeEt": [
             -705544249.1582385,
             -652112223.8194203
@@ -134,10 +134,43 @@
           "url": "data/voyager-2-seg03--652112224--640486355.bin.br"
         },
         {
+          "cadenceSec": 3600.0,
+          "kind": "trajectory",
+          "sha256": "a9ba511fab48ba3daa60ec05b9a907fe3bbbce0a2c38316628c450b0a57075dd",
+          "sizeBytes": 51593,
+          "timeRangeEt": [
+            -648912609.8161329,
+            -643728609.8161329
+          ],
+          "url": "data/voyager-2-enc-jupiter-hourly.bin.br"
+        },
+        {
+          "cadenceSec": 60.0,
+          "kind": "trajectory",
+          "sha256": "85824209a78593a81371d3643ed9c5d0ae4ae45cb110bb98f679f6da89246415",
+          "sizeBytes": 191500,
+          "timeRangeEt": [
+            -646493409.8161329,
+            -646147809.8161329
+          ],
+          "url": "data/voyager-2-enc-jupiter-1min.bin.br"
+        },
+        {
+          "cadenceSec": 10.0,
+          "kind": "trajectory",
+          "sha256": "2b066ef75efc667863345bb8ed039562932fa50d89261a8090451430612a00eb",
+          "sizeBytes": 22935,
+          "timeRangeEt": [
+            -646324209.8161329,
+            -646317009.8161329
+          ],
+          "url": "data/voyager-2-enc-jupiter-10sec.bin.br"
+        },
+        {
           "cadenceSec": 6940.227496606152,
           "kind": "trajectory",
-          "sha256": "5bd3dfd3563749a56efa9f522de6b0ee9eee45c913fe7249225129bca8819065",
-          "sizeBytes": 284219,
+          "sha256": "c3115280cbbcc4cd214019a08c23b386f1c81a4fd39717069e6095e7eedec82f",
+          "sizeBytes": 322039,
           "timeRangeEt": [
             -640486354.970042,
             -583632011.3178444
@@ -156,10 +189,43 @@
           "url": "data/voyager-2-seg05--583632012--574535764.bin.br"
         },
         {
+          "cadenceSec": 3600.0,
+          "kind": "trajectory",
+          "sha256": "111573a2b632afdccd94f12644ec73949485ecc364003be01e9447ab513bf3ee",
+          "sizeBytes": 48475,
+          "timeRangeEt": [
+            -581687947.8172839,
+            -576503947.8172839
+          ],
+          "url": "data/voyager-2-enc-saturn-hourly.bin.br"
+        },
+        {
+          "cadenceSec": 60.0,
+          "kind": "trajectory",
+          "sha256": "d96bcbfabd9d585ad56e589eca2f202c50fcf538c067cd93d56a51e1ad5e3b09",
+          "sizeBytes": 185681,
+          "timeRangeEt": [
+            -579268747.8172839,
+            -578923147.8172839
+          ],
+          "url": "data/voyager-2-enc-saturn-1min.bin.br"
+        },
+        {
+          "cadenceSec": 10.0,
+          "kind": "trajectory",
+          "sha256": "03c8fe83427d29d73f96e333265bfd2f4d4762c2a3bf1a445a78226d508e981a",
+          "sizeBytes": 23211,
+          "timeRangeEt": [
+            -579099547.8172839,
+            -579092347.8172839
+          ],
+          "url": "data/voyager-2-enc-saturn-10sec.bin.br"
+        },
+        {
           "cadenceSec": 16239.215358012996,
           "kind": "trajectory",
-          "sha256": "9c3cf40ff1df97fe5d4b71471efb726831858241a772f19dd7db96073d604ec8",
-          "sizeBytes": 330837,
+          "sha256": "1a50c3c0ac70d2ac26b595116f1297fea1f97e510569f0aa8bf9ff3ec1ab0ea0",
+          "sizeBytes": 330611,
           "timeRangeEt": [
             -574535763.6477046,
             -441504111.43486214
@@ -167,10 +233,21 @@
           "url": "data/voyager-2-seg06--574535764--441504112.bin.br"
         },
         {
+          "cadenceSec": 3600.0,
+          "kind": "trajectory",
+          "sha256": "9f1c27c6f4126751ffa6ff96cc6de62ba508a287cfd84ea8a1d6c42249564691",
+          "sizeBytes": 46523,
+          "timeRangeEt": [
+            -442346404.8153951,
+            -437162404.8153951
+          ],
+          "url": "data/voyager-2-enc-uranus-hourly.bin.br"
+        },
+        {
           "cadenceSec": 427.1730884506251,
           "kind": "trajectory",
-          "sha256": "49119dee98e2c41d9ba76f183820993808ac6476927d47c541de3a0997d26fa7",
-          "sizeBytes": 248101,
+          "sha256": "89e4ec717d743a2000efa0c95e60a784b399b4a52983329692e594a705c6ce56",
+          "sizeBytes": 248466,
           "timeRangeEt": [
             -441504111.43486214,
             -438004709.4942746
@@ -178,15 +255,48 @@
           "url": "data/voyager-2-seg07--441504112--438004710.bin.br"
         },
         {
+          "cadenceSec": 60.0,
+          "kind": "trajectory",
+          "sha256": "4ec86a89cef0919ead1bc1949855d4d2dd456421dff99155dfa7d86256c4b4b7",
+          "sizeBytes": 175012,
+          "timeRangeEt": [
+            -439927204.8153951,
+            -439581604.8153951
+          ],
+          "url": "data/voyager-2-enc-uranus-1min.bin.br"
+        },
+        {
+          "cadenceSec": 10.0,
+          "kind": "trajectory",
+          "sha256": "72971ddd7ceea89bb34cdaaea7be39db4782254e7fa7c4e0168a04010481a1cc",
+          "sizeBytes": 22985,
+          "timeRangeEt": [
+            -439758004.8153951,
+            -439750804.8153951
+          ],
+          "url": "data/voyager-2-enc-uranus-10sec.bin.br"
+        },
+        {
           "cadenceSec": 13346.601588275254,
           "kind": "trajectory",
-          "sha256": "d859aafe2f329c69fca4892c682757c72e8c43b531974ef6a25ff8ecefa8b94b",
-          "sizeBytes": 273335,
+          "sha256": "e77a150ffdb2c9097a162211ed7c709d7d4c11ffd5b915b4ee0868bdc5c7a32b",
+          "sizeBytes": 322995,
           "timeRangeEt": [
             -438004709.4942746,
             -328669349.28312373
           ],
           "url": "data/voyager-2-seg08--438004710--328669350.bin.br"
+        },
+        {
+          "cadenceSec": 3600.0,
+          "kind": "trajectory",
+          "sha256": "caeda623304c7a7265478d034b72d439977e80ae5a4e1dd9b3353cda2b706c2d",
+          "sizeBytes": 45778,
+          "timeRangeEt": [
+            -329299383.8172675,
+            -324115383.8172675
+          ],
+          "url": "data/voyager-2-enc-neptune-hourly.bin.br"
         },
         {
           "cadenceSec": 478.99990500032436,
@@ -200,10 +310,32 @@
           "url": "data/voyager-2-seg09--328669350--324745383.bin.br"
         },
         {
+          "cadenceSec": 60.0,
+          "kind": "trajectory",
+          "sha256": "46eac9937dea5963a31f0d310bfed42b25071a864f4a84ff0c55cde0e7f28e77",
+          "sizeBytes": 172961,
+          "timeRangeEt": [
+            -326880183.8172675,
+            -326534583.8172675
+          ],
+          "url": "data/voyager-2-enc-neptune-1min.bin.br"
+        },
+        {
+          "cadenceSec": 10.0,
+          "kind": "trajectory",
+          "sha256": "8d0ac23839626b3f6a2fdf04426931ab6ca7b507a67b6147139a718eaa940c1d",
+          "sizeBytes": 23611,
+          "timeRangeEt": [
+            -326710983.8172675,
+            -326703783.8172675
+          ],
+          "url": "data/voyager-2-enc-neptune-10sec.bin.br"
+        },
+        {
           "cadenceSec": 148.99683366224053,
           "kind": "trajectory",
-          "sha256": "81047cf95bbdf14aa285c0596ef1ba65b86a983da357dee1882bcd92e8a7379c",
-          "sizeBytes": 225609,
+          "sha256": "ff075724c3383d5b523f80125ae7f25668c2fa564366974df50fad0925684c09",
+          "sizeBytes": 225817,
           "timeRangeEt": [
             -324745382.0613611,
             -323524800.0
@@ -213,8 +345,8 @@
         {
           "cadenceSec": 86400.0,
           "kind": "trajectory",
-          "sha256": "003bc8439fb2d28dcfbd7ab8e3aeed823a1cb7c7ef8a699dfabd4b116adc0d5d",
-          "sizeBytes": 501911,
+          "sha256": "5121e2ddd6b51d96b4250300193dfdc52aa7cc47f4acb5222d5a422e94ad7a6c",
+          "sizeBytes": 501828,
           "timeRangeEt": [
             -323524800.0,
             978264000.0
@@ -290,8 +422,8 @@
         {
           "cadenceSec": 60.01296184775017,
           "kind": "trajectory",
-          "sha256": "d766e3ebcb8232f4f470d9d6d3c738106c5aa535f5a4971f525cd7449efe0ca8",
-          "sizeBytes": 132171,
+          "sha256": "33384aafcdce926602805a30c6edae053b978b7ed771f162d83bf18b0a9831c5",
+          "sizeBytes": 171156,
           "timeRangeEt": [
             -704412035.617,
             -704170303.4066772
@@ -301,8 +433,8 @@
         {
           "cadenceSec": 5202.559465646278,
           "kind": "trajectory",
-          "sha256": "bc1274d7eae926f19405f26c0638b62bbec1935461d718ae9207f7669ebe573e",
-          "sizeBytes": 339689,
+          "sha256": "54170a5402557180eaebca1fd8fda15ea1c6d7812560301e86585496f8a459a7",
+          "sizeBytes": 295914,
           "timeRangeEt": [
             -704170303.4066772,
             -661550936.2641029
@@ -321,10 +453,43 @@
           "url": "data/voyager-1-seg03--661550937--652940818.bin.br"
         },
         {
+          "cadenceSec": 3600.0,
+          "kind": "trajectory",
+          "sha256": "2b4e43785a7960f45864c8c2fe9507205e0d33bde2c36b44cd9a7ab10bd1d265",
+          "sizeBytes": 50103,
+          "timeRangeEt": [
+            -659836449.8145522,
+            -654652449.8145522
+          ],
+          "url": "data/voyager-1-enc-jupiter-hourly.bin.br"
+        },
+        {
+          "cadenceSec": 60.0,
+          "kind": "trajectory",
+          "sha256": "fe81528a551bce27747f1dcfdc23daf8174261677b87b4d0c6f71d7fe881aae6",
+          "sizeBytes": 190533,
+          "timeRangeEt": [
+            -657417249.8145522,
+            -657071649.8145522
+          ],
+          "url": "data/voyager-1-enc-jupiter-1min.bin.br"
+        },
+        {
+          "cadenceSec": 10.0,
+          "kind": "trajectory",
+          "sha256": "9b8e49ddd7dd34d25cd2d409c2f400d4bc28a3310b0211596903c16d72e4300f",
+          "sizeBytes": 24053,
+          "timeRangeEt": [
+            -657248049.8145522,
+            -657240849.8145522
+          ],
+          "url": "data/voyager-1-enc-jupiter-10sec.bin.br"
+        },
+        {
           "cadenceSec": 5601.570725906786,
           "kind": "trajectory",
-          "sha256": "83a25cb6a32bd4512debad6fe402cd7fb7444884c7518a104e5e97b10526b35e",
-          "sizeBytes": 282305,
+          "sha256": "785399d35d851b295c9bffd67c7a2f3438538c36082142ecb91447c718b75a84",
+          "sizeBytes": 331685,
           "timeRangeEt": [
             -652940817.3622439,
             -607052749.9756155
@@ -343,10 +508,43 @@
           "url": "data/voyager-1-seg05--607052750--600549281.bin.br"
         },
         {
+          "cadenceSec": 3600.0,
+          "kind": "trajectory",
+          "sha256": "a47de304e9f3564bba9948324c0e9f53cd1ac33ecd931d972ebf9fc552808d0f",
+          "sizeBytes": 49527,
+          "timeRangeEt": [
+            -606399188.8172894,
+            -601215188.8172894
+          ],
+          "url": "data/voyager-1-enc-saturn-hourly.bin.br"
+        },
+        {
+          "cadenceSec": 60.0,
+          "kind": "trajectory",
+          "sha256": "8bf9db6c548f3a17dbd884cdcdbd1389b2760c5eabcf6855ab759e7c482d0e68",
+          "sizeBytes": 188201,
+          "timeRangeEt": [
+            -603979988.8172894,
+            -603634388.8172894
+          ],
+          "url": "data/voyager-1-enc-saturn-1min.bin.br"
+        },
+        {
+          "cadenceSec": 10.0,
+          "kind": "trajectory",
+          "sha256": "df3fb68b305c493b914e1eec34f4130750c77736db07518923879f5ad76186b6",
+          "sizeBytes": 24148,
+          "timeRangeEt": [
+            -603810788.8172894,
+            -603803588.8172894
+          ],
+          "url": "data/voyager-1-enc-saturn-10sec.bin.br"
+        },
+        {
           "cadenceSec": 19377.792987350927,
           "kind": "trajectory",
-          "sha256": "7c66d3bf939466916fa4d45c81a8c1644df53ca3310d4bb238dd788fa9e4af4f",
-          "sizeBytes": 330817,
+          "sha256": "246ac396ac408ec356ccc63bd9721f1957b61be1ddcfcb84b16eb9f29c3d0f6b",
+          "sizeBytes": 330681,
           "timeRangeEt": [
             -600549280.1523788,
             -441806400.0
@@ -356,8 +554,8 @@
         {
           "cadenceSec": 86400.0,
           "kind": "trajectory",
-          "sha256": "f307dd76df6f6e2c0ab72c6c41a5570d0ded54588208e908e0af9e68c7649467",
-          "sizeBytes": 541230,
+          "sha256": "d395cfdd9edce148ef570e5cd75702d43062920bb3de839da2c61614738821d8",
+          "sizeBytes": 541228,
           "timeRangeEt": [
             -441806400.0,
             978264000.0
@@ -407,8 +605,8 @@
         {
           "cadenceSec": 86400.00102611752,
           "kind": "trajectory",
-          "sha256": "61fa7f4a201bf1fd44a9b7fde84b4e5b422f18d2c273d6c4611f31dda5faabf1",
-          "sizeBytes": 776750,
+          "sha256": "7b820b5565c79c8b01df8c7a5b43f3aac60eb89a1ccde106636acec01f33e7c6",
+          "sizeBytes": 777835,
           "timeRangeEt": [
             -705844751.8171712,
             978264068.1839114
@@ -475,8 +673,8 @@
         {
           "cadenceSec": 86400.00102611752,
           "kind": "trajectory",
-          "sha256": "9fc67df8bd4a14428189d4cd5b406f80ae9f197d292432ffbbdd55339f54f66f",
-          "sizeBytes": 742065,
+          "sha256": "24e0f6f862112068cd580d376205e8c8d4aa2123e352bfe03ae7464882ad022f",
+          "sizeBytes": 742071,
           "timeRangeEt": [
             -705844751.8171712,
             978264068.1839114
@@ -509,8 +707,8 @@
         {
           "cadenceSec": 86400.00102611752,
           "kind": "trajectory",
-          "sha256": "159ea303d939b60cd5bf9948080dc8fc61a58a248b4402ed70b9e920a462e9d5",
-          "sizeBytes": 783938,
+          "sha256": "fe58037568d0ba96cd9412e5d8a5d30c50a8190930a4dcd4cd792376a81b933c",
+          "sizeBytes": 783219,
           "timeRangeEt": [
             -705844751.8171712,
             978264068.1839114
@@ -526,8 +724,8 @@
         {
           "cadenceSec": 21600.00025652938,
           "kind": "trajectory",
-          "sha256": "5fc9d8365ec523a45a5fe3606a677576fc68416ef3e5b707b983e88bc1435dac",
-          "sizeBytes": 3177163,
+          "sha256": "d6490f5445854d092a92b120c76dcfa6948e12cc276c30ff9257a71f2d42a93a",
+          "sizeBytes": 3163749,
           "timeRangeEt": [
             -705844751.8171712,
             978264068.1839114
@@ -537,6 +735,227 @@
       ],
       "naifId": 301,
       "name": "Moon"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 3600.0000427548966,
+          "kind": "trajectory",
+          "sha256": "46ffc06a459bb95039f4f6dbeafb0da59b4bb4fef5daddc4d0b8283e8cb39e75",
+          "sizeBytes": 18479903,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/io.bin.br"
+        }
+      ],
+      "naifId": 501,
+      "name": "Io"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 7200.000085509793,
+          "kind": "trajectory",
+          "sha256": "a80e76e18f348a64d3b57bf7961fbf1b2ac0c5d6abb9fba5d64c7ebd4c7cf8f9",
+          "sizeBytes": 9450836,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/europa.bin.br"
+        }
+      ],
+      "naifId": 502,
+      "name": "Europa"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 21600.00025652938,
+          "kind": "trajectory",
+          "sha256": "b8e204bc52ec77cb36f8c7631dca258eaeee3b818c87f5d7220cc049597c4a83",
+          "sizeBytes": 3230554,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/ganymede.bin.br"
+        }
+      ],
+      "naifId": 503,
+      "name": "Ganymede"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 43200.00051305876,
+          "kind": "trajectory",
+          "sha256": "1336c35a450e840b69b11c88ba732060bd0938ab0e7573adad298bb65e03e306",
+          "sizeBytes": 1627991,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/callisto.bin.br"
+        }
+      ],
+      "naifId": 504,
+      "name": "Callisto"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 43200.00051305876,
+          "kind": "trajectory",
+          "sha256": "b97a6fe426a0af02f6b7ca531602d1f4ac5a5777a27f95b8f0d57eabc7f55f19",
+          "sizeBytes": 1600682,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/titan.bin.br"
+        }
+      ],
+      "naifId": 606,
+      "name": "Titan"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 43200.00051305876,
+          "kind": "trajectory",
+          "sha256": "ce0a7b91db4f1e3cbf2b76941bc1e62f6f99241789095e1f3ebe17a5ceeee163",
+          "sizeBytes": 1638521,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/hyperion.bin.br"
+        }
+      ],
+      "naifId": 607,
+      "name": "Hyperion"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 86400.00102611752,
+          "kind": "trajectory",
+          "sha256": "f7cabd50d6ec11015a141ee85e6ff97f438f6c997372d3514cb8df47c76a4c22",
+          "sizeBytes": 845604,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/iapetus.bin.br"
+        }
+      ],
+      "naifId": 608,
+      "name": "Iapetus"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 7200.000085509793,
+          "kind": "trajectory",
+          "sha256": "05c3068ba36fbad1bfc3c9d360338f8d29d78e72561e1813dd6b130e19ea4f8d",
+          "sizeBytes": 8899868,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/ariel.bin.br"
+        }
+      ],
+      "naifId": 701,
+      "name": "Ariel"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 14400.000171019587,
+          "kind": "trajectory",
+          "sha256": "ec666ad2b6fecc2dd5cc79246c89ae5befbea637e39c14ffdf1796196e9af1dd",
+          "sizeBytes": 4561177,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/umbriel.bin.br"
+        }
+      ],
+      "naifId": 702,
+      "name": "Umbriel"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 21600.00025652938,
+          "kind": "trajectory",
+          "sha256": "da76f5bdd6b6696b13f5bb99194d5c15bec8261e438d1c51bd7c77c983a59cae",
+          "sizeBytes": 3114589,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/titania.bin.br"
+        }
+      ],
+      "naifId": 703,
+      "name": "Titania"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 43200.00051305876,
+          "kind": "trajectory",
+          "sha256": "ecb869cfb967d7b922044e1bb51670f67feda0ff248fa3a830e49b6946a320ae",
+          "sizeBytes": 1552607,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/oberon.bin.br"
+        }
+      ],
+      "naifId": 704,
+      "name": "Oberon"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 3600.0000427548966,
+          "kind": "trajectory",
+          "sha256": "c91a2756a2b54d6833be9afc5913d56c13dcbc483bf222b9e8056896f2e08b49",
+          "sizeBytes": 17643737,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/miranda.bin.br"
+        }
+      ],
+      "naifId": 705,
+      "name": "Miranda"
+    },
+    {
+      "files": [
+        {
+          "cadenceSec": 14400.000171019587,
+          "kind": "trajectory",
+          "sha256": "709c66b8c69f17f04e2cb08979b488943136bbb0467ce8fda74cb37161f6b1eb",
+          "sizeBytes": 4527041,
+          "timeRangeEt": [
+            -705844751.8171712,
+            978264068.1839114
+          ],
+          "url": "data/triton.bin.br"
+        }
+      ],
+      "naifId": 801,
+      "name": "Triton"
     }
   ],
   "chapters": [],
@@ -642,6 +1061,30 @@
       "kind": "ck",
       "sha256": "f181a43f5785867afc81436a202a6ec453c8dd5538172ae916ca979981051f11",
       "source_url": "https://pds-rings.seti.org/voyager/ck/vg2_nep_version1_type1_iss_sedr.bc"
+    },
+    {
+      "file": "jup365.bsp",
+      "kind": "spk",
+      "sha256": "dbf016c01ba4d022154838000cf3f06962cf958ddc503a366f7fe8f81495c5cb",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/jup365.bsp"
+    },
+    {
+      "file": "sat441.bsp",
+      "kind": "spk",
+      "sha256": "d7e444a9ba7a52b8f448ff0747030789524d2f0c1212e4e2bd7f5fc3c96444d5",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat441.bsp"
+    },
+    {
+      "file": "ura184_part-3.bsp",
+      "kind": "spk",
+      "sha256": "273cd4ccc470d1098562cd4e94fa48fc2b4c6b1c2896308e473c949b87937c53",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/ura184_part-3.bsp"
+    },
+    {
+      "file": "nep097.bsp",
+      "kind": "spk",
+      "sha256": "5c1132fdc48c54e5d2e4eb663e1ed1a876911eae9433c203f29a5a1b5e1fa9b1",
+      "source_url": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/nep097.bsp"
     }
   ],
   "models": [

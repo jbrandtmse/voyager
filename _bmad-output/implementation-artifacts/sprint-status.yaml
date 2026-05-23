@@ -199,7 +199,7 @@ development_status:
   4-8-gravity-assist-trajectory-visual-validation: done
   4-9-l4-playwright-visual-regression-at-six-encounter-scenes-launch-pbd-stub: done
   4-10-bug-fixes-from-2026-05-23-review: done
-  4-11-satellite-spk-kernels-procurement-for-moon-visibility: backlog
+  4-11-satellite-spk-kernels-procurement-for-moon-visibility: done
   4-12-heliocentric-system-view-camera-mode: backlog
   epic-4-retrospective: done
 

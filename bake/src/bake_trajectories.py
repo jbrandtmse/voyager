@@ -211,12 +211,39 @@ MOON_BODIES: list[tuple[int, str, str]] = [
 # giants, ice giants) are comfortably inside the thresholds at daily
 # cadence (Jupiter/Saturn/Uranus/Neptune all <0.001 km max).
 #
+# Story 4.11 amendment (2026-05-23): outer-system moon cadences added
+# per Rule 5 (NFR tripwire response). Daily cadence fails catastrophically
+# for the inner moons — Io (1.77-day orbit), Miranda (1.41 day), and
+# Ariel (2.52 day) produce cubic-Hermite-interpolated positions that
+# disagree with SpiceyPy ground truth by >100,000 km at arbitrary ETs.
+# The rule-of-thumb is ~30 samples per orbital period for sub-1-km
+# Cubic Hermite accuracy at planet-scale distances. Per-moon cadences
+# below target this, conservatively rounded down to convenient values
+# (3600 / 7200 / 21600 / 43200) so the bake stays deterministic.
+#
 # Keys are NAIF IDs. Bodies not in this map default to
 # `CELESTIAL_DEFAULT_CADENCE_SECONDS`.
 CELESTIAL_DEFAULT_CADENCE_SECONDS = 86400.0  # daily
 CELESTIAL_CADENCE_OVERRIDES: dict[int, float] = {
     1: 14400.0,    # Mercury barycenter — 6 hourly (88-day orbit, fast inner planet)
     301: 21600.0,  # Moon — 6 hourly (27-day Earth orbit, ~1 km/s relative to Earth)
+    # Galileans (Jupiter system)
+    501: 3600.0,   # Io — hourly (1.77-day orbit, fastest Galilean)
+    502: 7200.0,   # Europa — 2 hourly (3.55-day orbit)
+    503: 21600.0,  # Ganymede — 6 hourly (7.15-day orbit)
+    504: 43200.0,  # Callisto — 12 hourly (16.7-day orbit)
+    # Saturn system
+    606: 43200.0,  # Titan — 12 hourly (15.9-day orbit)
+    607: 43200.0,  # Hyperion — 12 hourly (21.3-day orbit, chaotic but ephemeris-bakable)
+    608: 86400.0,  # Iapetus — daily (79.3-day orbit, comfortably slow)
+    # Uranus system
+    701: 7200.0,   # Ariel — 2 hourly (2.52-day orbit)
+    702: 14400.0,  # Umbriel — 4 hourly (4.14-day orbit)
+    703: 21600.0,  # Titania — 6 hourly (8.71-day orbit)
+    704: 43200.0,  # Oberon — 12 hourly (13.5-day orbit)
+    705: 3600.0,   # Miranda — hourly (1.41-day orbit, fastest Uranian)
+    # Neptune system
+    801: 14400.0,  # Triton — 4 hourly (5.88-day retrograde orbit)
 }
 
 # Mission window for celestial bodies, in ET (TDB s past J2000). These mirror
@@ -673,7 +700,11 @@ def bake(
                     "add to kernels/kernels-manifest.json + re-bake"
                 )
                 continue
-            cadence = CELESTIAL_DEFAULT_CADENCE_SECONDS
+            # Story 4.11 — moon cadences are per-NAIF per CELESTIAL_CADENCE_OVERRIDES;
+            # default daily cadence is catastrophic for inner moons (Io 1.77d, Miranda 1.41d).
+            cadence = CELESTIAL_CADENCE_OVERRIDES.get(
+                naif_id, CELESTIAL_DEFAULT_CADENCE_SECONDS
+            )
             _et_grid, samples, actual_cadence = _sample_celestial_body(
                 naif_id,
                 CELESTIAL_ET_START,
