@@ -40,11 +40,23 @@
 
 import type { ChapterModule, ChapterSpec } from '../../types/chapter';
 import { etFromIso } from '../../math/et-conversions';
+import type { AttitudeService } from '../../services/attitude-service';
+import type { EphemerisService } from '../../services/ephemeris-service';
+import type { Quaternion } from '../../types/branded';
 import { PBD_COPY } from './copy';
 import {
   PbdSubstate,
   pbdSubstateAt,
 } from './substates';
+import {
+  TurnChoreography,
+  computePlatformAimQuat,
+  targetNaifIdForSubstate,
+  type ReducedMotionProbe,
+  type WallClock,
+} from './turn-choreography';
+
+const V1_NAIF_ID = -31;
 
 const SECONDS_PER_DAY = 86_400;
 const ANCHOR_ET = etFromIso('1990-02-14T00:00:00Z');
@@ -127,6 +139,62 @@ export class PaleBlueDot implements ChapterModule {
   private lastEt: number | null = null;
   private readonly listeners: Set<PbdSubstateListener> = new Set();
 
+  // Story 5.2 — choreographed turn state + service refs. Services are
+  // injected post-construction (manifest-landing latency means they
+  // don't exist at boot). All choreography state lives on the module
+  // instance per ADR-0015 — no global store.
+  private ephemerisService: EphemerisService | null = null;
+  private attitudeService: AttitudeService | null = null;
+  private readonly choreography: TurnChoreography;
+  private _currentTargetNaifId: number | null = null;
+
+  constructor(opts?: {
+    reducedMotion?: ReducedMotionProbe;
+    wallClock?: WallClock;
+  }) {
+    this.choreography = new TurnChoreography(opts);
+  }
+
+  /**
+   * Story 5.2 — DI wiring for the choreographed turn. Called from
+   * `main.ts` once `AttitudeService` + `EphemerisService` are
+   * constructed (post-ManifestLoader). The platform-quat override is
+   * a no-op until both refs are wired.
+   *
+   * Per ADR-0015 these are passed as method parameters (not constructor
+   * args) because the module is constructed at boot but the services
+   * land later. The Path A subscriber pattern in `main.ts` wires this.
+   */
+  setServices(
+    ephemerisService: EphemerisService,
+    attitudeService: AttitudeService,
+  ): void {
+    this.ephemerisService = ephemerisService;
+    this.attitudeService = attitudeService;
+  }
+
+  /**
+   * Story 5.2 AC9 — the active target body's NAIF ID during a
+   * `sweeping_<body>` substate, or `null` otherwise. Read by the
+   * DEV-only `__voyagerDebug.paleBlueDot.currentTargetNaifId` accessor
+   * for the lead's PBD smoke probes.
+   */
+  get currentTargetNaifId(): number | null {
+    return this._currentTargetNaifId;
+  }
+
+  /**
+   * Story 5.2 AC9 — the most recent platform aim quaternion (BUS frame).
+   * Mirrors `currentSubstate`; returns `null` outside sweeping substates
+   * or while the SLERP has not yet produced an output.
+   *
+   * Read by the DEV-only
+   * `__voyagerDebug.paleBlueDot.currentPlatformOverrideQuat` accessor.
+   */
+  get currentPlatformOverrideQuat(): Quaternion | null {
+    return this.choreography.getLatestQuat();
+  }
+
   /**
    * Story 5.1 AC3 + AC7 — the active substate at the most recent
    * `update(et)` call. Defaults to `idle` before the first update.
@@ -153,7 +221,86 @@ export class PaleBlueDot implements ChapterModule {
     if (next === this._currentSubstate) return;
     const from = this._currentSubstate;
     this._currentSubstate = next;
+
+    // Story 5.2 — substate-transition side effect: feed the new substate
+    // (+ aim quaternion if it's a sweeping substate) into the
+    // choreography engine. The engine handles SLERP latching internally.
+    // The aim quaternion may be null when the ephemeris chunk for the
+    // target body hasn't loaded yet; the engine accepts this and reuses
+    // the previous aim until a non-null value arrives via a later tick.
+    const targetId = targetNaifIdForSubstate(next);
+    this._currentTargetNaifId = targetId;
+    if (targetId !== null) {
+      const aim = this.computeAimForSubstate(targetId, currentEt);
+      this.choreography.setActiveSubstate(next, aim);
+    } else {
+      // Non-sweeping substate — reset the choreography so the override
+      // returns null and AttitudeApplier falls through to AttitudeService.
+      this.choreography.setActiveSubstate(next, null);
+    }
+
     this.notify(from, next, currentEt);
+  }
+
+  /**
+   * Story 5.2 AC3 — platform-quat override consumed by `AttitudeApplier`
+   * via the override-first check (Path A topology). Returns the
+   * synthesized aim quaternion (BUS frame) during sweeping substates;
+   * returns `null` for non-sweeping substates so the applier falls through
+   * to `AttitudeService.getPlatformQuat`.
+   *
+   * Per AC3 last clause the override applies ONLY during the six
+   * `sweeping_<body>` substates (Venus..Neptune). The `turning` substate
+   * is bus-only motion (the CK bus quat is already the visible turn) —
+   * no per-target aim yet, so the override returns null and the platform
+   * synthesized fallback (identity composed with bus) applies.
+   *
+   * The method is called per-frame; it consults the choreography state
+   * holder for the SLERP-interpolated aim. If the ephemeris chunk for
+   * the current target is still loading the choreography may have a
+   * stale aim — that's acceptable per AC4 (hold-previous on null).
+   *
+   * @param naifId — NAIF SPK ID of the spacecraft. PBD only acts on V1
+   *                 (-31); for any other ID the override returns null
+   *                 immediately so V2 attitude is unaffected.
+   * @param et — SPICE ET (TDB seconds past J2000). Used to refresh the
+   *             aim quaternion if the underlying ephemeris just landed.
+   */
+  getPlatformQuatOverride(naifId: number, et: number): Quaternion | null {
+    if (naifId !== V1_NAIF_ID) return null;
+    // The choreography engine returns null outside sweeping substates.
+    // Before returning, if we have a sweeping substate but stale/null
+    // aim, try to refresh it (the chunk-loader may have landed the
+    // target body's ephemeris since the last substate transition).
+    if (this._currentTargetNaifId !== null && this.choreography.getLatestQuat() === null) {
+      const aim = this.computeAimForSubstate(this._currentTargetNaifId, et);
+      if (aim !== null) {
+        this.choreography.setActiveSubstate(this._currentSubstate, aim);
+      }
+    }
+    return this.choreography.tick();
+  }
+
+  /**
+   * Pure helper — compute the platform aim quaternion for `targetNaifId`
+   * at `et`. Returns null if any prerequisite is missing (services not
+   * yet wired, ephemeris chunk not yet loaded, bus quat unavailable).
+   */
+  private computeAimForSubstate(
+    targetNaifId: number,
+    et: number,
+  ): Quaternion | null {
+    if (this.ephemerisService === null || this.attitudeService === null) {
+      return null;
+    }
+    const busQuat = this.attitudeService.getBusQuat(V1_NAIF_ID, et);
+    if (busQuat === null) return null;
+    return computePlatformAimQuat(
+      this.ephemerisService,
+      targetNaifId,
+      busQuat,
+      et,
+    );
   }
 
   /**
@@ -172,9 +319,11 @@ export class PaleBlueDot implements ChapterModule {
     };
   }
 
-  /** Detach all listeners. */
+  /** Detach all listeners and reset choreography state. */
   dispose(): void {
     this.listeners.clear();
+    this.choreography.reset();
+    this._currentTargetNaifId = null;
   }
 
   private notify(from: PbdSubstate, to: PbdSubstate, et: number): void {

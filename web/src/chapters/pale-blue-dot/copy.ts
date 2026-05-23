@@ -71,5 +71,7 @@ export const PBD_COPY: EncounterChapterCopy = Object.freeze({
     'sunbeam: a pale blue dot. It is the most distant photograph of ' +
     'home ever taken. Six weeks later the cameras are powered down. ' +
     'The mission of imaging is complete; the spacecraft will travel ' +
-    'on, silent, into the interstellar dark.',
+    'on, silent, into the interstellar dark. The scan-platform aim ' +
+    'shown here is reconstructed from ephemeris constraints; the ' +
+    'body turn is from the historical CK.',
 });

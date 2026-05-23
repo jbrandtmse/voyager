@@ -236,6 +236,17 @@ const bootstrap = (): void => {
   // Story 5.1 AC7 — extended with `paleBlueDot` so the lead's PBD smoke
   // can probe `__voyagerDebug.paleBlueDot.currentSubstate` to verify
   // `idle` on cold-load at the PBD anchor ET.
+  //
+  // Story 5.2 AC9 — the same module instance also exposes
+  // `currentTargetNaifId` (NAIF SPK ID for the active sweeping substate's
+  // target body — null outside sweeping substates) and
+  // `currentPlatformOverrideQuat` (the most recent SLERP-interpolated aim
+  // quaternion in BUS frame — null outside sweeping substates) via plain
+  // instance getters. The lead's PBD smoke probes:
+  //   __voyagerDebug.paleBlueDot.currentSubstate            -> string
+  //   __voyagerDebug.paleBlueDot.currentTargetNaifId        -> number | null
+  //   __voyagerDebug.paleBlueDot.currentPlatformOverrideQuat -> Quaternion | null
+  // to verify the AC9 substate / override / target wire-up.
   if (import.meta.env.DEV) {
     const w = window as unknown as { __voyagerDebug?: Record<string, unknown> };
     w.__voyagerDebug = {
@@ -662,6 +673,21 @@ const bootstrap = (): void => {
       // dependencies resolved. The applier holds no global state per
       // ADR-0015; it is dependency-injected at the call site.
       const attitudeApplier = new AttitudeApplier();
+
+      // Story 5.2 AC3 (Path A) — wire the PaleBlueDot module as the
+      // platform-quat override provider on the AttitudeApplier. During
+      // the PBD `sweeping_<body>` substates the module's
+      // `getPlatformQuatOverride(-31, et)` returns the synthesized aim
+      // quaternion; outside those substates it returns null and the
+      // applier falls through to `attitudeService.getPlatformQuat`.
+      //
+      // The PaleBlueDot module also needs DI references to EphemerisService
+      // and AttitudeService so its choreography can compute the V1→target
+      // aim vectors and read the CK-derived bus quaternion. These are
+      // injected post-construction (the module is constructed at boot,
+      // before the manifest lands — services land here).
+      paleBlueDot.setServices(ephemerisService, attitudeService);
+      attitudeApplier.pbdOverrideProvider = paleBlueDot;
 
       // Story 3.5 — BoresightRenderer constructs ONE wireframe NA-camera
       // cone per spacecraft and parents it to the active LOD's

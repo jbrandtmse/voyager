@@ -463,4 +463,119 @@ describe('AttitudeApplier', () => {
       expect(v1Spy).toHaveBeenCalledTimes(4); // 2 more resolutions
     });
   });
+
+  describe('Story 5.2 AC3 — pbdOverrideProvider (platform-quat override-first check)', () => {
+    it('applies the override quaternion onto SCAN_PLATFORM when provider returns non-null', () => {
+      const v1 = buildFixture('voyager-1');
+      const v2 = buildFixture('voyager-2');
+      const models = buildModelsStub(v1, v2);
+
+      const overrideQ = brandedQuat(0.5, 0.5, 0.0, Math.sqrt(0.5));
+      const serviceQ = brandedQuat(0, 0, 0, 1);
+      const { service, getPlatformQuat } = buildAttitudeServiceStub({
+        busV1: brandedQuat(0, 0, 0, 1),
+        busV2: brandedQuat(0, 0, 0, 1),
+        platformV1: serviceQ,
+        platformV2: serviceQ,
+      });
+
+      const provider = {
+        getPlatformQuatOverride: vi.fn((naifId: number) =>
+          naifId === -31 ? overrideQ : null,
+        ),
+      };
+      applier.pbdOverrideProvider = provider;
+
+      applier.tick(1000, service, models);
+
+      // V1: override wins over service.
+      expect(v1.platformNode.quaternion.x).toBeCloseTo(overrideQ.x, 12);
+      expect(v1.platformNode.quaternion.y).toBeCloseTo(overrideQ.y, 12);
+      expect(v1.platformNode.quaternion.z).toBeCloseTo(overrideQ.z, 12);
+      expect(v1.platformNode.quaternion.w).toBeCloseTo(overrideQ.w, 12);
+
+      // The service's getPlatformQuat MUST NOT have been called for V1
+      // (override-first short-circuit).
+      expect(getPlatformQuat).not.toHaveBeenCalledWith(-31, expect.any(Number));
+      // V2: provider returned null, fall through to service.
+      expect(getPlatformQuat).toHaveBeenCalledWith(-32, 1000);
+      expect(v2.platformNode.quaternion.x).toBeCloseTo(0, 12);
+      expect(v2.platformNode.quaternion.w).toBeCloseTo(1, 12);
+    });
+
+    it('falls through to AttitudeService.getPlatformQuat when override returns null for V1', () => {
+      const v1 = buildFixture('voyager-1');
+      const v2 = buildFixture('voyager-2');
+      const models = buildModelsStub(v1, v2);
+
+      const serviceQ = brandedQuat(0.1, 0.2, 0.3, Math.sqrt(1 - 0.14));
+      const { service, getPlatformQuat } = buildAttitudeServiceStub({
+        busV1: brandedQuat(0, 0, 0, 1),
+        busV2: brandedQuat(0, 0, 0, 1),
+        platformV1: serviceQ,
+        platformV2: serviceQ,
+      });
+
+      const provider = {
+        getPlatformQuatOverride: vi.fn(() => null),
+      };
+      applier.pbdOverrideProvider = provider;
+
+      applier.tick(1000, service, models);
+
+      // V1: service quat applied (override returned null).
+      expect(v1.platformNode.quaternion.x).toBeCloseTo(serviceQ.x, 12);
+      expect(v1.platformNode.quaternion.w).toBeCloseTo(serviceQ.w, 12);
+      expect(getPlatformQuat).toHaveBeenCalledWith(-31, 1000);
+      expect(getPlatformQuat).toHaveBeenCalledWith(-32, 1000);
+    });
+
+    it('does NOT override the BUS quaternion (AC2 — PBD acts on platform only)', () => {
+      const v1 = buildFixture('voyager-1');
+      const v2 = buildFixture('voyager-2');
+      const models = buildModelsStub(v1, v2);
+
+      const busQ = brandedQuat(0.4, 0, 0, Math.sqrt(0.84));
+      const overrideQ = brandedQuat(0.5, 0.5, 0.0, Math.sqrt(0.5));
+      const { service, getBusQuat } = buildAttitudeServiceStub({
+        busV1: busQ,
+        busV2: brandedQuat(0, 0, 0, 1),
+        platformV1: brandedQuat(0, 0, 0, 1),
+        platformV2: brandedQuat(0, 0, 0, 1),
+      });
+
+      const provider = {
+        getPlatformQuatOverride: vi.fn(() => overrideQ),
+      };
+      applier.pbdOverrideProvider = provider;
+
+      applier.tick(1000, service, models);
+
+      // Bus quaternion = AttitudeService value, NOT the override.
+      expect(v1.busNode.quaternion.x).toBeCloseTo(busQ.x, 12);
+      expect(getBusQuat).toHaveBeenCalledWith(-31, 1000);
+    });
+
+    it('pbdOverrideProvider null (default) — applier behaves identically to pre-5.2 baseline', () => {
+      const v1 = buildFixture('voyager-1');
+      const v2 = buildFixture('voyager-2');
+      const models = buildModelsStub(v1, v2);
+
+      // Default: no provider set.
+      expect(applier.pbdOverrideProvider).toBe(null);
+
+      const platformV1 = brandedQuat(0.1, 0, 0, Math.sqrt(0.99));
+      const { service } = buildAttitudeServiceStub({
+        busV1: brandedQuat(0, 0, 0, 1),
+        busV2: brandedQuat(0, 0, 0, 1),
+        platformV1,
+        platformV2: brandedQuat(0, 0, 0, 1),
+      });
+
+      applier.tick(1000, service, models);
+
+      expect(v1.platformNode.quaternion.x).toBeCloseTo(platformV1.x, 12);
+      expect(v1.platformNode.quaternion.w).toBeCloseTo(platformV1.w, 12);
+    });
+  });
 });

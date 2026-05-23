@@ -237,3 +237,138 @@ describe('Story 5.1 AC1 — placeholder spec re-export preserves slug semantics'
     expect(mod.default).toBe(PBD_SPEC);
   });
 });
+
+describe('Story 5.2 AC3 — PaleBlueDot.getPlatformQuatOverride', () => {
+  // Build the module with deterministic wall-clock + reduced-motion-off so
+  // the SLERP timeline is independent of real time.
+  const buildModule = (): PaleBlueDot => {
+    let wallClockMs = 1000;
+    const mod = new PaleBlueDot({
+      reducedMotion: () => false,
+      wallClock: () => wallClockMs,
+    });
+    // Stub services. Ephemeris returns V1 + Earth + Venus + Neptune
+    // canned positions; AttitudeService returns identity bus quat.
+    const ephem = {
+      getPosition: (_et: number, bodyId: number): Float64Array | null => {
+        if (bodyId === -31) return new Float64Array([1e9, 0, 0]);     // V1
+        if (bodyId === 2) return new Float64Array([1.5e8, 0, 0]);     // Venus
+        if (bodyId === 3) return new Float64Array([0, 0, 0]);         // Earth (origin)
+        if (bodyId === 5) return new Float64Array([1e9, 5e8, 0]);     // Jupiter
+        if (bodyId === 6) return new Float64Array([1e9, -5e8, 0]);    // Saturn
+        if (bodyId === 7) return new Float64Array([2e9, 0, 0]);       // Uranus
+        if (bodyId === 8) return new Float64Array([3e9, 0, 0]);       // Neptune
+        return null;
+      },
+    } as unknown as Parameters<typeof mod.setServices>[0];
+    const attitude = {
+      getBusQuat: (_naif: number, _et: number) => ({ x: 0, y: 0, z: 0, w: 1 }),
+    } as unknown as Parameters<typeof mod.setServices>[1];
+    mod.setServices(ephem, attitude);
+    return mod;
+  };
+
+  it('returns null for V2 (-32) — PBD only acts on V1', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 30); // sweeping_venus
+    expect(m.getPlatformQuatOverride(-32, PBD_ANCHOR_ET + 30)).toBe(null);
+  });
+
+  it('returns null before any update() (no active substate)', () => {
+    const m = buildModule();
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET)).toBe(null);
+  });
+
+  it('returns null during the idle substate', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET - 1); // idle
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET - 1)).toBe(null);
+  });
+
+  it('returns null during the turning substate (bus-only motion, no per-target aim yet)', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 15); // turning peak
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 15)).toBe(null);
+  });
+
+  it('returns null during composite_active / composite_decay / passed substates', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 135); // composite_active peak
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 135)).toBe(null);
+
+    m.update(PBD_ANCHOR_ET + 165); // composite_decay peak
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 165)).toBe(null);
+
+    m.update(PBD_ANCHOR_ET + 200); // passed
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 200)).toBe(null);
+  });
+
+  it('returns a non-null quaternion during sweeping_venus', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 37.5); // sweeping_venus peak
+    const q = m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 37.5);
+    expect(q).not.toBe(null);
+    const norm = Math.sqrt(q!.x * q!.x + q!.y * q!.y + q!.z * q!.z + q!.w * q!.w);
+    expect(norm).toBeCloseTo(1, 6);
+  });
+
+  it('returns a non-null quaternion during each of the six sweeping substates', () => {
+    const m = buildModule();
+    const peaks = [37.5, 52.5, 67.5, 82.5, 97.5, 112.5];
+    for (const peak of peaks) {
+      m.update(PBD_ANCHOR_ET + peak);
+      const q = m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + peak);
+      expect(q).not.toBe(null);
+    }
+  });
+
+  it('updates currentTargetNaifId in sync with the substate', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 30); // enter sweeping_venus
+    expect(m.currentTargetNaifId).toBe(2);
+
+    m.update(PBD_ANCHOR_ET + 45); // sweeping_earth
+    expect(m.currentTargetNaifId).toBe(3);
+
+    m.update(PBD_ANCHOR_ET + 75); // sweeping_saturn
+    expect(m.currentTargetNaifId).toBe(6);
+
+    m.update(PBD_ANCHOR_ET + 200); // passed
+    expect(m.currentTargetNaifId).toBe(null);
+  });
+
+  it('exposes currentPlatformOverrideQuat for the DEV accessor', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 37.5);
+    // Trigger a tick by calling the override (which calls choreography.tick).
+    const out = m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 37.5);
+    expect(out).not.toBe(null);
+    const dev = m.currentPlatformOverrideQuat;
+    expect(dev).not.toBe(null);
+    expect(dev!.x).toBeCloseTo(out!.x, 12);
+    expect(dev!.w).toBeCloseTo(out!.w, 12);
+  });
+
+  it('returns null if services are not wired (boot-time before manifest)', () => {
+    const m = new PaleBlueDot({
+      reducedMotion: () => false,
+      wallClock: () => 1000,
+    });
+    // No setServices() call — services remain null.
+    m.update(PBD_ANCHOR_ET + 37.5);
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 37.5)).toBe(null);
+  });
+
+  it('dispose() resets choreography (subsequent override calls return null)', () => {
+    const m = buildModule();
+    m.update(PBD_ANCHOR_ET + 37.5);
+    expect(m.getPlatformQuatOverride(-31, PBD_ANCHOR_ET + 37.5)).not.toBe(null);
+
+    m.dispose();
+    expect(m.currentTargetNaifId).toBe(null);
+    // After dispose, the choreography is reset; the module's currentSubstate
+    // remains the last value but the override (which reads choreography
+    // state) returns null.
+    expect(m.currentPlatformOverrideQuat).toBe(null);
+  });
+});

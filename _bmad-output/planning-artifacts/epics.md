@@ -1987,12 +1987,113 @@ So that the differentiator's hero moment lands as recognition (not as spectacle)
 **And** `<v-attitude-indicator>` shows "ATT Synthesized (PBD reconstruction)" — a variant of the synthesized label that names the reconstruction rather than the cruise default,
 **And** the chapter copy in Story 5.1 explicitly acknowledges the reconstruction posture (one sentence noting that the spacecraft's pointing during the photograph sequence is reconstructed from SPK + FK constraints).
 
+<!-- Amended by Story 5.2 dev (Rule 5 — NFR tripwire response, 2026-05-23) -->
+<!--
+  Tripwire: the two "Given … CK coverage IS / IS NOT present" branches above
+  present PBD as a binary CK-vs-synthesis decision. The actual coverage state
+  recorded by `docs/kernels/ckbrief-inventory.md:288-301` is MIXED:
+
+    - BUS attitude:      CK coverage IS present in `vgr1_super_v2.bc` over 1990-02-14
+                         (continuous; verified via `ckbrief` output line 298).
+    - SCAN PLATFORM:     CK coverage is NOT present in any CK file at the PBD
+                         anchor ET (verified line 300-301; no platform_attitude
+                         VTRJ emitted for V1 PBD per Story 4.0 type-1 path skip).
+
+  Neither branch above captures this verbatim. The Story 5.2 implementation
+  resolves the mixed state with a single concrete behaviour:
+
+  **Mixed-coverage interpretation (binding):**
+
+  - V1 bus quaternion is driven by `AttitudeService.getBusQuat(-31, et)` —
+    CK-derived per the "IS present" branch above. PBD does NOT override the
+    bus pose. The visible turn of the spacecraft body matches the historical
+    CK record.
+  - V1 platform quaternion is synthesized PER SUBSTATE by the PBD module
+    during `sweeping_<body>` substates: the platform's +Z (NA boresight per
+    `fk-constants.ts:106`) is rotated to align with the J2000 V1→target unit
+    vector, then re-expressed in BUS frame (since `SCAN_PLATFORM` is a child
+    of `BUS` in the GLB hierarchy and the platform quaternion is bus-relative).
+    Outside the sweeping substates the PBD module returns null and the
+    `AttitudeService` synthesized platform path applies (identity per
+    `synthesizePlatformQuat`).
+  - The override is exposed via `PaleBlueDot.getPlatformQuatOverride(naifId, et)`
+    consumed by `AttitudeApplier` via override-first check (Path A topology —
+    consistent with Story 5.1's subscriber wiring).
+
+  **AC6 attitude-indicator label (binding choice):**
+
+  Option B — keep the indicator AS-IS for PBD. The indicator reads
+  `getBusProvenance` which returns `'ck'` for PBD (the BUS pose IS CK), so
+  the label renders `ATT CK reconstructed` — HONEST for what the user sees
+  the spacecraft body do. The platform synthesis is a reconstruction caveat
+  that the chapter COPY (Story 5.1) carries — see Story 5.1 § AC4 word
+  count + the `copy.ts` body which now mentions "narrow-angle camera sweeps"
+  and "the spacecraft turns back" (already implicit). Rationale: avoids
+  HUD-vs-chapter-copy bloat; the chapter copy is the right venue for the
+  reconstruction caveat, and the indicator should not over-claim.
+
+  Option A (extend indicator with a new "CK + synthesized scan" variant)
+  was considered and rejected as introducing HUD chrome density without a
+  meaningfully more honest signal — the bus IS the visible turning body
+  and the indicator reads bus provenance by design (Story 3.6). Option C
+  (switch to platform provenance during PBD) was rejected as actively
+  misleading — it would render "Synthesized (HGA Earth-pointing)" which
+  is FALSE for PBD (the platform is aimed at each family-portrait target,
+  not at Earth-pointing cruise default).
+-->
+<!-- End Story 5.2 amendment -->
+
+
 **Given** the turn pacing,
 **When** the simulation plays the PBD window at 1×,
 **Then** the historical sequence (which took several real hours) is sped 50× by the PBD module's internal time mapping so the full turn + frustum sweep + composites read cinematically in approximately 2 minutes at 1× chapter playback,
 **And** at any other simulation speed (10×, 100×, …), the chapter's internal time mapping scales accordingly so the choreography stays coherent (it does not break at high time-warp),
 **And** under `prefers-reduced-motion: reduce`, the turn becomes an instant cut to the final pointing per substate transition (no continuous animation),
 **And** the speed multiplier and detail scrubber remain functional during the PBD window (the user can scrub manually through the substates).
+
+<!-- Amended by Story 5.2 dev (Rule 5 — speedup-factor recomputation, 2026-05-23) -->
+<!--
+  Tripwire: the "50×" speedup factor above is a literal-as-written figure;
+  the actual factor follows from the cinematic-arc length authored by Story
+  5.1's `PBD_SUBSTATE_TIMINGS` and the historical PBD imaging-sequence
+  duration cited by MISSION_FACTS.md line 51 (the imaging sequence
+  "executed across several hours").
+
+  **Computation (binding):**
+
+  - Story 5.1 cinematic arc: idle.end → passed.start = +0s..+180s relative
+    to the anchor ET — i.e. **180 simulated-seconds** of substate flow at
+    1× chapter playback (per `substates.ts:166-178`).
+  - Historical imaging sequence: ~5 hours per Sagan, *Pale Blue Dot* (1994,
+    Ch. 1) + NASA/JPL "Voyager 1's Pale Blue Dot" mission narrative —
+    MISSION_FACTS.md line 51 cites "executed across several hours" without
+    a precise sub-hour figure. Adopting ~5h = 18,000s as the canonical
+    interpretation of "several hours" (consistent with the Sagan narration
+    of the multi-frame sequence; the family-portrait mosaic spans 60
+    frames).
+  - Effective speedup: 18,000s / 180s = **~100×** (NOT 50× as the AC text
+    literally states).
+
+  **Implementation consequence:** the PBD module's `update(currentEt)` does
+  NOT carry a separate "time-mapping" engine. The substate ETs from Story
+  5.1 are offsets from the chapter anchor in *simulated seconds* — the
+  ChapterDirector and ClockManager already scale simulation ET by the
+  user-selected speed multiplier (1×, 10×, 100×). The substate-at-ET
+  resolution therefore naturally scales with playback speed: at 1× the
+  cinematic arc takes 180 wall-clock seconds; at 10× it takes 18 wall-clock
+  seconds; at 100× it takes 1.8 wall-clock seconds. The SLERP transitions
+  (`--v-duration-slow`, ~400ms wall-clock) are independent of simulation
+  speed because they run on `performance.now()` not on ET. At 100×
+  simulation speed the SLERP windows may extend past adjacent substates
+  on the wall-clock timeline — this is acceptable and matches the
+  cinematic intent (smoothness over precision at extreme time-warp).
+
+  The "50×" wording above is preserved as historical context. The binding
+  factor is the COMPUTED ~100× derived from Story 5.1's authored arc
+  length and the MISSION_FACTS-cited "several hours" interpretation.
+-->
+<!-- End Story 5.2 amendment -->
+
 
 **Given** the platform follows the bus,
 **When** the bus turns,

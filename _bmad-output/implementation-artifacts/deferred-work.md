@@ -835,3 +835,47 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
    **Suggested resolution:** Optionally extend the reverse-scrub test to also wire the per-frame gate (mirror the `tick()` helper from the `:93` test) and assert on `pbd.currentSubstate` after the reverse re-entry tick. ~10 lines. Not load-bearing; the existing coverage is sufficient.
 
    **Routing:** Story 5.2 or 5.3 (which will add their own reverse-scrub integration tests on top of the same subscriber) — address inline if convenient.
+
+---
+
+## Deferred from: code review of story 5-2 (2026-05-23)
+
+1. **[5.2 / MED]** `AttitudeApplier.pbdOverrideProvider` is a public mutable field with no single-assignment guard.
+
+   **What's the issue:** `pbdOverrideProvider: PlatformQuatOverrideProvider | null = null;` is a public mutable instance field on `AttitudeApplier` (`web/src/render/attitude-applier.ts:117`). The canonical injection happens once at `main.ts:690` (`attitudeApplier.pbdOverrideProvider = paleBlueDot;`), but the API allows accidental replacement by any subsequent code path — there's no setter-method guard, no `Object.defineProperty(... writable: false)` lock, no "set once and freeze" discipline.
+
+   **Why deferred:** Consistent with the project's prevailing "constructor-injected or post-construction-assigned services" pattern (ADR-0015 doctrine; mirrors the `engine.setViewFrame(...)` setter pattern + `paleBlueDot.setServices(...)` post-construction injection). The mutable shape is intentional — the dependency lands post-`ManifestLoader.then` and the field can't be constructor-injected at boot time. The JSDoc at `attitude-applier.ts:107-117` makes the contract explicit ("Wired by main.ts (Story 5.1 Path A subscriber pattern)"). MED rather than LOW only because future agents could write code that toggles the override at runtime (e.g. "during this animation, disable the override") without realizing the override-provider semantics is meant to be single-assignment.
+
+   **Suggested resolution:** Either (a) introduce a `setPbdOverrideProvider(provider)` setter that throws on second-assignment (the strictest interpretation) or (b) wrap the field with a one-time-assignment helper (`assignOnce()`) that throws on the second call. ~5 lines + a unit test that asserts the second-assignment throw. Could also be a non-throwing "warn-once" if we want to preserve hot-reload ergonomics. Not load-bearing; the field's single canonical writer is the manifest-loader `.then` block.
+
+   **Routing:** Story 5.3 or 5.4 (next stories that touch PBD subsystem wire-up) — address inline if convenient, or fold into an Epic 5 retrospective hardening pass.
+
+2. **[5.2 / LOW]** `TurnChoreography.tick()` allocates one fresh `THREE.Quaternion` per frame during a SLERP window.
+
+   **What's the issue:** `turn-choreography.ts:397` constructs a new `THREE.Quaternion()` per call to `tick()` while a SLERP is in progress (the `slerpQuaternions` destination buffer). The applier consumes it once and the branded `quaternion(...)` wrapper produces a fresh `Quaternion` brand for the caller. Two allocations per frame during SLERP windows (Quaternion + branded). The pattern is consistent with the existing AttitudeService slerp call (Story 3.2 § Completion Note 9 — "slerpQuaternions allocates a Three.js Quaternion that we read once and drop").
+
+   **Why deferred:** V8 nursery sweep absorbs the per-frame transients cheaply (the AttitudeApplier zero-allocation contract documented at `attitude-applier.ts:14-19` explicitly acknowledges this pattern). PBD SLERP windows are short (400ms wall-clock per `--v-duration-slow`); even at 60Hz the per-substate-transition garbage is ~24 quaternions = ~960 bytes / transition / spacecraft, with ~10 substate transitions across the cinematic arc. Negligible relative to the ~150 MB bundle and per-frame matrix uniforms.
+
+   **Suggested resolution:** Optional zero-allocation pass — pre-allocate a single `THREE.Quaternion` destination inside `TurnChoreography` and reuse it (mirror the cache pattern in `AttitudeApplier`). The branded wrapper would also need a `mutating` variant. Worth ~20 lines of code; only do this if a future profiling pass flags PBD SLERP allocations.
+
+   **Routing:** Story 5.3 / 5.4 or an Epic 7 polish pass — only address if profiling surfaces an actionable signal.
+
+3. **[5.2 / LOW]** Rule 5 amendment #1 in epics.md references the PRE-amendment copy ("already implicit"); the as-shipped Story 5.2 also amended `copy.ts` with the explicit "reconstructed from ephemeris constraints" sentence (T5.2).
+
+   **What's the issue:** The Story 5.2 Rule 5 amendment block in `_bmad-output/planning-artifacts/epics.md` describing the Option B AC6 choice says the copy "now mentions 'narrow-angle camera sweeps' and 'the spacecraft turns back' (already implicit)" — but the dev's actual implementation (T5.2) ALSO appended the explicit "scan-platform aim shown here is reconstructed from ephemeris constraints; the body turn is from the historical CK" sentence to `copy.ts`. The amendment block's wording about "already implicit" is slightly stale relative to the as-shipped copy. The binding Option-B decision (indicator unchanged, caveat in copy) is recorded correctly; only the descriptive parenthetical is out of date.
+
+   **Why deferred:** Pure editorial nit; the binding interpretation is correct. A future contributor reading the amendment block would see the Option-B decision and the "in copy" routing, then read `copy.ts` and discover the explicit sentence — no contradiction, just a slight stylistic mismatch in how the amendment narrates the copy contents.
+
+   **Suggested resolution:** A 1-line edit to the amendment block updating the "already implicit" parenthetical to reference the explicit sentence ("now contains an explicit 'reconstructed from ephemeris constraints' sentence per Story 5.2 T5.2"). Trivial.
+
+   **Routing:** Story 5.3 (next PBD story — likely to touch `epics.md` PBD section again) or any future epics.md editorial pass.
+
+4. **[5.2 / LOW]** `PaleBlueDot.currentSubstate` accessor is not reset by `dispose()`.
+
+   **What's the issue:** `PaleBlueDot.dispose()` (`web/src/chapters/pale-blue-dot/index.ts:323-327`) clears listeners + resets choreography + sets `currentTargetNaifId = null`, but does NOT reset `_currentSubstate` — it remains at whatever value it last advanced to. The `currentSubstate` getter (line 204) therefore returns the pre-dispose value. The override-lifecycle test at `pale-blue-dot-override-lifecycle.test.ts:189-200` asserts `currentTargetNaifId` + `currentPlatformOverrideQuat` are null post-dispose but does NOT assert on `currentSubstate`, so the inconsistency is implicit and untested.
+
+   **Why deferred:** Production wire-up calls `update(et)` per frame after dispose-and-reactivate sequences (the per-frame loop in `main.ts:226-228` is unconditional within the active window), so any stale `currentSubstate` value is overwritten on the next `update(et)`. The accessor is DEV-only via `__voyagerDebug.paleBlueDot.currentSubstate`, so the inconsistency is only observable in DEV smoke probes that interrogate the module after a manual `dispose()` call — not a real production code path.
+
+   **Suggested resolution:** Either (a) reset `_currentSubstate = PbdSubstate.idle` in `dispose()` (the strict-reset interpretation; matches the "no stale state after dispose" doctrine) or (b) document the divergence in the `dispose()` JSDoc and add a unit test pinning the observed behaviour ("currentSubstate retains last value post-dispose; production code re-drives via update()"). Trivial either way.
+
+   **Routing:** Story 5.3 or 5.4 — address inline when next touching `PaleBlueDot.dispose()` semantics, or fold into an Epic 5 polish pass.

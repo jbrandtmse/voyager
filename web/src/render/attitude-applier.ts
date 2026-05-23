@@ -54,7 +54,24 @@
 import type { Object3D } from 'three';
 
 import type { AttitudeService } from '../services/attitude-service';
+import type { Quaternion } from '../types/branded';
 import type { SpacecraftModels, SpacecraftHandle } from './spacecraft-models';
+
+/**
+ * Story 5.2 AC3 — platform-quat override-provider interface. Consumed by
+ * `AttitudeApplier.tick()` via override-first check; the override takes
+ * precedence over `AttitudeService.getPlatformQuat`. Returns null to fall
+ * through to the service's own quat (the no-override path).
+ *
+ * The PaleBlueDot module class implements this interface (its
+ * `getPlatformQuatOverride` method matches structurally). The wire-up
+ * lives in `main.ts` per the Path A topology — `AttitudeApplier` does
+ * NOT import the PBD module directly, preserving the inversion of
+ * dependency from render → chapter.
+ */
+export interface PlatformQuatOverrideProvider {
+  getPlatformQuatOverride(naifId: number, et: number): Quaternion | null;
+}
 
 /**
  * NAIF SPK IDs for V1 and V2. Sourced here rather than imported from
@@ -88,11 +105,29 @@ export class AttitudeApplier {
   private readonly v2Cache: PerSpacecraftCache = createEmptyCache();
 
   /**
+   * Story 5.2 AC3 (Path A) — optional platform-quat override provider.
+   * When set, `tick` consults this FIRST for each spacecraft's platform
+   * quaternion; if the override returns non-null it is applied directly
+   * (the `AttitudeService` platform path is skipped). Null override
+   * means fall through to `AttitudeService.getPlatformQuat` as before.
+   *
+   * Wired by `main.ts` (Story 5.1 Path A subscriber pattern). Per
+   * ADR-0015 the field is a reference, not a global store.
+   */
+  pbdOverrideProvider: PlatformQuatOverrideProvider | null = null;
+
+  /**
    * Per-frame tick. Queries AttitudeService for V1 + V2's bus + platform
    * quaternions at `et` and copies them onto the cached BUS + SCAN_PLATFORM
    * Object3D nodes. Hold-previous on null returns; skip on
    * `handle.group.visible === false`; re-resolve cached nodes on LOD-level
    * change.
+   *
+   * Story 5.2 AC3 — if `pbdOverrideProvider` is set AND it returns a
+   * non-null platform quaternion for `naifId`, the override is applied
+   * for the platform node and `AttitudeService.getPlatformQuat` is NOT
+   * called. The bus quaternion is always read from `AttitudeService`
+   * (AC2 — PBD does not override the bus pose).
    */
   tick(
     et: number,
@@ -194,9 +229,24 @@ export class AttitudeApplier {
     }
 
     if (cache.platformNode !== null) {
-      const platformQuat = attitudeService.getPlatformQuat(naifId, et);
-      if (platformQuat !== null) {
-        cache.platformNode.quaternion.copy(platformQuat);
+      // Story 5.2 AC3 — override-first check (Path A). The PBD module
+      // provides a non-null override during its `sweeping_<body>`
+      // substates (Venus..Neptune for V1); outside those substates the
+      // override returns null and we fall through to AttitudeService.
+      // For V2 (always — no PBD activity) the override returns null
+      // unconditionally.
+      const overrideQuat =
+        this.pbdOverrideProvider !== null
+          ? this.pbdOverrideProvider.getPlatformQuatOverride(naifId, et)
+          : null;
+      if (overrideQuat !== null) {
+        cache.platformNode.quaternion.copy(overrideQuat);
+      } else {
+        const platformQuat = attitudeService.getPlatformQuat(naifId, et);
+        if (platformQuat !== null) {
+          cache.platformNode.quaternion.copy(platformQuat);
+        }
+        // null → hold previous (AC2 clause 3). No-op.
       }
     }
   }

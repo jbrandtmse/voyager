@@ -73,6 +73,17 @@ describe('Story 5.1 AC4 — PBD copy references the turn-back act', () => {
   });
 });
 
+describe('Story 5.2 AC6 — PBD copy acknowledges reconstruction posture', () => {
+  it('body matches /reconstruct/i (mixed-coverage honesty per the Story 5.2 Rule 5 amendment)', () => {
+    // Story 5.2 AC6 (Option B) — the chapter copy carries the
+    // mixed-coverage caveat (bus = CK, platform = synthesized aim) since
+    // the indicator is intentionally left as-is. The substring check is
+    // loose so future tuning ("reconstructs", "reconstruction") still
+    // passes.
+    expect(PBD_COPY.body).toMatch(/reconstruct/i);
+  });
+});
+
 describe('Story 5.1 AC4 — PBD copy is frozen', () => {
   it('PBD_COPY is frozen (mutation throws in strict mode)', () => {
     expect(Object.isFrozen(PBD_COPY)).toBe(true);
