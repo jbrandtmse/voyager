@@ -213,7 +213,7 @@ development_status:
   epic-5: in-progress
   5-0-epic-4-deferred-cleanup: done
   5-1-pbd-dedicated-module-and-internal-substates: done
-  5-2-choreographed-spacecraft-turn-ck-or-synthesized-per-coverage: review
+  5-2-choreographed-spacecraft-turn-ck-or-synthesized-per-coverage: done
   5-3-photo-plate-compositing-pipeline-at-historical-instants: backlog
   5-4-pbd-l4-playwright-visual-regression-suite: backlog
   epic-5-retrospective: optional
