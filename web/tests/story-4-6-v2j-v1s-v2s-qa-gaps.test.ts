@@ -543,21 +543,29 @@ describe('Story 4.6 QA gap 5 — copyForChapter dispatch coverage across V1J / V
     expect(slug).toBe('v2-heliopause');
   });
 
-  it('chapters NOT populated through Story 4.6 (V2U / V2N / launches / PBD) leave the copy panel empty', async () => {
+  it('non-encounter chapters (launches / PBD) leave the copy panel empty (V2U / V2N now populated post-Story-4.7, FR30 closed)', async () => {
     const unpopulatedSlugs = [
       'launch-v1',
       'launch-v2',
       'pale-blue-dot',
-      'v2-uranus',
-      'v2-neptune',
     ];
     for (const slug of unpopulatedSlugs) {
       const displayed = await displayedSlugAtAnchor(slug);
       expect(
         displayed,
-        `${slug} unexpectedly rendered copy — Story 4.7 territory or PBD`,
+        `${slug} unexpectedly rendered copy — only the six gas-giant encounters carry copy after FR30 closure`,
       ).toBeNull();
     }
+  });
+
+  it('V2U resolves to non-null copy (Story 4.7 — FR30 closed)', async () => {
+    const slug = await displayedSlugAtAnchor('v2-uranus');
+    expect(slug).toBe('v2-uranus');
+  });
+
+  it('V2N resolves to non-null copy (Story 4.7 — FR30 closed)', async () => {
+    const slug = await displayedSlugAtAnchor('v2-neptune');
+    expect(slug).toBe('v2-neptune');
   });
 });
 

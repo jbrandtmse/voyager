@@ -1,18 +1,20 @@
 // @vitest-environment happy-dom
 /**
- * Story 4.6 AC7 — V2J / V1S / V2S encounter end-to-end integration test.
+ * Story 4.6 + Story 4.7 AC7 — gas-giant encounter end-to-end integration
+ * test for V2J / V1S / V2S (Story 4.6) and V2U / V2N (Story 4.7).
  *
- * Per Rule 1 (Integration AC) Story 4.6 amends three chapter specs and
- * extends `MISSION_FACTS.md` with primary-source citations. This file is
- * the consumer-side verification that the lookup, window narrowing,
- * detail-scrubber range binding, chapter-copy rendering, and chapter-
- * default-framing wire-up all hold for each of the three new encounters
- * under a real ChapterDirector + real ViewFrame + real ALL_CHAPTERS
- * stack.
+ * Per Rule 1 (Integration AC), Story 4.6 amended three chapter specs
+ * (V2J / V1S / V2S) and Story 4.7 closed FR30 by amending the final
+ * two (V2U / V2N). This file is the consumer-side verification that
+ * the lookup, window narrowing, detail-scrubber range binding,
+ * chapter-copy rendering, and chapter-default-framing wire-up all hold
+ * for each of the five encounters under a real ChapterDirector + real
+ * ViewFrame + real ALL_CHAPTERS stack. (V1J is exercised by the
+ * separate `v1j-encounter-end-to-end.test.ts` from Story 4.5.)
  *
- * One describe block per chapter (V2J, V1S, V2S). Each block walks the
- * director out → entering → held → exiting → passed and asserts at
- * `held`:
+ * One describe block per chapter, driven by `runChapterIntegration(fixture)`.
+ * Each block walks the director out → entering → held → exiting → passed
+ * and asserts at `held`:
  *
  *   - chapter spec window is ±5 days (10-day span)
  *   - `<v-chapter-copy>` renders the chapter's lede on `held`
@@ -26,6 +28,14 @@
  * The test uses stub ephemeris (each chapter's target body has a
  * synthetic heliocentric position) — Story 4.1 AC7 already exercises
  * real bake numerics end-to-end.
+ *
+ * Story 4.7 extends the original three V2J/V1S/V2S fixtures with two
+ * more: V2U (Uranus barycenter NAIF 7) and V2N (Neptune barycenter NAIF
+ * 8). The `runChapterIntegration` helper requires no shape changes —
+ * the only addition is two more stub heliocentric positions and two
+ * more fixtures wired into the helper call list at the bottom of the
+ * file. This is the Story 4.6 design lesson made explicit: the helper
+ * is the reuse surface.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -48,22 +58,29 @@ import { resolveChapterDefaultFraming } from '../src/chapters/chapter-default-fr
 
 const JUPITER_NAIF_ID = 5;
 const SATURN_NAIF_ID = 6;
+const URANUS_NAIF_ID = 7;
+const NEPTUNE_NAIF_ID = 8;
 const SECONDS_PER_DAY = 86_400;
 
 // Synthetic heliocentric positions (km). Real Jupiter is ~5.2 AU
-// (~778 million km); Saturn is ~9.5 AU (~1.43 billion km). Synthetic
+// (~778 million km); Saturn is ~9.5 AU (~1.43 billion km); Uranus is
+// ~19.2 AU (~2.87e9 km); Neptune is ~30.1 AU (~4.50e9 km). Synthetic
 // magnitudes preserve relative ordering without invoking the real bake.
 const SYNTHETIC_JUPITER_POS_KM: WorldVec3 = worldVec3(7.78e8, 0, 0);
 const SYNTHETIC_SATURN_POS_KM: WorldVec3 = worldVec3(0, 1.43e9, 0);
+const SYNTHETIC_URANUS_POS_KM: WorldVec3 = worldVec3(2.87e9, 0, 0);
+const SYNTHETIC_NEPTUNE_POS_KM: WorldVec3 = worldVec3(0, 4.50e9, 0);
 
 /**
- * Stub EphemerisService that returns the synthetic position for Jupiter
- * (NAIF 5) and Saturn (NAIF 6), and null for everything else.
+ * Stub EphemerisService that returns the synthetic positions for the
+ * four outer gas giants (NAIF 5–8), and null for everything else.
  */
 const makeStubEphemeris = (): Pick<EphemerisService, 'getPosition'> => ({
   getPosition: (_et: number, naifId: number): WorldVec3 | null => {
     if (naifId === JUPITER_NAIF_ID) return SYNTHETIC_JUPITER_POS_KM;
     if (naifId === SATURN_NAIF_ID) return SYNTHETIC_SATURN_POS_KM;
+    if (naifId === URANUS_NAIF_ID) return SYNTHETIC_URANUS_POS_KM;
+    if (naifId === NEPTUNE_NAIF_ID) return SYNTHETIC_NEPTUNE_POS_KM;
     return null;
   },
 });
@@ -188,8 +205,27 @@ const v2sFixture: ChapterFixture = {
   syntheticTargetPos: SYNTHETIC_SATURN_POS_KM,
 };
 
+// Story 4.7 — V2U + V2N fixtures (FR30 closure).
+const v2uFixture: ChapterFixture = {
+  slug: 'v2-uranus',
+  lede: 'V2 Uranus.',
+  targetBody: URANUS_NAIF_ID,
+  syntheticTargetPos: SYNTHETIC_URANUS_POS_KM,
+};
+
+const v2nFixture: ChapterFixture = {
+  slug: 'v2-neptune',
+  lede: 'V2 Neptune.',
+  targetBody: NEPTUNE_NAIF_ID,
+  syntheticTargetPos: SYNTHETIC_NEPTUNE_POS_KM,
+};
+
 const runChapterIntegration = (fixture: ChapterFixture): void => {
-  describe(`Story 4.6 AC7 — ${fixture.slug} encounter end-to-end`, () => {
+  // Story 4.6 introduced the helper for V2J / V1S / V2S; Story 4.7
+  // reuses it verbatim for V2U / V2N. The describe label refers to the
+  // story whose AC7 the assertion list comes from (4.6) — the helper
+  // shape is the same across both stories.
+  describe(`Story 4.6 / 4.7 AC7 — ${fixture.slug} encounter end-to-end`, () => {
     let rig: IntegrationRig;
 
     beforeEach(async () => {
@@ -318,3 +354,6 @@ const runChapterIntegration = (fixture: ChapterFixture): void => {
 runChapterIntegration(v2jFixture);
 runChapterIntegration(v1sFixture);
 runChapterIntegration(v2sFixture);
+// Story 4.7 — V2U + V2N (FR30 closure).
+runChapterIntegration(v2uFixture);
+runChapterIntegration(v2nFixture);

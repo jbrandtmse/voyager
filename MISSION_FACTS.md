@@ -343,6 +343,173 @@ Titan triple-flyby and the Uranus-trajectory setup.
 
 ---
 
+## Voyager 2 Uranus encounter — moon flyby parameters and discoveries
+
+The V2 Uranus encounter (1986-01-24) was the first — and to date only —
+spacecraft visit to the Uranian system. The encounter trajectory was
+designed around a close pass at Miranda, the smallest and innermost of
+the five major Uranian moons, with progressively more distant flybys of
+Ariel, Umbriel, Titania, and Oberon along the inbound approach. NASA
+SP-466 ("Voyager 2 at Uranus", JPL final mission report) and the *Science*
+233 (1986) special issue ("Voyager 2 at Uranus" — Stone & Miner
+introduction at *Science* 233, 39 (1986); Smith et al., *Science* 233,
+43 (1986) — "Voyager 2 in the Uranian system: Imaging science results")
+document the sequence and discoveries.
+
+| Body    | NAIF | Closest-approach UTC instant | Altitude / range | Source |
+| ------- | ---- | ---------------------------- | ---------------- | ------ |
+| Miranda | 705  | `1986-01-24T17:00:00Z`       | `29,000 km` (above Miranda's surface — closest of any Uranian moon flyby) | Stone & Miner, *Science* 233, 39 (1986); Smith et al., *Science* 233, 43 (1986). Date-level sub-day sourcing — Miranda closest approach was ~1 hour before Uranus closest approach per the published encounter timeline. |
+| Uranus  | 7    | `1986-01-24T17:59:00Z`       | (planetary closest approach) | NASA/JPL Voyager-Uranus Encounter press release (NASA SP-495); Stone & Miner, *Science* 233, 39 (1986). |
+| Ariel   | 701  | `1986-01-24T16:11:00Z`       | `127,000 km`     | Smith et al., *Science* 233, 43 (1986) (V2 Uranus encounter table). |
+| Umbriel | 702  | `1986-01-24T15:40:00Z`       | `325,000 km`     | Smith et al., *Science* 233, 43 (1986). |
+| Titania | 703  | `1986-01-24T15:13:00Z`       | `365,200 km`     | Smith et al., *Science* 233, 43 (1986). |
+| Oberon  | 704  | `1986-01-24T14:36:00Z`       | `470,600 km`     | Smith et al., *Science* 233, 43 (1986). |
+
+### New moons discovered at Uranus
+
+Voyager 2 discovered **10 new moons** of Uranus during the encounter
+approach phase (December 1985 through January 1986) — small inner moons
+all interior to Miranda's orbit. The full list with NAIF body IDs per
+the JPL planetary satellite ephemeris (NAIF satellites kernel):
+Cordelia (706), Ophelia (707), Bianca (708), Cressida (709), Desdemona
+(710), Juliet (711), Portia (712), Rosalind (713), Belinda (714), and
+Puck (715, the largest of the ten, discovered earliest at 30 December
+1985). An 11th moon, **Perdita** (725), was identified in V2 Uranus
+encounter imagery only in 1999 by Erich Karkoschka's re-analysis of
+the archived Voyager frames (Karkoschka, *Icarus* 151, 51 (2001) —
+"Voyager's eleventh discovery of a satellite of Uranus and photometry
+and the first size measurements of nine satellites"). The
+contemporaneous 1986 count is 10; the historical total credited to the
+V2 Uranus encounter imagery is **11 satellites** once Perdita was
+identified.
+
+| Event | UTC date | Source |
+| ----- | -------- | ------ |
+| 10 new Uranian moons discovered (contemporaneous count) | `1985-12` through `1986-01` | Smith et al., *Science* 233, 43 (1986); Stone & Miner, *Science* 233, 39 (1986). |
+| 11th moon (Perdita) identified in archived V2 frames | `1999` | Karkoschka, *Icarus* 151, 51 (2001). |
+
+The chapter copy at `web/src/chapters/specs/v2-uranus.ts` cites the
+**11 new moons** total credited to the V2 Uranus encounter imagery — the
+contemporaneous 10 + Perdita — consistent with the PRD encounter
+coverage table phrasing.
+
+### Uranus rings
+
+Voyager 2 imagery refined the Uranian ring system count — the
+ground-based stellar-occultation discoveries (1977 — Elliot, Dunham &
+Mink, *Nature* 267, 328 (1977)) had identified the nine outer narrow
+rings; Voyager 2 added two more (ε ring substructure characterised
+plus the broad outer ν and μ rings reported later). The principal
+*Science* 233 (1986) imaging-team paper documents the 10-ring count
+recognised at encounter time. Story 4.7 editorial copy cites the
+**new ring detail** in the V2U encounter qualitatively per the *Science*
+233 paper; specific ring counts are NOT cited in the editorial copy.
+
+### Miranda surface fractures (Story 4.7 editorial fact)
+
+V2 imagery of Miranda's surface — at 29,000 km closest-approach altitude
+— captured the moon's coronae (large oval surface features), ridged
+"chevron" terrain, and surface cliffs up to ~20 km in vertical relief
+(Verona Rupes). Smith et al., *Science* 233, 43 (1986) reports the
+imagery and identifies the geological surface anomalies; the editorial
+copy at `web/src/chapters/specs/v2-uranus.ts` cites the **dramatic
+surface fractures** qualitatively.
+
+---
+
+## Voyager 2 Neptune encounter — Triton flyby parameters and discoveries
+
+The V2 Neptune encounter (1989-08-25) was the spacecraft's final
+planetary encounter and the first — and to date only — visit to the
+Neptunian system. The encounter trajectory was designed around a close
+pass at Triton, Neptune's large retrograde moon. NASA SP-525 ("Voyager
+at Neptune", JPL final mission report) and the *Science* 246 (1989)
+special issue ("Voyager 2 at Neptune" — Stone & Miner introduction at
+*Science* 246, 1417 (1989); Smith et al., *Science* 246, 1422 (1989) —
+"Voyager 2 at Neptune: Imaging science results") document the sequence
+and discoveries.
+
+| Body    | NAIF | Closest-approach UTC instant | Altitude / range | Source |
+| ------- | ---- | ---------------------------- | ---------------- | ------ |
+| Neptune | 8    | `1989-08-25T03:56:00Z`       | (planetary closest approach — 4,950 km above Neptune's 1-bar level, the closest-altitude planetary flyby of either Voyager) | NASA/JPL Voyager-Neptune Encounter press release (NASA SP-525); Stone & Miner, *Science* 246, 1417 (1989). |
+| Triton  | 801  | `1989-08-25T09:10:00Z`       | `39,800 km` (above Triton's surface) | Smith et al., *Science* 246, 1422 (1989) (V2 Neptune encounter table); NASA SP-525. |
+
+The Triton closest approach occurred roughly five hours after Neptune
+closest approach on the same UTC date. The 39,800 km figure is the
+published altitude above Triton's solid surface; the close geometry let
+the imaging team resolve the moon's polar cap, cantaloupe terrain, and
+the active geyser plumes described below.
+
+### Triton nitrogen geyser discovery
+
+V2 imagery of Triton's southern hemisphere captured **active nitrogen
+geyser plumes** rising from the surface — dark streaks extending ~8 km
+into the thin nitrogen atmosphere, identified as wind-blown plumes of
+nitrogen gas and entrained dark dust originating from sub-surface
+vents heated by weak solar insolation. The geyser activity was the
+second confirmed observation of cryovolcanic activity in the solar
+system (after Io's silicate volcanism, V1 1979). Soderblom et al.,
+*Science* 250, 410 (1990) — "Triton's geyser-like plumes: Discovery
+and basic characterization" — is the primary citation; Smith et al.,
+*Science* 246, 1422 (1989) reports the initial imaging observation in
+the V2 Neptune special issue.
+
+### Neptune Great Dark Spot
+
+V2 imagery of Neptune's southern hemisphere captured the **Great Dark
+Spot** — a large anticyclonic storm system roughly the size of Earth,
+analogous in scale (though not lifetime) to Jupiter's Great Red Spot.
+Subsequent Hubble Space Telescope observations (1994 onwards) showed
+that the Great Dark Spot had dissipated and re-formed elsewhere on the
+planet — Neptune's storms are transient on decadal timescales. Smith
+et al., *Science* 246, 1422 (1989) — V2 Neptune imaging-science
+results paper — documents the initial discovery.
+
+### Neptune ring arcs and new moons
+
+V2 imagery confirmed the existence of **complete (not arc) rings**
+around Neptune — ground-based stellar-occultation observations
+(1984 onwards) had detected partial brightness anomalies interpreted
+as "ring arcs"; V2 imagery established that complete rings exist
+(Adams, Le Verrier, Galle, Lassell, Arago in IAU-final designations)
+with the brightness anomalies being azimuthal density variations
+within the Adams ring rather than discontinuous arcs. The
+ring-arc-to-complete-ring resolution is documented in Smith et al.,
+*Science* 246, 1422 (1989) § "The ring system."
+
+V2 also discovered **six new inner moons of Neptune**:
+
+| Moon    | NAIF | Discovery context | Source |
+| ------- | ---- | ----------------- | ------ |
+| Naiad   | 803  | V2 imagery, 1989  | Smith et al., *Science* 246, 1422 (1989); IAU Circular 4867 (1989). |
+| Thalassa | 804 | V2 imagery, 1989  | Smith et al., *Science* 246, 1422 (1989); IAU Circular 4867 (1989). |
+| Despina | 805  | V2 imagery, 1989  | Smith et al., *Science* 246, 1422 (1989); IAU Circular 4824 (1989). |
+| Galatea | 806  | V2 imagery, 1989  | Smith et al., *Science* 246, 1422 (1989); IAU Circular 4824 (1989). |
+| Larissa | 807  | (Re-)discovered V2 1989; earlier 1981 ground-based detection (Reitsema et al.) confirmed by V2 | Smith et al., *Science* 246, 1422 (1989); IAU Circular 4824 (1989). |
+| Proteus | 808  | V2 imagery, 1989 (largest of the six discoveries; ~210 km radius) | Smith et al., *Science* 246, 1422 (1989); IAU Circular 4806 (1989). |
+
+The chapter copy at `web/src/chapters/specs/v2-neptune.ts` cites the
+six new moons + ring-arc → complete-ring resolution qualitatively per
+the *Science* 246 imaging paper.
+
+### Triton gravity-assist bend (FR12)
+
+The close Triton flyby (39,800 km altitude, retrograde encounter
+geometry) deflected V2's heliocentric trajectory **south of the
+ecliptic plane** — the final gravity assist of the Voyager mission and
+the largest plane-change of either spacecraft's trajectory. The
+post-Neptune trajectory carries V2 progressively southward of the
+ecliptic; the bend's full visualisation in heliocentric framing
+develops over the post-encounter cruise era (1990 onwards) rather than
+inside the ±5d V2 Neptune encounter window. Story 4.7 AC4 documents
+the bend's qualitative visibility "at the end of the mission (2030)";
+Story 4.8 captures the canonical annotated screenshot. The
+gravity-assist bend is documented in Stone & Miner, *Science* 246,
+1417 (1989) — V2 Neptune encounter introduction — and the NASA SP-525
+trajectory appendix.
+
+---
+
 ## Editorial chapter copy
 
 Per ADR-0021, the heliopause chapter prose lives in
@@ -375,3 +542,16 @@ trajectory setup. Every dated / distanced / named fact traces to the
 tables above. Per the looser Story 4.6 band, encounter prose is
 50–150 words rather than Story 4.5's 80–120 — the historical record's
 density varies across the four encounters.
+
+Story 4.7 closes the editorial-copy surface for the final two encounter
+chapters — V2 Uranus (`v2-uranus.ts`) and V2 Neptune (`v2-neptune.ts`).
+The V2U prose covers the Miranda flyby at 29,000 km + the
+Ariel/Umbriel/Titania/Oberon flyby sequence + the 11 new moons + Miranda's
+dramatic surface fractures; the V2N prose covers the Triton flyby at
+39,800 km + the nitrogen geysers + Neptune's Great Dark Spot + the
+new moons + ring-arc-to-complete-ring resolution + the gravity-assist
+bend south of the ecliptic (FR12). Every dated / distanced / named fact
+traces to the V2 Uranus / V2 Neptune sections above. The V2U + V2N copy
+also stays in the looser Story 4.6 band of 50–150 words per chapter. FR30
+(all six gas-giant encounters fully populated with copy + framing) is
+now closed at the content tier.

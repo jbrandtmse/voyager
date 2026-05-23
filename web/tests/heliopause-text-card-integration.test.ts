@@ -138,7 +138,16 @@ describe('Story 2.9 AC4 — chapter-jump simulation → text-card appears', () =
     handle.dispose();
   });
 
-  it('scrubbing through encounter chapter leaves text-card empty (Epic 4 owns encounter copy)', async () => {
+  it('scrubbing through a non-copy chapter (launch) leaves text-card empty (FR30 closed in Story 4.7: encounters now carry ChapterSpec.copy)', async () => {
+    // Pre-Story-4.7 this test used V2 Neptune as the "encounter without
+    // copy" sentinel; Story 4.7 closed FR30 by populating V2U + V2N copy
+    // (alongside the V1J/V2J/V1S/V2S copy from Stories 4.5 + 4.6). The
+    // chapters that still leave the text-card empty are the launch
+    // chapters and Pale Blue Dot (the latter handled separately by Epic
+    // 5). We assert that launch-v1 still leaves the panel empty —
+    // preserving the test's original intent: a chapter outside both the
+    // heliopause-copy.ts surface AND the ChapterSpec.copy surface
+    // produces no rendered text-card.
     const host = document.createElement('div');
     document.body.appendChild(host);
     const clock = new ClockManager();
@@ -148,9 +157,8 @@ describe('Story 2.9 AC4 — chapter-jump simulation → text-card appears', () =
       chapterDirector: director,
     });
 
-    // Scrub to V2 Neptune anchor.
-    const v2n = requireChapter('v2-neptune');
-    clock.scrubTo(v2n.anchorEt);
+    const launchV1 = requireChapter('launch-v1');
+    clock.scrubTo(launchV1.anchorEt);
     director.update(clock.simTimeEt);
     await handle.chapterCopy!.updateComplete;
 
