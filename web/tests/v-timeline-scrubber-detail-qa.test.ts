@@ -687,9 +687,15 @@ describe('QA priority 7 — Rule 9: createSliderKeyboardHandler consumption + la
     );
     expect(rig.detail.simEt - before1).toBe(10); // 10sec tier
 
-    // Teleport cursor to 5 days past anchor (hourly tier).
-    rig.clock.scrubTo(v1Jupiter.anchorEt + 5 * ONE_DAY);
-    rig.director.update(v1Jupiter.anchorEt + 5 * ONE_DAY);
+    // Teleport cursor to 3 days past anchor (hourly tier — still inside
+    // the Story-4.5 ±5d V1J window so the ArrowRight isn't clamped at the
+    // right edge of the detail scrubber's range; >2 days from anchor so
+    // the 1min tier doesn't fire). Story 4.4 used 5 days as the teleport
+    // target when V1J held a ±30d placeholder window; Story 4.5 narrows
+    // the window to ±5d, so 5d-from-anchor lands AT windowEndEt and the
+    // ArrowRight gets clamped to zero. 3 days exercises the same tier.
+    rig.clock.scrubTo(v1Jupiter.anchorEt + 3 * ONE_DAY);
+    rig.director.update(v1Jupiter.anchorEt + 3 * ONE_DAY);
     await rig.detail.updateComplete;
     const before2 = rig.detail.simEt;
     thumb.dispatchEvent(

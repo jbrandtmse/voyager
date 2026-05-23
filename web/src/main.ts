@@ -32,6 +32,7 @@ import { ALL_CHAPTERS } from './chapters/registry';
 import { RenderEngine } from './render/render-engine';
 import { VoyagerCameraController } from './render/voyager-camera-controller';
 import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
+import { resolveChapterDefaultFraming } from './chapters/chapter-default-framing';
 import { worldVec3, type WorldVec3 } from './types/branded';
 import {
   isPrecisionSmokeMode,
@@ -398,6 +399,12 @@ const bootstrap = (): void => {
         chapterDirector.activeChapter,
       ).originOffsetWorld;
     },
+    // Story 4.5 AC3 — chapter-driven default framing. Reads the active
+    // chapter's `defaultFraming` field via the pure helper at
+    // `chapters/chapter-default-framing.ts`; null result falls back to
+    // the controller's built-in encounter / cruise defaults.
+    resolveDefaultFraming: (activeTarget) =>
+      resolveChapterDefaultFraming(chapterDirector.activeChapter, activeTarget),
   });
   cameraController.attach();
 
@@ -411,6 +418,36 @@ const bootstrap = (): void => {
   // local; the SPA lifetime is the document, so we never explicitly
   // dispose (the page unload tears everything down).
   void restoreAffordance;
+
+  // Story 4.5 AC3 (smoke cycle-2 fix 2026-05-23): auto-trigger the
+  // chapter-default framing on `to === 'held'` transitions for chapters
+  // carrying `defaultFraming`. Without this subscriber the resolver IS
+  // registered but never CALLED — the camera stays at (0, 0, 0) (world
+  // origin, embedded inside Jupiter post-floating-origin).
+  //
+  // Gate on services being ready: the framing math reads
+  // `getActiveTarget()` which needs `ephemerisServiceRef` +
+  // `viewFrameServiceRef` to be live. Before the manifest resolves
+  // those refs are null and `getActiveTarget()` returns null — at
+  // which point the controller's fallback would snap to cruise-default
+  // (Sun-centered ~10 AU), which is worse than doing nothing. The
+  // sibling cold-load replay below fires after the manifest lands.
+  //
+  // Animated path (rather than instant) for runtime transitions —
+  // matches the R-key restore semantics + Story 4.1's smoothstep
+  // ViewFrame blend on chapter entry. Cold-load path uses instant
+  // because the camera starts at world origin.
+  //
+  // Suppress immediately AFTER a user gesture flipped manualCameraActive
+  // to true — the user explicitly took control; we don't override.
+  chapterDirector.subscribe((event) => {
+    if (event.to !== 'held') return;
+    if (event.chapter.defaultFraming === undefined) return;
+    if (ephemerisServiceRef === null) return;
+    if (viewFrameServiceRef === null) return;
+    if (engine.manualCameraActive) return;
+    cameraController.applyDefaultFraming({ animated: true });
+  });
 
   // Story 2.2 — DEV-only debug surface mirroring Story 2.1's pattern so
   // the lead's Chrome DevTools MCP smoke can read
@@ -692,6 +729,38 @@ const bootstrap = (): void => {
       // bodies at their real positions, not at the origin.
       await prefetchSpacecraftChunks(manifest, chunkLoader);
       await prefetchCelestialBodyChunks(manifest, chunkLoader);
+
+      // Story 4.5 AC3 cold-load framing replay (smoke cycle-2 fix
+      // 2026-05-23). Mirror of the Story 4.3 cold-load SOI replay
+      // pattern: on cold-load arrival into an encounter chapter (e.g.
+      // /c/v1-jupiter), the ChapterDirector sync seed (above, line
+      // ~282) fired `held` BEFORE the camera-controller existed AND
+      // before `ephemerisServiceRef` was promoted to the live service.
+      // The runtime subscriber installed alongside the controller
+      // therefore early-returns on the first held event (services
+      // null-gated). This one-shot replay fires AFTER the celestial-
+      // body chunks are in cache (so `ephemerisService.getPosition` for
+      // Jupiter resolves synchronously), the controller's resolver path
+      // succeeds, and the camera lands at the chapter's
+      // `defaultFraming` position instead of staying at world origin
+      // (i.e., embedded inside Jupiter post-floating-origin).
+      //
+      // Instant (not animated) on cold-load: the camera starts at
+      // (0, 0, 0); a 400ms tween from origin to a 3-Mm-out framing
+      // would be a jarring pull-back. The reduced-motion path takes
+      // the same instant branch — symmetric.
+      //
+      // Suppression: if the user has somehow already flipped the
+      // manual-camera flag (e.g. a gesture fired during the manifest
+      // load), respect that and don't override.
+      const initialActiveChapter = chapterDirector.activeChapter;
+      if (
+        initialActiveChapter !== null &&
+        initialActiveChapter.defaultFraming !== undefined &&
+        !engine.manualCameraActive
+      ) {
+        cameraController.applyDefaultFraming({ animated: false });
+      }
 
       trajectoryLines = new TrajectoryLines(
         (et, naifId) => ephemerisService.getPosition(et, naifId),

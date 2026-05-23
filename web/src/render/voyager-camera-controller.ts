@@ -408,6 +408,11 @@ export class VoyagerCameraController {
    *   - the `R` keyboard handler (Story 4.2 AC3 + AC7)
    *   - the `<button class="restore-camera">` click handler (AC4)
    *
+   * Delegates to `applyDefaultFraming({ animated: true })`. The
+   * separately-named entry point preserves the Story 4.2 surface while
+   * Story 4.5 wires the new chapter-activation path through the shared
+   * implementation.
+   *
    * No-op when `manualCameraSuspended === true` (PBD carve-out).
    *
    * Under reduced motion the animation collapses to instant: the camera
@@ -415,12 +420,43 @@ export class VoyagerCameraController {
    * `manualCameraActive` flips to false synchronously.
    */
   restore(): void {
+    this.applyDefaultFraming({ animated: true });
+  }
+
+  /**
+   * Drive the camera to the chapter-resolved default framing. Story 4.5
+   * AC3 entry point — called from the `ChapterDirector` subscriber in
+   * `main.ts` on `to === 'held'` transitions for chapters carrying
+   * `defaultFraming`.
+   *
+   * Behaviour:
+   *   - No-op when `manualCameraSuspended === true` (PBD carve-out).
+   *   - No-op when the resolver returns null AND no fallback would
+   *     apply (e.g. chapter has no `defaultFraming` and no active body).
+   *     The cold-load / cruise case correctly falls through to the
+   *     built-in `defaultFramingFallback` (Sun-centered ~10 AU); we
+   *     only short-circuit when both resolver + fallbacks are null,
+   *     which today's code path doesn't produce but defends against a
+   *     future third-party resolver shape.
+   *   - Animated path: SLERP + LERP over `--v-duration-slow` (matches
+   *     R-key restore semantics).
+   *   - Instant path: direct position + quaternion assignment.
+   *
+   * After the framing lands (animated end or instant immediate),
+   * `manualCameraActive` is set to `false` — the camera is in
+   * chapter-controlled state, not user-manual state.
+   *
+   * `applyDefaultFraming({ animated: false })` is the cold-load entry
+   * point — the camera starts at the world origin and we want it at
+   * the framing target on the first user-visible frame, no tween.
+   */
+  applyDefaultFraming(options: { animated: boolean }): void {
     if (this.manualCameraSuspended) return;
 
-    // Cancel any in-flight animation; the new restore takes precedence.
+    // Cancel any in-flight animation; the new framing takes precedence.
     // We intentionally do NOT resolve the previous animation's promise
-    // here — the awaiter is awaiting THIS restore call to complete, not
-    // the cancelled one.
+    // here — the awaiter is awaiting THIS call to complete, not the
+    // cancelled one.
     this.cancelAnimation();
 
     const activeTargetWorld = this.getActiveTarget();
@@ -438,7 +474,8 @@ export class VoyagerCameraController {
     const fromPosition = this.camera.position.clone();
     const fromQuaternion = this.camera.quaternion.clone();
 
-    if (this.reducedMotion() || this.restoreDurationMs <= 0) {
+    const animated = options.animated;
+    if (!animated || this.reducedMotion() || this.restoreDurationMs <= 0) {
       // Instant cut — collapse the animation to a single state assignment.
       this.camera.position.copy(target.position);
       this.camera.quaternion.copy(target.quaternion);

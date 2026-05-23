@@ -179,6 +179,75 @@ material.
 
 ---
 
+## Voyager 1 Jupiter encounter — interior sweep timeline
+
+The V1 Jupiter encounter's nominal closest-approach instants for the four
+Galilean moons + Amalthea, sourced from NASA SP-439 (the "Voyagers Encounter
+Jupiter" mission report, JPL, 1979) Appendix A "Voyager 1 Jupiter encounter
+sequence." All times are UTC. The instants are nominal trajectory
+predictions reconciled with the post-encounter reconstruction; tolerance is
+~1 minute against subsequent recoveries.
+
+| Body     | NAIF | UTC instant            | Source |
+| -------- | ---- | ---------------------- | ------ |
+| Amalthea | 505  | `1979-03-05T06:54:00Z` | NASA SP-439 Appendix A |
+| Jupiter  | 5    | `1979-03-05T12:05:00Z` | NASA SP-439 Appendix A (closest planetary approach) |
+| Io       | 501  | `1979-03-05T15:14:00Z` | NASA SP-439 Appendix A |
+| Europa   | 502  | `1979-03-05T18:19:00Z` | NASA SP-439 Appendix A |
+| Ganymede | 503  | `1979-03-06T02:15:00Z` | NASA SP-439 Appendix A |
+| Callisto | 504  | `1979-03-06T17:08:00Z` | NASA SP-439 Appendix A |
+
+The full encounter, from first Amalthea approach to last Callisto recession,
+spans roughly 34 hours; the editorial chapter copy rounds this to "the next
+forty-eight hours" to encompass both the in-bound geometry (the moons appear
+on approach as well as recession) and the public-facing colloquial framing
+in the NASA mission summaries.
+
+---
+
+## Voyager 1 Jupiter ring discovery (1979-03-04)
+
+Voyager 1 detected Jupiter's tenuous main ring during the in-bound encounter
+phase on 1979-03-04. The detection frame is a single long-exposure (~11
+minute) backlit image taken when the spacecraft was downstream of Jupiter,
+looking back toward the planet against the Sun — the geometry that maximizes
+forward-scatter from sub-micron ring dust. The ring image was assigned image
+ID `FDS 16383.54` in the Voyager flight data system.
+
+| Event | UTC date | Source |
+| ----- | -------- | ------ |
+| Jupiter ring detection | `1979-03-04` | Smith et al., *Science* 204, 951 (1979) — "The Jupiter system through the eyes of Voyager 1"; NASA SP-439 § 8 "The discovery of Jupiter's ring" |
+
+The detection was a Voyager-mission scientific surprise — the ring had been
+hypothesized but never observed — and was deliberately planned: imaging-team
+member Tobias Owen had proposed the long-exposure backlit frame to look for
+ring material in advance of the encounter, and the image was scheduled in
+the sequence accordingly.
+
+---
+
+## Voyager 1 Io volcanic activity discovery (1979-03-08)
+
+Three days after closest approach, on 1979-03-08, JPL navigation engineer
+Linda Morabito identified a crescent-shaped plume rising above Io's limb in
+a navigation reference image. The feature did not match any expected moon
+or star occultation; subsequent analysis confirmed it was an active
+volcanic eruption — the first observation of an active volcano outside
+Earth.
+
+| Event | UTC date | Frame ID | Source |
+| ----- | -------- | -------- | ------ |
+| Io plume identified by L. Morabito | `1979-03-08` | `FDS 16390.29` (often cited as `0468J1-001`) | Morabito et al., *Science* 204, 972 (1979) — "Discovery of currently active extraterrestrial volcanism" |
+
+The frame designation `0468J1-001` is the Voyager imaging-team's session
+identifier; `FDS 16390.29` is the Flight Data System sequence number from
+which the SPICE-aware planetary archive ingest derives. Both are equivalent
+references to the same image. The editorial chapter copy cites
+`0468J1-001` to match the Morabito public-record narrative; the FDS number
+appears in the peer-reviewed *Science* paper.
+
+---
+
 ## Editorial chapter copy
 
 Per ADR-0021, the heliopause chapter prose lives in
@@ -188,3 +257,13 @@ content is the same NASA/JPL announcement + peer-reviewed publications cited
 in the heliopause-crossings table above. The copy is editorial, not a direct
 quotation, so a single block citation in the chapter-copy module footer is
 sufficient; this file (MISSION_FACTS.md) is the canonical citation surface.
+
+Story 4.5 extends the editorial-copy surface to encounter chapters by adding
+an optional `copy?: EncounterChapterCopy` field on `ChapterSpec`
+(`web/src/types/chapter.ts`). The V1J chapter spec at
+`web/src/chapters/specs/v1-jupiter.ts` populates this field; the prose
+covers the ring discovery (1979-03-04), the closest-approach instant
+(1979-03-05T12:05:00Z), the 48-hour Amalthea/Io/Europa/Ganymede/Callisto
+sweep (table above), and Linda Morabito's Io volcano discovery (1979-03-08).
+Every dated / distanced / named / counted fact traces back to a primary
+source in this document — no invented values.

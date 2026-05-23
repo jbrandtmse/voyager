@@ -141,20 +141,59 @@ describe('Story 2.9 AC1 — copy clears on exit', () => {
   });
 });
 
-describe('Story 2.9 AC1 — non-heliopause chapters ignored', () => {
-  it('does NOT render copy for v1-jupiter (Epic 4 owns encounter copy)', async () => {
+describe('Story 4.5 AC5 — V1J encounter copy renders when held', () => {
+  it('renders V1J copy (lede + body) when director enters v1-jupiter held state', async () => {
+    const v1j = requireChapter('v1-jupiter');
+    expect(v1j.copy).toBeDefined();
+    const { el, director } = await mount();
+    director!.update(v1j.anchorEt);
+    await el.updateComplete;
+
+    const article = el.querySelector<HTMLElement>('article.v-chapter-copy');
+    expect(article?.getAttribute('data-active')).toBe('true');
+    expect(article?.getAttribute('data-slug')).toBe('v1-jupiter');
+    expect(el.displayedSlug).toBe('v1-jupiter');
+
+    const lede = el.querySelector<HTMLElement>('.v-chapter-copy-lede');
+    expect(lede?.textContent).toBe(v1j.copy!.lede);
+
+    // Encounter copy is a single body string rendered as one <p>.
+    const paragraphs = el.querySelectorAll<HTMLElement>(
+      '.v-chapter-copy-paragraph',
+    );
+    expect(paragraphs.length).toBe(1);
+    expect(paragraphs[0].textContent).toBe(v1j.copy!.body);
+    el.remove();
+  });
+
+  it('clears V1J copy when scrubbing past windowEnd', async () => {
     const v1j = requireChapter('v1-jupiter');
     const { el, director } = await mount();
     director!.update(v1j.anchorEt);
+    await el.updateComplete;
+    expect(el.displayedSlug).toBe('v1-jupiter');
+
+    director!.update(v1j.windowEndEt + 1);
+    await el.updateComplete;
+    expect(el.displayedSlug).toBeNull();
+    el.remove();
+  });
+});
+
+describe('Story 2.9 / 4.5 AC5 — non-copy chapters ignored', () => {
+  it('does NOT render copy for pale-blue-dot (Epic 5 owns PBD copy)', async () => {
+    const pbd = requireChapter('pale-blue-dot');
+    const { el, director } = await mount();
+    director!.update(pbd.anchorEt);
     await el.updateComplete;
     expect(el.displayedSlug).toBeNull();
     el.remove();
   });
 
-  it('does NOT render copy for pale-blue-dot (Epic 5 owns PBD copy)', async () => {
-    const pbd = requireChapter('pale-blue-dot');
+  it('does NOT render copy for launch-v1 (no copy field on cruise/launch chapters)', async () => {
+    const launchV1 = requireChapter('launch-v1');
     const { el, director } = await mount();
-    director!.update(pbd.anchorEt);
+    director!.update(launchV1.anchorEt);
     await el.updateComplete;
     expect(el.displayedSlug).toBeNull();
     el.remove();
@@ -180,11 +219,27 @@ describe('Story 2.9 AC1 — late-mount seeding', () => {
     el.remove();
   });
 
-  it('clears if director.activeChapter is a non-heliopause chapter at mount time', async () => {
+  it('seeds V1J encounter copy on connectedCallback (Story 4.5 — late-mount path)', async () => {
     const v1j = requireChapter('v1-jupiter');
     const director = new ChapterDirector(ALL_CHAPTERS);
     director.update(v1j.anchorEt);
     expect(director.activeChapter?.slug).toBe('v1-jupiter');
+
+    const el = document.createElement('v-chapter-copy') as VChapterCopy;
+    el.chapterDirector = director;
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    // V1J now carries its own copy block; the seed path must surface it.
+    expect(el.displayedSlug).toBe('v1-jupiter');
+    el.remove();
+  });
+
+  it('clears if director.activeChapter is a copy-less chapter at mount time', async () => {
+    const pbd = requireChapter('pale-blue-dot');
+    const director = new ChapterDirector(ALL_CHAPTERS);
+    director.update(pbd.anchorEt);
+    expect(director.activeChapter?.slug).toBe('pale-blue-dot');
 
     const el = document.createElement('v-chapter-copy') as VChapterCopy;
     el.chapterDirector = director;

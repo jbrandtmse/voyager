@@ -1373,9 +1373,13 @@ describe('Story 4.4 AC5 — cadence-aware keyboard step on detail variant', () =
     el.remove();
   });
 
-  it('at anchor + 10 days: ArrowRight steps by 3600 seconds (hourly tier)', async () => {
+  it('at anchor + 3 days: ArrowRight steps by 3600 seconds (hourly tier)', async () => {
+    // Story 4.5 — V1J window narrowed from ±30d (Story 2.1 placeholder)
+    // to ±5d. Anchor + 10 days now lands outside the held window, so
+    // the test uses anchor + 3 days: >2 days (past the 1min band) and
+    // inside the ±5d window (chapter still held).
     const v1Jupiter = findChapterBySlug('v1-jupiter')!;
-    const { el } = await makeDetailWithChapter(v1Jupiter.anchorEt + 10 * SECONDS_PER_DAY);
+    const { el } = await makeDetailWithChapter(v1Jupiter.anchorEt + 3 * SECONDS_PER_DAY);
     const before = el.simEt;
     const thumb = el.shadowRoot!.querySelector('.thumb')!;
     thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
