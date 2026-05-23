@@ -248,6 +248,101 @@ appears in the peer-reviewed *Science* paper.
 
 ---
 
+## Voyager 2 Jupiter encounter — interior sweep timeline
+
+The V2 Jupiter encounter took a different approach geometry than V1 — V2
+passed through the system roughly four months later (1979-07-09) on a
+trajectory that traversed the outer Galilean moons inbound (Callisto →
+Ganymede) and the inner moons (Europa → Io) outbound. V2 did NOT make a
+close pass at Amalthea; the inner red moon was a V1-only close encounter.
+The closest-approach instants for the four Galilean moons are sourced
+from NASA SP-439 ("Voyagers Encounter Jupiter", JPL, 1979) Appendix A
+"Voyager 2 Jupiter encounter sequence." Times are UTC, with tolerance
+~1 minute against post-encounter reconstruction.
+
+| Body     | NAIF | UTC instant            | Source |
+| -------- | ---- | ---------------------- | ------ |
+| Callisto | 504  | `1979-07-08T12:21:00Z` | NASA SP-439 Appendix A (V2 Jupiter sequence) |
+| Ganymede | 503  | `1979-07-09T07:14:00Z` | NASA SP-439 Appendix A (V2 Jupiter sequence) |
+| Europa   | 502  | `1979-07-09T17:53:00Z` | NASA SP-439 Appendix A (V2 Jupiter sequence) |
+| Jupiter  | 5    | `1979-07-09T22:29:00Z` | NASA SP-439 Appendix A (closest planetary approach) |
+| Io       | 501  | `1979-07-09T23:17:00Z` | NASA SP-439 Appendix A (V2 Jupiter sequence) |
+
+Voyager 2's Jupiter trajectory was deliberately shaped — V2's flyby
+geometry was chosen to bend the spacecraft onto the Saturn-and-beyond
+Grand Tour path, in contrast with V1's Titan-priority deflection. Smith
+et al., *Science* 206, 925 (1979) — "The Galilean satellites and Jupiter:
+Voyager 2 imaging science results" — reports the post-encounter imaging
+products that show finer ring structure than V1 captured (V2 returned a
+multi-exposure ring sequence at higher signal-to-noise) and the first
+high-resolution coverage of Ganymede's grooved terrain. Editorial chapter
+copy at `web/src/chapters/specs/v2-jupiter.ts` rounds the Callisto-through-
+Io sweep to "a day" — the actual span from Callisto (07/08 12:21 UT) to
+Io (07/09 23:17 UT) is roughly 35 hours.
+
+---
+
+## Voyager 1 Saturn encounter — Titan flyby parameters
+
+Voyager 1's Saturn flyby was shaped around a single targeting priority:
+a close pass at Titan to characterize its atmosphere. The close-approach
+trajectory came at the cost of V1's planetary tour — the Titan gravity
+assist deflected V1's path northward out of the ecliptic plane, ending
+its inner-solar-system mission. NASA SP-451 ("Voyages to Saturn", JPL,
+1982) and Smith et al., *Science* 212, 159 (1981) — "Encounter with
+Saturn: Voyager 1 imaging science results" — document the encounter
+sequence and Titan flyby geometry.
+
+| Event | UTC instant            | Parameter | Value | Source |
+| ----- | ---------------------- | --------- | ----- | ------ |
+| Titan closest approach | `1980-11-12T05:41:00Z` | Altitude above Titan's surface | `6,490 km` | NASA SP-451 § 3 "The Titan encounter"; Smith et al., *Science* 212, 159 (1981) |
+| Saturn closest approach | `1980-11-12T23:46:00Z` | (planetary closest approach) | — | NASA SP-451 (planetary closest approach) |
+
+The Titan flyby occurred roughly 18 hours before Saturn closest approach
+on the same UTC date. The 6,490 km figure is the published altitude above
+Titan's solid surface; the upper-atmosphere encounter geometry let the
+radio-science occultation experiment probe Titan's atmosphere top-down
+(Tyler et al., *Science* 212, 201, 1981 — "Radio science investigations
+of the Saturn system with Voyager 1"). Post-encounter, V1 climbed north
+of the ecliptic plane; the trajectory bend is the V1S "slingshot" visible
+in the simulation per Story 4.6 AC4 + Story 4.8.
+
+Saturn ring detail captured by V1 was the first high-resolution
+photometric coverage of the ring system; SP-451 reports the F-ring
+braiding structure, the broad-ring radial fine structure, and the
+discovery of ring "spokes" — radial features rotating with the magnetic
+field rather than Keplerian motion (Smith et al., 1981, *Science* 212).
+
+---
+
+## Voyager 2 Saturn encounter — moon flyby parameters
+
+The V2 Saturn encounter (1981-08-26) covered the Saturn system without
+the Titan-priority constraint that shaped V1's flyby — V2's trajectory
+was tuned for the Uranus-and-Neptune Grand Tour continuation, with moon
+flybys targeted opportunistically along the way. NASA's published Voyager
+2 Saturn encounter timeline and Smith et al., *Science* 215, 504 (1982) —
+"A new look at the Saturn system: the Voyager 2 images" — document the
+sequence.
+
+| Body    | NAIF | UTC instant            | Source |
+| ------- | ---- | ---------------------- | ------ |
+| Iapetus | 608  | `1981-08-22T01:26:00Z` | Smith et al., *Science* 215, 504 (1982) (V2 Saturn encounter table) |
+| Hyperion | 607 | `1981-08-25T01:25:00Z` | Smith et al., *Science* 215, 504 (1982) (V2 Saturn encounter table) |
+| Titan   | 606  | `1981-08-25T09:37:00Z` | Smith et al., *Science* 215, 504 (1982) (V2 Saturn encounter table) |
+| Saturn  | 6    | `1981-08-26T00:00:00Z` | NASA/JPL Voyager-Saturn Encounter (date-level sourcing — closest approach 26 Aug 1981 03:24 UTC at S-ring; chapter uses midnight anchor for cross-spec consistency with Story 2.1) |
+
+V2's Saturn flyby returned the first close imagery of Iapetus's two-toned
+hemispheres (Cassini Regio is the dark trailing hemisphere documented in
+the *Science* 215 paper) and the first close imagery of Hyperion's
+irregular shape (~360 × 266 × 205 km tri-axial). V2 also returned ring
+imagery at higher cadence than V1, contributing to the C-ring and D-ring
+structure characterization in Smith et al. (1982). Editorial chapter copy
+at `web/src/chapters/specs/v2-saturn.ts` cites the Iapetus / Hyperion /
+Titan triple-flyby and the Uranus-trajectory setup.
+
+---
+
 ## Editorial chapter copy
 
 Per ADR-0021, the heliopause chapter prose lives in
@@ -267,3 +362,16 @@ covers the ring discovery (1979-03-04), the closest-approach instant
 sweep (table above), and Linda Morabito's Io volcano discovery (1979-03-08).
 Every dated / distanced / named / counted fact traces back to a primary
 source in this document — no invented values.
+
+Story 4.6 extends the editorial-copy surface to three more encounter
+chapters — V2 Jupiter (`v2-jupiter.ts`), V1 Saturn (`v1-saturn.ts`), and
+V2 Saturn (`v2-saturn.ts`). The V2J prose covers the
+Callisto/Ganymede/Europa/Io sweep + the deflection onto the Saturn-and-
+beyond trajectory + V2's finer ring imaging; the V1S prose covers the
+Titan flyby at 6,490 km + the slingshot deflection out of the ecliptic +
+the ring-spoke discovery; the V2S prose covers the
+Iapetus/Hyperion/Titan flybys + the additional ring detail + the Uranus
+trajectory setup. Every dated / distanced / named fact traces to the
+tables above. Per the looser Story 4.6 band, encounter prose is
+50–150 words rather than Story 4.5's 80–120 — the historical record's
+density varies across the four encounters.

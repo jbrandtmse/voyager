@@ -797,3 +797,17 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
    **Suggested resolution:** Compute `total_vtrjs = sum(len(b.files) for b in body_records)` at the bottom of the bake loop, immediately before the print. ~2 lines. Trivial when somebody next touches the bake summary path.
 
    **Routing:** Any future bake-pipeline story (Epic 4 Story 4.6 / 4.7 chapter content or Epic 5 PBD bake extensions will likely touch this code path).
+
+---
+
+## Deferred from: code review of story 4-6 (2026-05-23)
+
+1. **[4.6 / LOW]** `MISSION_FACTS.md` V2J interior-sweep paragraph uses a `MM/DD` slash format once.
+
+   **What's the issue:** The new "Voyager 2 Jupiter encounter — interior sweep timeline" section's closing paragraph reads "the actual span from Callisto (07/08 12:21 UT) to Io (07/09 23:17 UT) is roughly 35 hours." All canonical instants elsewhere in the file (and in the same section's table) use full ISO-8601 timestamps. This single paragraph uses `07/08` / `07/09` US-style slash dates without a year, inside parenthetical commentary.
+
+   **Why deferred:** The QA gap-8 anti-`MM/DD/YYYY` defense regex requires a year (`\b\d{2}\/\d{2}\/\d{4}\b`), so this style-inconsistency is outside the citation-surface contract the test pins. The factual content is correct (both times match the ISO table rows above it). Pure style nit; not a regression risk.
+
+   **Suggested resolution:** Either restate as "Callisto (1979-07-08 12:21 UT)" / "Io (1979-07-09 23:17 UT)" or drop the parenthetical entirely (the table immediately above already cites both instants in ISO form). Trivial when MISSION_FACTS is next edited.
+
+   **Routing:** Any future MISSION_FACTS editorial pass (Story 4.7's V2U / V2N additions are the obvious next opportunity).

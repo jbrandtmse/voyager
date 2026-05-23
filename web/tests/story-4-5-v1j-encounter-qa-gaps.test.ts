@@ -386,20 +386,26 @@ describe('Story 4.5 QA gap 3 — heliopause copy regression (Story 2.9 dispatch 
 // Gap 4 — Default-framing resolver fallback path (non-V1J chapters)
 // ====================================================================
 
-describe('Story 4.5 QA gap 4 — defaultFraming resolver returns null for every non-V1J chapter', () => {
-  it('every chapter except v1-jupiter resolves to null framing (fallback path)', () => {
+describe('Story 4.5 QA gap 4 — defaultFraming resolver returns null for non-framed chapters', () => {
+  it('every chapter except the Story-4.5/4.6-populated encounters resolves to null framing (fallback path)', () => {
+    // Story 4.5 populated V1J. Story 4.6 populated V2J / V1S / V2S.
+    // Story 4.7 will add V2U / V2N. Until then, every other chapter must
+    // fall back to null (cruise / launch / heliopause / PBD).
+    const POPULATED_SLUGS = new Set<string>([
+      'v1-jupiter',
+      'v2-jupiter',
+      'v1-saturn',
+      'v2-saturn',
+    ]);
     const target = new Vector3(100, 200, 300);
     for (const chapter of ALL_CHAPTERS) {
       const framing = resolveChapterDefaultFraming(chapter, target);
-      if (chapter.slug === 'v1-jupiter') {
-        // V1J is the only chapter Story 4.5 populates.
+      if (POPULATED_SLUGS.has(chapter.slug)) {
         expect(framing).not.toBeNull();
       } else {
-        // Stories 4.6 / 4.7 will populate the remaining encounter
-        // chapters; today every other chapter must fall back.
         expect(
           framing,
-          `Story 4.5 unexpectedly resolved framing for ${chapter.slug}; only v1-jupiter should be populated until Story 4.6 / 4.7`,
+          `${chapter.slug} unexpectedly resolved framing; only ${[...POPULATED_SLUGS].join(', ')} populated through Story 4.6 (V2U / V2N pending Story 4.7)`,
         ).toBeNull();
       }
     }
@@ -618,34 +624,37 @@ describe('Story 4.5 QA gap 7 — VoyagerCameraController honours chapter default
 // Gap 8 — ChapterSpec.copy / defaultFraming optionality at runtime
 // ====================================================================
 
-describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (only V1J populated)', () => {
-  it('exactly ONE chapter (v1-jupiter) carries a ChapterSpec.copy field after Story 4.5', () => {
+describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (Story 4.5 + 4.6 populated)', () => {
+  it('exactly FOUR chapters carry a ChapterSpec.copy field after Story 4.6 (V1J + V2J + V1S + V2S)', () => {
     const chaptersWithCopy = ALL_CHAPTERS.filter(
       (c) => c.copy !== undefined,
     );
-    expect(chaptersWithCopy.length).toBe(1);
-    expect(chaptersWithCopy[0].slug).toBe('v1-jupiter');
+    expect(chaptersWithCopy.length).toBe(4);
+    const slugs = chaptersWithCopy.map((c) => c.slug).sort();
+    expect(slugs).toEqual(
+      ['v1-jupiter', 'v1-saturn', 'v2-jupiter', 'v2-saturn'].sort(),
+    );
   });
 
-  it('exactly ONE chapter (v1-jupiter) carries a ChapterSpec.defaultFraming field after Story 4.5', () => {
+  it('exactly FOUR chapters carry a ChapterSpec.defaultFraming field after Story 4.6', () => {
     const chaptersWithFraming = ALL_CHAPTERS.filter(
       (c) => c.defaultFraming !== undefined,
     );
-    expect(chaptersWithFraming.length).toBe(1);
-    expect(chaptersWithFraming[0].slug).toBe('v1-jupiter');
+    expect(chaptersWithFraming.length).toBe(4);
+    const slugs = chaptersWithFraming.map((c) => c.slug).sort();
+    expect(slugs).toEqual(
+      ['v1-jupiter', 'v1-saturn', 'v2-jupiter', 'v2-saturn'].sort(),
+    );
   });
 
-  it('cruise / launch / PBD / heliopause chapters all leave both fields undefined', () => {
+  it('cruise / launch / PBD / heliopause + remaining encounter chapters leave both fields undefined', () => {
     const slugsExpectedClean = [
       'launch-v1',
       'launch-v2',
       'pale-blue-dot',
       'v1-heliopause',
       'v2-heliopause',
-      // Encounter chapters NOT yet populated (Stories 4.6 / 4.7).
-      'v2-jupiter',
-      'v1-saturn',
-      'v2-saturn',
+      // Story 4.7 territory — still un-populated.
       'v2-uranus',
       'v2-neptune',
     ];
@@ -654,11 +663,11 @@ describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (
       expect(chapter, `unknown slug ${slug}`).not.toBeNull();
       expect(
         chapter!.copy,
-        `${slug} unexpectedly populated copy — Story 4.6/4.7 territory`,
+        `${slug} unexpectedly populated copy — Story 4.7 territory`,
       ).toBeUndefined();
       expect(
         chapter!.defaultFraming,
-        `${slug} unexpectedly populated defaultFraming — Story 4.6/4.7 territory`,
+        `${slug} unexpectedly populated defaultFraming — Story 4.7 territory`,
       ).toBeUndefined();
     }
   });
