@@ -1,6 +1,6 @@
 # Voyager
 
-> 🚧 **Implementation phase — Epic 1 in progress.** Planning artifacts (product brief, PRD, technical research, UX design specification, architecture) are complete. The monorepo scaffold is in place: `web/` (TypeScript + Vite vanilla-ts) and `bake/` (Python 3.13 + uv + SpiceyPy 8.1.0). See [Repository Layout](#repository-layout) for the smoke-test sequence.
+> 🚀 **Epics 1–4 complete; Epic 5 (Pale Blue Dot) starting.** All six gas-giant encounter chapters are operational end-to-end (V1J / V2J / V1S / V2S / V2U / V2N), the Voyager Golden Record-era attitude is CK-driven through every encounter, and the L4 Playwright visual-regression suite locks 9 pinned scenes. The mission's hero scene — the Pale Blue Dot turn-and-photograph sequence on 1990-02-14 — is the next epic. See [Implementation Status](#implementation-status) for the per-epic shipping summary.
 
 A browser-based, narrative-driven cinematic replay of the **Voyager 1 and Voyager 2** missions — from launch in 1977 through projected interstellar cruise in 2030 — built around a single coherent time axis you can scrub, pause, and zoom from 1× real-time to 1,000,000× (the full 53-year mission in roughly fifty seconds).
 
@@ -11,6 +11,26 @@ The mission is the protagonist, not one entry in a multi-mission catalog. The di
 CK-reconstructed attitude data drives instrument boresights so the spacecraft physically turn, the scan platforms articulate, and the narrow-angle cameras' frustums sweep the targets they actually aimed at during the gas-giant encounters of 1979, 1980, 1986, and 1989, and at the inner solar system on 14 February 1990 — the Pale Blue Dot.
 
 The visual register is *[Apollo in Real Time](https://apolloinrealtime.org)* applied to an unmanned mission for the first time: silent, dignified, time-anchored, generous typography. Reverent but not mournful — awe and wonder with weight.
+
+## Implementation Status
+
+Four epics (Epic 0 foundation + Epics 1–4) have shipped. Epic 5 (Pale Blue Dot) is the next major scope; Epic 6 (polish + accessibility) and Epic 7 (friendly-user testing + L5 E2E) follow. The artifact is currently a fully navigable simulation — open `web/` and start the dev server — for the full mission window (1977-08-20 through 2030-12-31), with all encounter chapters renderable end-to-end.
+
+| Epic | Status | What it shipped |
+| --- | --- | --- |
+| Epic 1 — Foundation + Cruise Viewer | ✅ done | Floating-origin reverse-Z renderer; SpiceyPy bake pipeline (VTRJ + cubic-Hermite Float64 interpolation); ChunkLoader + EphemerisService; Voyager 1 + 2 spacecraft GLBs with 4-LOD chain; trajectory polylines; mission scrubber + ClockManager + URLSync; HUD shell; CI + Cloudflare Pages deploy. |
+| Epic 2 — Chapter Director + HUD | ✅ done | `ChapterDirector` FSM over 11 chapter specs; mission-scrubber chapter pin markers + jump-to-anchor; chapter index modal + keyboard shortcuts; `<v-attitude-indicator>` HUD provenance element; `<v-chapter-copy>` panel; URL deep-link routing (`/c/<slug>` + `?t=<iso>`); pre-rendered OG cards per chapter; embed mode (`?embed=true`); fallback page (Story 1.8 ADR-0022); help-overlay modal; About page. |
+| Epic 3 — Attitude Reconstruction | ✅ done | CK-driven bus + scan-platform attitude per spacecraft; NA boresight cone; articulated spacecraft GLB with scan-platform child node; HUD provenance flickers between "CK reconstructed" and "Synthesized (HGA Earth-pointing)" only where CK coverage gaps exist; L2 validation harness asserts JS-side attitude matches SPICE to ≤ 1 mrad. |
+| Epic 4 — Encounter Chapters | ✅ done | All six gas-giant encounter chapters (V1J / V2J / V1S / V2S / V2U / V2N) with body-centered framing + hand-written copy; cadence-refined trajectory chunks (hourly ±30d → 1-min ±2d → 10-sec ±1hr around closest approach); 4K KTX2 gas-giant textures + 2K KTX2 moon textures via Story 4.3 Solar System Scope + Steve Albers + Wikimedia procurement; 12 Voyager-encounter moons positionally visible via the Story 4.11 satellite SPK kernels (Hyperion is a documented grey-sphere placeholder — no public-domain equirectangular map exists due to chaotic rotation); MissionPhaseFSM (AR13) tracking SOI crossings + instrument-shutoff timeline; `<v-timeline-scrubber variant="detail">` dual scrubber with cadence-aware keyboard steps; per-chapter `defaultFraming` auto-applied via the `applyDefaultFraming` subscriber + cold-load replay; heliocentric system-view camera mode (Story 4.12) reachable via `?view=heliocentric&distance=<au>&elevation=<deg>`; gravity-assist visual validation document at [`docs/visual-validation/gravity-assists.md`](docs/visual-validation/gravity-assists.md) with 8 captured screenshots; L4 Playwright visual-regression suite (Story 4.9) pins 9 scenes; 8 bugs from the 2026-05-23 manual review triaged + closed (5 fixed, 2 misfiled-with-evidence, 1 already-fixed + hardened). |
+| Epic 5 — Pale Blue Dot | ⏳ starting | Dedicated PBD module + internal substates; choreographed spacecraft turn (CK or synthesized per coverage); photo-plate compositing pipeline at historical instants; PBD L4 visual regression. Epic 5's planning artifact cites the Story 4.5 `applyDefaultFraming` pattern as the canonical chapter-activation framing trigger. |
+| Epic 6 — Polish | 📋 backlog | A11y axe-core sweep; HUD compaction polish; remaining FR-tail items. |
+| Epic 7 — Friendly-User Testing + L5 | 📋 backlog | 5–10 first-time users complete the launch → heliopause journey; L5 Playwright E2E mission-timeline assertion. |
+
+**FR closures achieved through Epic 4:** FR1 (sub-day scrub during encounters), FR4 + FR37 + FR41 (deep-link URL contract), FR8–FR12 (gravity-assist visible + spacecraft model rendering), FR21–FR26 (V1J / V2J / V1S / V2S / V2U / V2N encounter chapters), FR30 (six gas-giant encounters), FR33 (single-action restore-default camera), FR34 (HUD: chapter title, distance, attitude provenance, speed multiplier), FR55 (L4 visual regression operational).
+
+**Test pyramid baseline at Epic 4 close:** web vitest 3088 passed / 8 skipped / 173 files; bake fast-tier pytest 430 / 4 / 24; L4 Playwright 9 scenes / 41-second wall-clock; bake slow-tier (LFS kernels gated) 5+ moon-trajectory E2E tests; typecheck clean; lint baseline preserved (4 warnings, 0 errors).
+
+Per-epic retrospectives are saved alongside the cycle logs under `_bmad-output/implementation-artifacts/epic-N-retro-<date>.md`; see Epic 4's at [`epic-4-retro-2026-05-23.md`](_bmad-output/implementation-artifacts/epic-4-retro-2026-05-23.md) for the working-pattern lessons that carry into Epic 5.
 
 ## What we're building (in scope for v1)
 
@@ -31,7 +51,7 @@ The visual register is *[Apollo in Real Time](https://apolloinrealtime.org)* app
 
 Curated 20–40 hand-picked image plates · wide-angle camera boresight · broader PDS image archive · DSN contact-window overlays · documentary/cinematic mode toggle · spoken narration · VR/WebXR · multi-language localization · dedicated classroom mode · mobile/tablet polish · Pioneer 10 or any other spacecraft
 
-## Tech stack (planned)
+## Tech stack
 
 | Layer | Choice | Why |
 | --- | --- | --- |
@@ -63,31 +83,38 @@ All planning artifacts live under `_bmad-output/planning-artifacts/`:
 
 ## Roadmap
 
-Planning is well advanced; implementation has not started.
+Planning + four implementation epics complete; Epic 5 (Pale Blue Dot) is next.
 
-**Done:**
+**Planning artifacts (all done):**
 
 - ✅ Product brief + distillate
 - ✅ Technical feasibility research
 - ✅ Product Requirements Document
 - ✅ UX design specification (14-step BMAD workflow complete)
+- ✅ Solution architecture document (`_bmad-output/planning-artifacts/architecture.md`)
+- ✅ Epics + stories breakdown (`_bmad-output/planning-artifacts/epics.md`)
 
-**Next:**
+**Implementation (done + remaining):**
 
-- ⏳ Solution architecture document (`/bmad-create-architecture`) — translate PRD + UX spec into technical architecture covering SPICE bake pipeline, Three.js scene graph, validation harness wiring, deploy topology
-- ⏳ Epics + stories (`/bmad-create-epics-and-stories`) — break the spec into implementable units against the PRD's Phase 0 → 1 → 2 → 3 sequence
+- ✅ **Epic 1 — Foundation + Cruise Viewer.** Floating-origin reverse-Z renderer, bake pipeline, ChunkLoader + EphemerisService, scrubber, HUD shell, deploy.
+- ✅ **Epic 2 — Chapter Director + HUD + URL Routing.** 11 chapter specs, `<v-chapter-copy>`, OG cards, embed mode, fallback page, help overlay.
+- ✅ **Epic 3 — Attitude Reconstruction.** CK-driven bus + scan-platform attitude, NA boresight cone, `<v-attitude-indicator>` provenance, L2 JS-vs-SPICE validation.
+- ✅ **Epic 4 — Encounter Chapters.** All six gas-giant encounters operational; detail scrubber; MissionPhaseFSM; 4K KTX2 + moon textures + meshes; heliocentric camera mode; L4 Playwright visual regression. See [Implementation Status](#implementation-status) for the full per-story summary.
+- ⏳ **Epic 5 — Pale Blue Dot.** Dedicated PBD module + substates; choreographed spacecraft turn (CK or synthesized); photo-plate compositing; PBD L4 visual regression. Planning spec at `_bmad-output/planning-artifacts/epics.md` § Epic 5.
+- 📋 **Epic 6 — Polish.** A11y axe-core sweep; HUD compaction polish; remaining FR-tail items.
+- 📋 **Epic 7 — Friendly-User Testing + L5 E2E.** 5–10 first-time users complete launch → heliopause; L5 Playwright mission-timeline assertion.
 
-**Implementation phases (per PRD):**
+**Original PRD implementation phases (kept for historical reference; the Epic 0 → 7 model is what actually shipped):**
 
-| Phase | Duration | Deliverable |
+| Phase | Original estimate | Mapped to |
 | --- | --- | --- |
-| Phase 0 — Spike | 1–2 days | SpiceyPy + Three.js precision sanity check |
-| Phase 1 — MVP cruise viewer | 1–2 weeks | V1 + planets, daily cadence, no encounters, deployable |
-| Phase 2 — Encounters | 2.5–3.5 weeks | V2 added, blended view frames, real textures, CK boresights, all six encounters |
-| Phase 3 — Polish + Pale Blue Dot + heliopause | 2 weeks | HUD complete, Pale Blue Dot, Golden Record audio, accessibility pass |
-| **Engineering substrate** | **~6–9 weeks** | |
-| **+ Portfolio-grade polish** | **+6–12 weeks** | |
-| **= Realistic total** | **~3–5 months** | "Linkable next to *Apollo in Real Time*, NYT long-scroll science features, and FWA Site of the Day Three.js winners without an apology" |
+| Phase 0 — Spike | 1–2 days | Folded into Epic 1's foundation stories |
+| Phase 1 — MVP cruise viewer | 1–2 weeks | Epic 1 |
+| Phase 2 — Encounters | 2.5–3.5 weeks | Epics 3 + 4 (attitude + encounter chapters) |
+| Phase 3 — Polish + Pale Blue Dot + heliopause | 2 weeks | Epic 5 (PBD) + Epic 6 (polish) |
+| **+ Portfolio-grade polish** | **+6–12 weeks** | Epic 6 + Epic 7 |
+
+Voyager 1's 50th anniversary is 2027-09-05. That remains **opportunity timing, not a deadline.** The artifact ships when it clears its own bar — see [Definition of Done](#definition-of-done).
 
 ## Definition of Done
 
@@ -244,6 +271,24 @@ The cold-start experience is a designed sequence (Story 1.9; FR1, FR6, FR42, FR4
 3. **`?t=` deep-link contract** — `voyager.app/?t=<iso-8601>` (e.g. `/?t=1989-08-25T09:23:00Z`) initializes the simulation paused at that exact instant. **Invalid `?t=`** values (non-ISO, out-of-mission-range, or any parse error) are silently rejected (NFR-S7) — the simulation falls back to `MISSION_START_ET` with no error UI. The address bar always reflects the current simulation timestamp via `history.replaceState` (throttled at 250 ms during continuous scrub; final write on `pointerup`) — `pushState` is intentionally not used so the back button does not pollute with every drag.
 
 The ET ↔ ISO-8601 conversion table (`web/src/math/et-conversions.ts`) embeds the SPICE leap-second table from `kernels/naif0012.tls` and matches `spiceypy.str2et` to within 2 ms across the full mission window (the omitted K·sin(E) periodic correction is below that bound).
+
+## Chapter Director, Encounters, and the Detail Scrubber
+
+The simulation is organised around **11 declarative chapter specs** registered in `web/src/chapters/registry.ts` (`ALL_CHAPTERS`). Each spec is a typed `ChapterSpec` object with `slug`, `name`, `markerLabel`, `anchorEt`, `[windowStartEt, windowEndEt]`, `spacecraft`, `targetBody`, and (per Story 4.5 onward for encounter chapters) optional `copy: { lede, body }` and `defaultFraming: { offsetKm: [x, y, z] }`. The 11 chapters: `launch-v1`, `launch-v2`, `v1-jupiter`, `v2-jupiter`, `v1-saturn`, `v2-saturn`, `v2-uranus`, `v2-neptune`, `pale-blue-dot`, `v1-heliopause`, `v2-heliopause`.
+
+**`ChapterDirector` (Story 2.1)** is the per-frame FSM. For each chapter, it tracks the substate `out → entering → held → exiting → passed` against the current ET. The `entering` and `exiting` substates are transient — they fire once during a window crossing and immediately settle into `held` (forward enter) or `passed` (forward exit). Reverse-scrub symmetry holds: `passed → exiting → held` on reverse re-entry. Subscribers fire on **transitions only**, never per frame, mirroring the `ClockManager` cool-under-60-Hz contract.
+
+**`<v-chapter-copy>` (Story 2.9 + extended in Story 4.5)** renders the `held` chapter's editorial copy in the right-side panel: serif `--v-size-chapter-copy-lg` lede + serif body in `--v-color-fg-muted` with max-width 32ch. The component subscribes to `ChapterDirector`'s transitions; on `to === 'held'` it renders the chapter's lede + body; on `from === 'held'` it clears. Heliopause copy lives in `web/src/data/heliopause-copy.ts` (Story 2.9 ADR-0021 wire-up); encounter copy lives on the `ChapterSpec.copy` field directly (Story 4.5). The `copyForChapter(chapter)` helper inside the component dispatches between the two paths.
+
+**`<v-timeline-scrubber variant="detail">` (Story 4.4)** is the second scrubber that slides into view above the mission scrubber when an encounter chapter enters `held`. The detail scrubber's `[range-start, range-end]` props auto-bind to the active chapter's `[windowStartEt, windowEndEt]` (±5 days per Stories 4.5 → 4.7). Keyboard step sizes are **cadence-aware** — hourly outside ±2 days of the anchor, 1-minute inside ±2 days, 10-second inside ±1 hour of closest approach — matching the bake's `CADENCE_BANDS` table at `bake/src/bake_trajectories.py`. Both scrubbers share a single `URLSync` instance so the 250 ms `replaceState` throttle coalesces drags across either scrubber. The detail scrubber consumes the APG-Slider keyboard contract via `createSliderKeyboardHandler` from `web/src/primitives/slider-keyboard.ts` (ADR-0025; Rule 9 in `_bmad/custom/voyager-skill-rules.md`).
+
+**Body-centered camera framing (Stories 4.5 → 4.7).** Each encounter chapter spec carries `defaultFraming.offsetKm`; on `to === 'held'`, a subscriber wired in `web/src/main.ts` calls `cameraController.applyDefaultFraming({ animated: true })` which interpolates the camera to the chapter's offset over `--v-duration-slow` (SLERP quaternion + LERP position). The cold-load path replays the same fire ONCE on first paint via `coldLoadReplayDone`. The pattern generalises across all 6 encounter chapters and is the canonical wire-up for any future chapter that wants body-centered framing (Epic 5 PBD reuses it).
+
+**Heliocentric system-view (Story 4.12).** A second public method `cameraController.applyHeliocentricFraming({ distanceAu, elevationDeg, animated })` positions the camera at the specified AU-scale distance from the Sun-at-origin (per Story 1.13), tilted by `elevationDeg` from the ecliptic, looking back at origin. Activated via the URL query `?view=heliocentric&distance=<au>&elevation=<deg>`; defaults to 10 AU + 20° elevation; clamped to `distance ∈ [1, 100]` AU and `elevation ∈ [-89, 89]°`. The two FR11/FR12 dramatic-moment screenshots — V1 Saturn's Titan-slingshot ecliptic exit and V2 Neptune's Triton bend south — were captured via this mode and live at [`docs/visual-validation/gravity-assists.md`](docs/visual-validation/gravity-assists.md).
+
+**Moons.** The 12 Voyager-encounter moons (Io, Europa, Ganymede, Callisto, Titan, Iapetus, Miranda, Ariel, Umbriel, Titania, Oberon, Triton) are added to the scene on `MissionPhaseFSM.soiEntered` events and removed on `soiExited` (Story 4.3 cycle 4). Position chunks come from the satellite SPK kernels procured in Story 4.11 (`jup365.bsp`, `sat441.bsp`, `ura184_part-3.bsp`, `nep097.bsp`). Hyperion (NAIF 607) is a documented grey-sphere placeholder per Story 4.3 cycle 4 — no public-domain equirectangular surface map exists due to the moon's chaotic rotation (USGS confirms no control network). 2K KTX2 textures for the other 12 moons live under `web/public/textures/`; sources mirrored in [`THIRD_PARTY.md`](THIRD_PARTY.md).
+
+**L4 visual regression (Story 4.9).** The Playwright suite at `web/tests/visual/encounters.spec.ts` pins **9 scenes** at 1280×720 in Chromium-for-Testing (locked by the `@playwright/test` package version): V1 launch, V2 launch, V1J, V2J, V1S, V2S, V2U, V2N, and a PBD stub baseline (the real PBD baseline is Story 5-4's deliverable). The `l4-visual-regression` CI job in `.github/workflows/ci.yml` runs the suite after the web build; diff artifacts are uploaded on failure. The full suite runs in ~41 seconds locally — well under the NFR-M4 L4 + L5 budget. Run locally with `npm run test:visual`; refresh baselines via `npm run test:visual:update` (and commit the new baselines in the same PR per Story 4.9 AC4).
 
 ## Data Flow
 
