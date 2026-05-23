@@ -11,6 +11,8 @@
     "build-textures": "node --import tsx scripts/build_textures.ts",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
+    "test:visual": "playwright test --config tests/visual/playwright.config.ts",
+    "test:visual:update": "playwright test --config tests/visual/playwright.config.ts --update-snapshots",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

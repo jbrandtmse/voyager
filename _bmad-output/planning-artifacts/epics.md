@@ -1873,14 +1873,14 @@ So that FR11 is verified beyond the numerical-accuracy gate from NFR-P9, and the
 ### Story 4.9: L4 Playwright Visual Regression at Six Encounter Scenes + Launch + PBD Stub
 
 As the project maintainer,
-I want a CI-gated Playwright visual-regression suite at eight pinned scenes so any unintended change to the rendered output is caught before merge,
+I want a CI-gated Playwright visual-regression suite at nine pinned scenes so any unintended change to the rendered output is caught before merge,
 So that FR55 (L4) is operational and PRD §Layer-4 commitment is met.
 
 **Acceptance Criteria:**
 
 **Given** the Playwright test suite at `web/tests/visual/`,
 **When** I inspect the suite,
-**Then** the suite registers eight pinned scenes at 1280×720: V1 launch anchor (1977-09-05), V2 launch anchor (1977-08-20), V1J closest approach (1979-03-05 12:05 UT), V2J (1979-07-09 22:29 UT), V1S (1980-11-12 23:46 UT), V2S (1981-08-26), V2U (1986-01-24), V2N (1989-08-25), PBD anchor (1990-02-14 — stub baseline this story; Epic 5 updates the real baseline once the dedicated module is in),
+**Then** the suite registers nine pinned scenes at 1280×720: V1 launch anchor (1977-09-05), V2 launch anchor (1977-08-20), V1J closest approach (1979-03-05 12:05 UT), V2J (1979-07-09 22:29 UT), V1S (1980-11-12 23:46 UT), V2S (1981-08-26), V2U (1986-01-24), V2N (1989-08-25), PBD anchor (1990-02-14 — stub baseline this story; Epic 5 updates the real baseline once the dedicated module is in),
 **And** each test navigates to the corresponding deep-link URL on the locally-served built site (`web/dist/` served by a static file server in the Playwright fixture),
 **And** waits for the simulation to reach a stable frame (no in-flight asset loads, no animating chapter-copy fade) before screenshot capture.
 
