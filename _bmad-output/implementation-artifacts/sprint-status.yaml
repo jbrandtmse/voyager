@@ -215,8 +215,8 @@ development_status:
   5-0-epic-4-deferred-cleanup: done
   5-1-pbd-dedicated-module-and-internal-substates: done
   5-2-choreographed-spacecraft-turn-ck-or-synthesized-per-coverage: done
-  5-3-photo-plate-compositing-pipeline-at-historical-instants: review
-  5-4-pbd-l4-playwright-visual-regression-suite: backlog
+  5-3-photo-plate-compositing-pipeline-at-historical-instants: done
+  5-4-pbd-l4-playwright-visual-regression-suite: done
   epic-5-retrospective: optional
 
   # Epic 6: Audio, Reduced Motion and Full Accessibility Pass

@@ -244,3 +244,97 @@ describe('Story 5.1 AC2 — pbdSubstateAnchorEts convenience accessor', () => {
     expect(turning.end).toBe(PBD_ANCHOR_ET + PBD_SUBSTATE_TIMINGS.turning.end);
   });
 });
+
+/**
+ * Story 5.4 QA gap-filler — L4 deep-link offset dependency pin.
+ *
+ * The Story 5.4 L4 Playwright suite (`web/tests/visual/encounters.spec.ts`,
+ * "L4 PBD substates" describe block) anchors four visual baselines at
+ * integer-second offsets `+15s`, `+52s`, `+142s`, `+165s` from
+ * `PBD_ANCHOR_ET`. The Playwright tests embed a runtime cross-check
+ * assertion that the offsets lie inside the corresponding substate
+ * `[start, end)` window, but that gate only fires when the L4 suite runs
+ * (~30-90s feedback loop).
+ *
+ * These vitest pins surface a `substates.ts` edit that would break the
+ * L4 deep-link offsets as a SUB-SECOND failure in the default `npm test`
+ * sweep, naming the four affected baselines explicitly so the dev knows
+ * exactly which Playwright baselines need a `--update-snapshots` pass.
+ *
+ * Adding a substate / renaming a substate is a normal change — the goal
+ * is to keep the four KEYS the L4 suite depends on stable, and to keep
+ * the four integer offsets inside their windows.
+ */
+describe('Story 5.4 — L4 PBD substate deep-link offset dependency pin', () => {
+  it('exposes the four substate keys the L4 deep-links anchor against', () => {
+    // Pins `turning`, `sweeping_earth`, `sweeping_neptune`, `composite_decay`
+    // by enum member access. A rename of any of these in `PbdSubstate`
+    // would surface here as a TypeScript compile-time error AND at vitest
+    // runtime as an undefined-timing-table-lookup failure.
+    expect(PBD_SUBSTATE_TIMINGS[PbdSubstate.turning]).toBeDefined();
+    expect(PBD_SUBSTATE_TIMINGS[PbdSubstate.sweeping_earth]).toBeDefined();
+    expect(PBD_SUBSTATE_TIMINGS[PbdSubstate.sweeping_neptune]).toBeDefined();
+    expect(PBD_SUBSTATE_TIMINGS[PbdSubstate.composite_decay]).toBeDefined();
+  });
+
+  it('keeps +15s inside `turning` [start, end) — pbd-turning baseline', () => {
+    const t = PBD_SUBSTATE_TIMINGS[PbdSubstate.turning];
+    expect(
+      15,
+      `L4 baseline pbd-turning anchors at +15s; if turning [${t.start}, ${t.end}) ` +
+        `no longer contains it, re-derive + re-capture web/tests/visual/__snapshots__/pbd-turning.png ` +
+        `via --update-snapshots and update the offsetSeconds in encounters.spec.ts.`,
+    ).toBeGreaterThanOrEqual(t.start);
+    expect(15).toBeLessThan(t.end);
+  });
+
+  it('keeps +52s inside `sweeping_earth` [start, end) — pbd-sweeping-earth baseline (the hero shot)', () => {
+    const t = PBD_SUBSTATE_TIMINGS[PbdSubstate.sweeping_earth];
+    expect(
+      52,
+      `L4 baseline pbd-sweeping-earth (the iconic hero shot) anchors at +52s; ` +
+        `if sweeping_earth [${t.start}, ${t.end}) no longer contains it, re-derive + ` +
+        `re-capture web/tests/visual/__snapshots__/pbd-sweeping-earth.png via --update-snapshots.`,
+    ).toBeGreaterThanOrEqual(t.start);
+    expect(52).toBeLessThan(t.end);
+  });
+
+  it('keeps +142s inside `sweeping_neptune` [start, end) — pbd-sweeping-neptune baseline', () => {
+    const t = PBD_SUBSTATE_TIMINGS[PbdSubstate.sweeping_neptune];
+    expect(
+      142,
+      `L4 baseline pbd-sweeping-neptune anchors at +142s; if sweeping_neptune ` +
+        `[${t.start}, ${t.end}) no longer contains it, re-derive + re-capture ` +
+        `web/tests/visual/__snapshots__/pbd-sweeping-neptune.png via --update-snapshots.`,
+    ).toBeGreaterThanOrEqual(t.start);
+    expect(142).toBeLessThan(t.end);
+  });
+
+  it('keeps +165s inside `composite_decay` [start, end) — pbd-composite-decay baseline', () => {
+    const t = PBD_SUBSTATE_TIMINGS[PbdSubstate.composite_decay];
+    expect(
+      165,
+      `L4 baseline pbd-composite-decay anchors at +165s; if composite_decay ` +
+        `[${t.start}, ${t.end}) no longer contains it, re-derive + re-capture ` +
+        `web/tests/visual/__snapshots__/pbd-composite-decay.png via --update-snapshots.`,
+    ).toBeGreaterThanOrEqual(t.start);
+    expect(165).toBeLessThan(t.end);
+  });
+
+  it('the four L4 offsets resolve to their expected substates via pbdSubstateAt', () => {
+    // Belt-and-braces: drive pbdSubstateAt with each L4 ISO offset and
+    // confirm it returns the substate the deep-link is supposed to land in.
+    // If a substate window shifts AND another substate happens to cover
+    // the offset, the previous expect()s above would pass — but the
+    // VISUAL CONTENT at that offset would be wrong. This test pins the
+    // semantic mapping (offset → substate) end-to-end.
+    expect(pbdSubstateAt(PBD_ANCHOR_ET + 15)).toBe(PbdSubstate.turning);
+    expect(pbdSubstateAt(PBD_ANCHOR_ET + 52)).toBe(PbdSubstate.sweeping_earth);
+    expect(pbdSubstateAt(PBD_ANCHOR_ET + 142)).toBe(
+      PbdSubstate.sweeping_neptune,
+    );
+    expect(pbdSubstateAt(PBD_ANCHOR_ET + 165)).toBe(
+      PbdSubstate.composite_decay,
+    );
+  });
+});
