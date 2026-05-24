@@ -879,3 +879,37 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
    **Suggested resolution:** Either (a) reset `_currentSubstate = PbdSubstate.idle` in `dispose()` (the strict-reset interpretation; matches the "no stale state after dispose" doctrine) or (b) document the divergence in the `dispose()` JSDoc and add a unit test pinning the observed behaviour ("currentSubstate retains last value post-dispose; production code re-drives via update()"). Trivial either way.
 
    **Routing:** Story 5.3 or 5.4 — address inline when next touching `PaleBlueDot.dispose()` semantics, or fold into an Epic 5 polish pass.
+
+---
+
+### Story 6.0 (code review, 2026-05-24)
+
+1. **`[6.0 / LOW]` `voyager-skill-rules.md` widespread reference rot across the repository (88 files reference a filename that does not exist)**
+
+   **What's the issue:** 88 files in the repository reference `voyager-skill-rules.md` — a filename that does not exist. The canonical file is `_bmad/custom/skill-rules.md` (renamed at some point in the BMAD-kit installation). Affected surfaces include `CONTRIBUTING.md:78`, multiple `docs/adr/*.md`, every `_bmad-output/implementation-artifacts/tests/test-summary-*.md` from 2-0 through 4-7, every per-story implementation artifact from Stories 1.15 through 5.3, multiple `web/tests/*.test.ts` story-X.Y qa-gaps files, `README.md`, `THIRD_PARTY.md`, and `bake/src/ck_sample.py`.
+
+   **Why deferred:** out of scope for Story 6.0 (which focused on Epic 5 retro Action items #1, #4, #5, #6). A repo-wide find/replace would be mechanical but the audit should also reconcile any links that point at sections within `voyager-skill-rules.md` (e.g., "Rule 12") to verify they resolve to the same rule numbers in `skill-rules.md` (which they should — Rule 12 / 13 numbering is preserved per the Rule 13 numbering note). The Story 6.0 review surfaced this when the dev's NEW dev-doc at `docs/visual-validation/update-snapshot-discipline.md:7` inherited the stale name; that one file was auto-resolved inline (the Story-6.0-introduced contribution is now zero).
+
+   **Suggested resolution:** Epic 7 docs-cleanup / ADR-housekeeping pass: (a) repo-wide find `voyager-skill-rules.md` → replace `_bmad/custom/skill-rules.md` (with relative-path adjustments per file location), (b) follow up by greg-verifying every Rule-N reference in the replaced files still resolves to the same numbered rule in `skill-rules.md`.
+
+   **Routing:** Epic 7 docs-cleanup / ADR-housekeeping pass, or fold into the next story that touches a substantial fraction of the affected files.
+
+2. **`[6.0 / LOW]` `build-dist-layout.test.ts` CSS-link strip regex assumes trailing whitespace after `>`**
+
+   **What's the issue:** The synthetic missing-CSS-link case in `web/tests/build-dist-layout.test.ts:432-435` uses `/<link\s+rel="stylesheet"\s+(?:crossorigin\s+)?href="\/assets\/main-[^"]+\.css">\s*/` to strip the CSS link tag. The trailing `\s*` is greedy-matched but requires SOME whitespace context. If a future Vite plugin emits the `<link>` tag at the end of a minified single line with no trailing whitespace (or as the last char of the document), the regex still matches — `\s*` matches zero chars. The regex is correct in practice; the LOW signal is that the sanity-check `throw` (lines 439–443) is the binding gate that catches a future Vite emission change.
+
+   **Why deferred:** the test fails LOUD if the regex no-ops (the `throw` says "CSS-link strip regex did not match — defense test cannot prove regression coverage"). The failure mode is graceful and surfaces immediately at vitest time. Tightening the regex to be more permissive (e.g., `(?:\s*|\b)` after `>`) is a defensive tweak with no current failure mode driving it.
+
+   **Suggested resolution:** when the next bundler-config or Vite-version change lands (Epic 6 dev-cycle or Epic 7), revisit the regex's robustness against minified HEAD emission. Optional pre-emptive tightening: replace `>\s*/` with `>\s*(?:<|$)/` to anchor the strip at the next tag-open or document end.
+
+   **Routing:** any future story that touches `vite.config.ts`, `web/index.html`, or `package.json` Vite version pins; OR a defensive-test sweep at Epic 6 retro.
+
+---
+
+## Forward-coupled provisional definitions
+
+> **Established by Story 6.0 (2026-05-24, Epic 5 retro Action item #6).** Landing place for cross-story coupled definitions introduced in a Story-X.1 foundation story and consumed by a named-but-not-yet-written future Story X.Y. Per [`_bmad/custom/skill-rules.md`](../../_bmad/custom/skill-rules.md) Rule 15, every PROVISIONAL definition gets a forward-link here so the consumer story's `bmad-create-story` planning gate sees the pending coupling.
+>
+> **Entry format:** `**[X.1 → X.Y]** <definition name> — <one-line semantic contract>` plus a sub-bullet linking the X.1 Dev Notes section. Closure happens when the consumer Story X.Y is implemented and the PROVISIONAL marker is resolved (either confirmed or amended via Rule 5). At closure, strike through the entry with a `**CLOSED by Story X.Y (date): <one-line>**` annotation.
+
+_(Currently empty — Epic 6 does not introduce any X.1-style multi-story foundation; the section is in place for any future epic with that shape. Add new forward-links here as Story-X.1 stories ship.)_

@@ -209,3 +209,59 @@ Generated tests MUST be discoverable by the project's default test suite — (a)
 A test that exists but does not run in the default suite is invisible to CI and to the next story's regression check. Undiscoverable tests are a HIGH finding on subsequent code review.
 
 **Numbering note:** this rule corresponds to "Rule 8 — Test discoverability" in the upstream `epic-cycle` kit template. It is slotted at position 13 here so Voyager's existing project-specific rules (originally numbered 8 through 12) retain their numbers as referenced in `CONTRIBUTING.md`, `bake/tests/test_bake_moon_trajectories.py`, and the many `_bmad-output/implementation-artifacts/tests/test-summary-*.md` files. Add additional rules sequentially after Rule 13.
+
+**Cross-reference (Story 6.0, 2026-05-24):** the `--update-snapshots` workflow for Playwright visual baselines (`web/tests/visual/__snapshots__/`) has its own discoverability hazard: a baseline updated against a broken runtime captures the broken layout INTO the baseline, and every subsequent pixel-diff passes against the wrong reference. The full discipline lives at [`docs/visual-validation/update-snapshot-discipline.md`](../../docs/visual-validation/update-snapshot-discipline.md); `bmad-qa-generate-e2e-tests` and `bmad-code-review` SHOULD consult that dev-doc whenever a story touches the L4 visual suite or proposes a new baseline.
+
+## Rule 14 — Spec arithmetic must show derivation or cite the source line (applies to `bmad-create-story`)
+
+Any spec value in an AC, Dev Notes section, or Acceptance-Criteria threshold that is mathematically derived from a separate fact source MUST either show the computation inline OR cite the source-file line that supplies the input. Bare-derived values without a derivation citation are a process-gap finding at planning review.
+
+The "separate fact sources" that historically drift include — but are not limited to — `_bmad-output/planning-artifacts/MISSION_FACTS.md` (mission timing constants), `docs/kernels/ckbrief-inventory.md` (NAIF SPICE CK coverage windows), `kernels-manifest.json` (kernel SHA pins), `web/src/styles/tokens.css` (design tokens like `--v-edge-margin`), `_bmad-output/planning-artifacts/prd.md` NFR tables (performance / byte-budget thresholds), and any "X% of Y" arithmetic where Y comes from a separate file. Treat every numeric quantifier as a potential drift risk unless it is self-evident (e.g., "the L4 viewport is 1280×720" is the value itself, not a derivation).
+
+**Why this rule exists today:** Story 5.2 (Epic 5, 2026-05-23) shipped with an `epics.md` line that read "the historical sequence ... is sped 50× by the PBD module's internal time mapping" (epics.md:1991–1992 pre-amendment). The dev's Rule 5 amendment caught it: 180 s of Story 5.1's cinematic arc ÷ Sagan 1994's "several hours" (~5 h = 18000 s) ≈ 100×, not 50×. The 50× literal had no derivation citation in the spec; the planning author's mental math was off by a factor of two AND the spec did not show its work. The Epic 5 retrospective (2026-05-24) Action item #5 routed this rule to Story 6.0 as the canonical landing.
+
+**Enforcement:**
+
+- `bmad-create-story` MUST surface a finding at planning review for any AC / Dev Notes value that is numerically derived from an external source and lacks either an inline derivation (`"180s ÷ 18000s ≈ 100×"`) OR a source-line citation (`"per MISSION_FACTS.md:42 (Sagan 1994 'several hours' = ~5 h)"`).
+- `bmad-code-review` does NOT additionally police this at code-review time. The planning-stage gate is sufficient; doubling up would create review noise on the already-amended spec. (If the spec is amended in place via Rule 5 during dev, the derivation citation goes into the amendment block — that's how Rule 14 closes its own loop.)
+
+**When this rule fires:** ACs containing numeric quantifiers derived from external sources. Triggering surfaces include — but are not limited to — timing tables (substate arc durations, FSM dwell times, animation easing curves), coverage windows (CK / SPK ET ranges), kernel SHA references, performance thresholds (`P95 ≤ 100 ms`, `bundle ≤ 150 MB`, `byte-budget ≤ 27.5 MB`), texture / asset dimension claims (`4K ≈ 4096×2048`), pixel-coordinate gutters (`var(--v-edge-margin) ≈ 24 px`), and any narrative speed-up / scale-factor claim. If you cannot point to the source the number derives from, the number is not yet a spec — it is a guess that drifts silently.
+
+**Examples:**
+
+- Acceptable inline: `"AC4 threshold: bundle ≤ 150 MB (per architecture.md NFR-P5 — 50% headroom over the current 75 MB baseline at Story 4.3 / commit abc1234)"`.
+- Acceptable citation: `"AC2 timing: PBD anchor + 45 s places the camera at sweeping_earth peak per substates.ts:24"`.
+- Unacceptable (Story 5.2 trap): `"the historical sequence is sped 50× by the PBD module"` — no derivation, no citation; the 50× IS the drift surface.
+- Acceptable amendment-block citation (Rule 5 + Rule 14 close together): `"Amended from '50×' to '~100×' per Story 5.2 dev derivation: 180 s cinematic arc ÷ 18000 s Sagan-1994 historical span ≈ 100×."`
+
+## Rule 15 — Forward-coupled definitions in Story-X.1 foundations are PROVISIONAL until consumed by X.2 / X.3 (applies to `bmad-create-story`)
+
+When authoring Story X.1 of a multi-story foundation (the first story of an epic that introduces substate enums, public APIs, event payloads, or module-interface contracts named by NOT-YET-WRITTEN future stories X.2 / X.3 / etc.), the cross-story coupled definitions MUST be marked `PROVISIONAL — consumed by Story X.Y` in the story's Dev Notes section AND forward-linked from the [`deferred-work.md`](../../_bmad-output/implementation-artifacts/deferred-work.md) § "Forward-coupled provisional definitions" section. Consumer stories (X.2 / X.3) at their `bmad-create-story` planning time MUST verify the provisional definition is still semantically consistent with the consumer's contract OR trigger a Rule 5 amendment in either direction (X.1 amended retroactively, or X.Y scope adjusted, with rationale).
+
+**Why this rule exists today:** Story 5.1 (Epic 5, 2026-05-22) authored the PBD substate machine including `composite_active` with the docstring "all six plates visible simultaneously" and positioned it at the END of the cinematic arc (+120..+150 s). Story 5.3 (Epic 5, 2026-05-23) — written AFTER Story 5.1 shipped — required at most ONE plate visible at a time AND a 30-second Earth pause hold IN THE MIDDLE of the arc. The Story 5.3 dev caught the contradiction and amended Story 5.1's substates.ts via Rule 5, but the forward-coherence gap existed because Story 5.3's contract didn't exist at Story 5.1's planning time. The Epic 5 retrospective (2026-05-24) Action item #6 routed this rule to Story 6.0 as the canonical landing.
+
+The lesson generalizes: any Story-X.1 that ships substate semantics, public APIs, event payloads, or contract-defined fields that later stories will consume is at risk of forward-coherence drift unless the definition is explicitly marked PROVISIONAL.
+
+**How to apply (bmad-create-story authoring Story X.1):**
+
+1. **Identify cross-story coupled definitions.** Walk the Story X.1 AC + Files-to-Modify list. For each substate enum, public API, event payload, or module-interface contract that names fields consumed by a named-but-not-yet-written future Story X.Y, the definition is forward-coupled.
+2. **Mark each as `PROVISIONAL — consumed by Story X.Y`** in the Dev Notes section. Include the field name, the consuming story ID, and a one-line statement of the semantic contract you believe X.Y will need.
+3. **Add a forward-link in `deferred-work.md`'s § "Forward-coupled provisional definitions" section.** The forward-link is the audit trail X.Y's planning gate consults; without it, the future Story-X.Y planning author has no visible signal that this definition exists or is provisional.
+
+**How to apply (bmad-create-story authoring Story X.Y consumer):**
+
+1. **Read the X.1 Dev Notes section.** Look for `PROVISIONAL — consumed by Story X.Y` markers naming this story.
+2. **Verify semantic consistency.** Does X.Y's contract still match what X.1 defined? If yes, drop the PROVISIONAL marker as part of X.Y's planning cycle (the definition is now consumed).
+3. **If inconsistent, trigger Rule 5 amendment.** Either amend X.1 retroactively (preferred when X.1's definition was the source of confusion — like the `composite_active` semantics) OR amend X.Y's scope to honor X.1's existing definition (when X.Y's planning author can adjust). Whichever path, the rationale lives in BOTH stories' Dev Notes.
+
+**Enforcement:**
+
+- `bmad-create-story` MUST surface a process-gap finding when an X.1-style foundation story ships substate / API / event / contract definitions naming a future Story X.Y consumer WITHOUT marking those definitions PROVISIONAL or without a forward-link in `deferred-work.md`.
+- `bmad-create-story` MUST also surface a finding when an X.Y consumer story is authored WITHOUT consulting the `deferred-work.md` § "Forward-coupled provisional definitions" section for an X.1 forward-link addressing this story.
+- `bmad-code-review` does NOT additionally police this at code-review time. The planning-stage gate is sufficient.
+
+**Examples:**
+
+- Acceptable Story-X.1 marker: `"DEV NOTES: \`composite_active\` substate semantic is PROVISIONAL — consumed by Story 5.3 (compositing pipeline). Currently defined as 'all six plates visible'; Story 5.3 may amend to 'at most one plate visible' depending on the 30-second-Earth-pause success criterion's resolution. Forward-linked at deferred-work.md § Forward-coupled provisional definitions."`
+- Acceptable Story-X.Y verification (in X.Y Dev Notes): `"Story 5.1's \`composite_active\` PROVISIONAL marker resolved: amended via Rule 5 to 'at most one plate visible during composite_active'; positioned between sweeping_earth (+45..+60s) and sweeping_jupiter (+90..+105s) per the 30s Earth-pause success criterion. Both stories' substates.ts now agree."`
+- Unacceptable (Story 5.1 trap): silent shipping of `composite_active` with no PROVISIONAL marker; Story 5.3 dev burns time amending the upstream definition mid-implementation.

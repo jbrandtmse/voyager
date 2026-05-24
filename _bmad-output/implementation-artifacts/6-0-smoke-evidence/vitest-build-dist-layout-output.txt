@@ -1,0 +1,15 @@
+
+ RUN  v4.1.6 C:/git/Voyager/web
+
+ ✓ tests/build-dist-layout.test.ts > Story 6.0 AC1 static parse — dist/index.html link + inline style order > contains a <link rel="stylesheet"> for the hashed main-*.css asset 4ms
+ ✓ tests/build-dist-layout.test.ts > Story 6.0 AC1 static parse — dist/index.html link + inline style order > contains the Story 1.7 AC2 FOUC-shim inline <style> block 1ms
+ ✓ tests/build-dist-layout.test.ts > Story 6.0 AC1 static parse — dist/index.html link + inline style order > emits the inline <style> BEFORE the <link rel="stylesheet"> (head-priority) 1ms
+ ✓ tests/build-dist-layout.test.ts > Story 6.0 AC1 Playwright tier — production-build HUD layout invariants > cold-loads root / with HUD corners at expected viewport positions 752ms
+ ✓ tests/build-dist-layout.test.ts > Story 6.0 AC1 Playwright tier — production-build HUD layout invariants > renders chapter-copy panel on-screen at /c/v1-jupiter/ 1126ms
+ ✓ tests/build-dist-layout.test.ts > Story 6.0 AC1 Playwright tier — production-build HUD layout invariants > catches a missing CSS-link regression (synthetic BUG-E5-007) 731ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  07:31:43
+   Duration  4.79s (transform 106ms, setup 0ms, import 138ms, tests 4.29s, environment 0ms)
+
