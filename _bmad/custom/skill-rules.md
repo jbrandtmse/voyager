@@ -126,7 +126,7 @@ The Slider and Listbox primitives committed by ADR-0025 are now landed at `web/s
 
 - A new slider component (e.g. `<v-speed-multiplier>` per ADR-0025 line 30) MUST consume `createSliderKeyboardHandler` — no inline Home/End/Arrows logic in component code.
 - A new listbox component MUST consume `createListboxKeyboardHandler`.
-- A new dialog component (e.g. `<v-help-overlay>` already uses focus-trap inline; an extraction of `primitives/dialog.ts` is a Story 6.4 candidate per the deferred-work `[2.8 / LOW]` entry).
+- A new dialog component MUST consume `createDialogFocusTrap` from `web/src/primitives/dialog.ts` (Story 6.4 AC6 third-consumer extraction — closes the deferred `[2.8/LOW]` entry; both `<v-help-overlay>` and `<v-chapter-index>` now delegate to the primitive).
 - Code review treats inline re-implementation of an extracted APG contract as a HIGH finding per Rule 6.
 
 **Why this rule exists today:** ADR-0025's "Obligations on downstream stories" clause — "Components compose primitives via mixin or delegation — no APG keyboard logic embedded directly in component code" — was silently violated by Stories 2.2 and 2.3 (both shipped inline implementations). Story 3.0 path (a) honoured the ADR as-written rather than amending the clause to permit inline-until-second-consumer. Future drift is prevented by this rule plus the primitives' presence in the dependency graph.
@@ -265,3 +265,26 @@ The lesson generalizes: any Story-X.1 that ships substate semantics, public APIs
 - Acceptable Story-X.1 marker: `"DEV NOTES: \`composite_active\` substate semantic is PROVISIONAL — consumed by Story 5.3 (compositing pipeline). Currently defined as 'all six plates visible'; Story 5.3 may amend to 'at most one plate visible' depending on the 30-second-Earth-pause success criterion's resolution. Forward-linked at deferred-work.md § Forward-coupled provisional definitions."`
 - Acceptable Story-X.Y verification (in X.Y Dev Notes): `"Story 5.1's \`composite_active\` PROVISIONAL marker resolved: amended via Rule 5 to 'at most one plate visible during composite_active'; positioned between sweeping_earth (+45..+60s) and sweeping_jupiter (+90..+105s) per the 30s Earth-pause success criterion. Both stories' substates.ts now agree."`
 - Unacceptable (Story 5.1 trap): silent shipping of `composite_active` with no PROVISIONAL marker; Story 5.3 dev burns time amending the upstream definition mid-implementation.
+
+## Rule 16 — Manual a11y checklist run before each Phase milestone (applies to `bmad-create-story`, `bmad-code-review`, dev/QA roles)
+
+Voyager's accessibility gate has two halves:
+
+1. **Automated** — the axe-core component-state matrix (`web/tests/a11y/components/`) + the axe-core route matrix (`web/tests/a11y/routes.spec.ts`). These run in CI per push (Story 6.4 AC1 + AC2). Critical + serious violations FAIL the build; moderate + minor are reported as advisories.
+2. **Manual** — the checklist at [`docs/accessibility/manual-test-checklist.md`](../../docs/accessibility/manual-test-checklist.md). Catches the cases automation cannot: screen-reader narration quality (VoiceOver / NVDA / TalkBack), color-blindness disambiguation, forced-colors palette overrides, reduced-transparency scrim adaptation, photosensitive-epilepsy safety per NFR-A6.
+
+**When the manual checklist MUST run:**
+
+- Before every **Phase milestone** (Epic boundary).
+- Before any **production deploy** that changes a user-facing surface (HUD, controls, chapter copy, animations).
+- After any change to **animation, transition, or fade timing** — re-run the photosensitive-epilepsy audit (Pass 9) at minimum.
+
+Run results are committed to `docs/accessibility/manual-test-runs/<YYYY-MM-DD>.md` per the checklist's Sign-off schema. A `critical` or `serious` manual finding blocks the next milestone until remediated.
+
+**Enforcement:**
+
+- `bmad-create-story` for any Epic-boundary story (X.0 stories) SHOULD include a Tasks/Subtasks entry requiring a fresh manual-checklist run if the previous run is older than the previous Phase boundary.
+- `bmad-code-review` for stories that touch user-facing surfaces (web/src/components/**, styles/**, animation tokens in tokens.css) SHOULD remind the dev that the manual checklist must run before the next deploy if it would otherwise be skipped.
+- The lead is the binding gate — the dev / QA agents cannot run the screen-reader passes themselves, so this rule is primarily a planning-stage and review-stage cue.
+
+**Why this rule exists today:** Story 6.4 (2026-05-24) authored the canonical manual-checklist + first run record + photosensitive audit + axe-core full coverage. Before Story 6.4, manual a11y testing was implicit ("the project supports keyboard-only" — but no checklist enumerated what that means or when it gets re-run). UX-DR36 mandated the explicit gate; this rule routes the obligation into BMAD planning + review workflows so it doesn't quietly slide off the deploy checklist between phases.

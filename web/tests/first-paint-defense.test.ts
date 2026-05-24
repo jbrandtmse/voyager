@@ -253,7 +253,7 @@ describe('Story 1.9 defense — WAI-ARIA Slider attributes on [role="slider"]', 
 });
 
 describe('Story 1.9 defense — aria-valuenow + aria-valuetext update reactively', () => {
-  it('setting simEt updates aria-valuenow (ISO) and aria-valuetext (HUD form)', async () => {
+  it('setting simEt updates aria-valuenow (numeric ET — Story 6.4 AC1 amendment) and aria-valuetext (HUD form)', async () => {
     const el = document.createElement('v-timeline-scrubber') as VTimelineScrubber;
     document.body.appendChild(el);
     await el.updateComplete;
@@ -261,8 +261,11 @@ describe('Story 1.9 defense — aria-valuenow + aria-valuetext update reactively
     el.simEt = neptuneEt;
     await el.updateComplete;
     const slider = el.shadowRoot!.querySelector('[role="slider"]')!;
-    // aria-valuenow is the ISO form (to-the-second precision).
-    expect(slider.getAttribute('aria-valuenow')).toBe('1989-08-25T09:23:00Z');
+    // Story 6.4 AC1: aria-valuenow is the NUMERIC ET (ARIA spec
+    // requires numeric; axe-core flags ISO strings as critical
+    // `aria-valid-attr-value` violations). The ISO form moves to
+    // aria-valuetext (which screen readers announce in preference).
+    expect(slider.getAttribute('aria-valuenow')).toBe(String(neptuneEt));
     // aria-valuetext is human-readable "YYYY-MM-DD HH:MM UT" — must contain
     // both the date and time components.
     const valueText = slider.getAttribute('aria-valuetext')!;

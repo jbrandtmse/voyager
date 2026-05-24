@@ -145,7 +145,9 @@ describe('Story 4.4 AC7 — detail-scrubber × real ChapterDirector + ClockManag
     const detailNow = rig.detail.shadowRoot!.querySelector('.thumb')!.getAttribute(
       'aria-valuenow',
     );
-    const expected = isoFromEt(v1Jupiter.anchorEt);
+    // Story 6.4 AC1 — aria-valuenow is numeric ET (ARIA spec requires
+    // numeric; ISO form moved to aria-valuetext).
+    const expected = String(v1Jupiter.anchorEt);
     expect(missionNow).toBe(expected);
     expect(detailNow).toBe(expected);
     expect(missionNow).toBe(detailNow);

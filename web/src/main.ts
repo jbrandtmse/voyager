@@ -1240,10 +1240,16 @@ const mountAboutSurface = (): void => {
   while (mount.firstChild) {
     mount.removeChild(mount.firstChild);
   }
-  // Reset the page-level styling away from the canvas-friendly
-  // overflow/100vh that the simulation surface assumes. The about page is
-  // a normal document with natural scroll behaviour.
-  document.body.style.overflow = 'auto';
+  // Story 6.4 AC6 — closes [2.7/LOW]: the overflow reset now lives in
+  // `about.css` under `body.v-about-surface { overflow: auto; }` rather
+  // than a one-shot `document.body.style.overflow = 'auto'` mutation.
+  // The class persists for the lifetime of the about surface; the about
+  // → simulation back-navigation path triggers `window.location.reload()`
+  // (see the popstate handler installed in bootstrap), which clears the
+  // class as a natural side-effect of the full reload. No explicit
+  // dispose is needed because the only exit from the about surface is
+  // the reload path.
+  document.body.classList.add('v-about-surface');
   const about = document.createElement('v-about-page');
   mount.appendChild(about);
   // If the URL carried a hash (e.g. /about#attribution), browser-native

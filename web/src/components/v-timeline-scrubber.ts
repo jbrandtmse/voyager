@@ -89,8 +89,8 @@ const isEncounterChapter = (chapter: ChapterSpec | null): boolean => {
  *     fixed defect where these rendered as `"0"` via Lit's undefined
  *     coercion; the bindings now route through `String(MISSION_*_ET)`
  *     directly so the template evaluates synchronously at first paint)
- *   - `aria-valuenow` as an ISO-8601 UTC string (assistive-tech announces
- *     it to the user)
+ *   - `aria-valuenow` as the numeric SPICE ET value (ARIA spec requires
+ *     numeric; assistive tech announces `aria-valuetext` in preference)
  *   - `aria-valuetext` as the human-readable "YYYY-MM-DD HH:MM UT" form
  *   - `aria-label="Mission timeline"` (mission variant) or
  *     `"<chapter name> encounter timeline"` (detail variant, Story 4.4 AC5)
@@ -610,10 +610,18 @@ export class VTimelineScrubber extends BaseElement {
     // Story 4.4 — sync aria-hidden on mount BEFORE first render so a
     // detail-variant scrubber that is mounted but not yet open is
     // already inaccessible to assistive tech.
+    //
+    // Story 6.4 AC1 — pair aria-hidden with `inert` so the slider thumb
+    // inside the closed detail variant is removed from the tab order
+    // too (axe-core `aria-hidden-focus` is a serious violation when
+    // aria-hidden contains focusable content).
     if (this.variant === 'detail') {
       this.setAttribute('aria-hidden', this.detailOpen ? 'false' : 'true');
       if (this.detailOpen) {
         this.setAttribute('data-open', '');
+        this.removeAttribute('inert');
+      } else {
+        this.setAttribute('inert', '');
       }
     }
   }
@@ -737,9 +745,12 @@ export class VTimelineScrubber extends BaseElement {
     if (this.detailOpen) {
       this.setAttribute('data-open', '');
       this.setAttribute('aria-hidden', 'false');
+      this.removeAttribute('inert');
     } else {
       this.removeAttribute('data-open');
       this.setAttribute('aria-hidden', 'true');
+      // Story 6.4 AC1 — pair aria-hidden with inert (see connectedCallback).
+      this.setAttribute('inert', '');
     }
     this.requestUpdate();
   }
@@ -1073,22 +1084,24 @@ export class VTimelineScrubber extends BaseElement {
     const fracPct = `${(this.computeFraction() * 100).toFixed(4)}%`;
     // Story 1.15 AC3 — `aria-valuemin` / `aria-valuemax` carry the numeric
     // SPICE ET range, not ISO-8601 strings. The WAI-ARIA Slider pattern
-    // permits any string and the manual browser smoke surfaced a defect
-    // where the bound values rendered as the literal `"0"` (Lit silently
-    // coerces `undefined` to the string `"0"` on numeric attributes). We
-    // route through `String(...)` of the module-level constants so the
-    // template evaluates synchronously at first paint — no async-init or
-    // late-binding window where the values could be undefined. ISO
-    // representations of the current position and value-text remain on
-    // `aria-valuenow` / `aria-valuetext` because that's what screen
-    // readers announce to the user.
+    // requires `aria-valuenow` to be a NUMERIC value (axe-core
+    // `aria-valid-attr-value` is critical when an ISO string is
+    // supplied) — the human-readable ISO representation goes on
+    // `aria-valuetext` which assistive tech announces in preference to
+    // the numeric `aria-valuenow`. Story 1.15 AC3 traced the original
+    // defect of these rendering as `"0"` from Lit's `undefined` coercion;
+    // routing through `String(...)` of the module-level constants
+    // preserves synchronous first-paint evaluation. Story 6.4 AC1
+    // amended `aria-valuenow` from `isoFromEt(...)` to the raw ET
+    // number after axe-core flagged the ISO string as a critical
+    // ARIA-value violation.
     //
     // Story 4.4 AC1 + AC5 — the detail variant exposes the chapter
     // window's bounds (not the mission window) and adopts a chapter-
     // aware aria-label.
     const valueMin = String(this.rangeLow());
     const valueMax = String(this.rangeHigh());
-    const valueNow = isoFromEt(this.simEt);
+    const valueNow = String(this.simEt);
     const valueText = formatForHud(this.simEt);
 
     let ariaLabel = 'Mission timeline';

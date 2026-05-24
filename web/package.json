@@ -14,10 +14,12 @@
     "test": "vitest run --passWithNoTests",
     "test:visual": "playwright test --config tests/visual/playwright.config.ts",
     "test:visual:update": "playwright test --config tests/visual/playwright.config.ts --update-snapshots",
+    "test:a11y": "playwright test --config tests/a11y/playwright.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@gltf-transform/core": "^4.3.0",
     "@gltf-transform/extensions": "^4.3.0",
     "@gltf-transform/functions": "^4.3.0",
@@ -26,6 +28,7 @@
     "@typescript-eslint/eslint-plugin": "^8.59.4",
     "@typescript-eslint/parser": "^8.59.4",
     "@vitest/coverage-v8": "^4.1.6",
+    "axe-core": "^4.11.4",
     "draco3dgltf": "^1.5.7",
     "eslint": "^10.4.0",
     "happy-dom": "^20.9.0",

@@ -110,7 +110,7 @@ The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cle
 - **[1.7 / LOW]** `tokens.css` `--v-bp-*` media-query comment — DEFER (one-line doc; batch next tokens touch).
 - **[1.7 / LOW]** `index.html` / `fonts.css` root-absolute paths — DEFER to Story 7.4 (deploy).
 - **[1.7 / LOW]** `font-subset.py` dead code — DEFER (one-off script).
-- **[1.7 / LOW]** `global.css` universal margin/padding reset — DEFER to Story 6.4 (BaseElement doc).
+- ~~**[1.7 / LOW]** `global.css` universal margin/padding reset — DEFER to Story 6.4 (BaseElement doc).~~ **CLOSED by Story 6.4 (2026-05-24) via AC6 T5.1:** JSDoc block added to `web/src/components/base-element.ts` documenting the universal-reset implications (Shadow DOM components insulated; Light-DOM components must re-add UA defaults via their companion stylesheet; about.css already does this for `<v-about-page>` + `<v-attribution-panel>`; future form-element-bearing Light-DOM components must opt into a "form-element reset" sibling stylesheet). The block names every current component to make the contract grep-able.
 - **[1.8 / LOW]** font preloads before FEATURE_PROBE — DEFER (architectural trade-off).
 - **[1.8 / LOW]** `vite.config` replace vs replaceAll — DEFER until 5th marker.
 - **[1.8 / LOW]** `resolveMainEntry` silent `/src/main.ts` fallback — DEFER to Story 7.x build hygiene.
@@ -144,11 +144,11 @@ The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cle
 - **[2.6 / LOW]** `ogCardsPlugin` duplicated `resolveMainEntry` helper — DEFER (vite hygiene).
 - **[2.7 / LOW]** `main.ts` ClockManager constructed before `/about` return — DEFER to Story 6.1 (audio surface restructure).
 - **[2.7 / LOW]** `main.ts` `ensureCanvas` before URL parse — DEFER (paired with above).
-- **[2.7 / LOW]** `mountAboutSurface` mutates `document.body.style.overflow` — DEFER to Story 6.4 (global.css revisit).
+- ~~**[2.7 / LOW]** `mountAboutSurface` mutates `document.body.style.overflow` — DEFER to Story 6.4 (global.css revisit).~~ **CLOSED by Story 6.4 (2026-05-24) via AC6 T5.2:** the inline mutation in `web/src/main.ts:mountAboutSurface` now toggles a `v-about-surface` class on `<body>`; the actual `overflow: auto` rule lives in `web/src/styles/about.css` next to the other about-surface styles. The rule is now visible to a CSS-only review of the about surface and diffable as part of the CSS contract — the previous inline mutation was invisible to a CSS audit.
 - **[2.7 / LOW]** `about.css` mixes `--v-size-about-*` and `--v-font-size-*` — DEFER to Story 7.6 (token sweep).
 - **[2.7 / LOW]** `URLRouter.dispose` listeners-array iteration race — DEFER (paired with 2.4 `pendingWaveSettle`).
 - **[2.7 / LOW]** `mountAttributionsFooter` host attachment fragility — DEFER to Epic 6 (layout).
-- **[2.8 / LOW]** `v-help-overlay` focus-trap silent catches — DEFER to Story 6.4 (a11y; paired with v-chapter-index sibling — `primitives/dialog.ts` extraction is the natural sibling to Story 3.0's AC4 work).
+- ~~**[2.8 / LOW]** `v-help-overlay` focus-trap silent catches — DEFER to Story 6.4 (a11y; paired with v-chapter-index sibling — `primitives/dialog.ts` extraction is the natural sibling to Story 3.0's AC4 work).~~ **CLOSED by Story 6.4 (2026-05-24) via AC6 T5.3 + T5.4:** `web/src/primitives/dialog.ts` extracted per Rule 9 (third-consumer threshold). Both `<v-help-overlay>` and `<v-chapter-index>` now delegate to `createDialogFocusTrap({ host, initialFocus, componentName })`; the defensive try/catch + `console.warn` diagnostics live in the primitive. Inline re-implementation by a future dialog component is now a HIGH code-review finding per Rule 6 (ADR-0025 obligations carried into Rule 9). Sibling primitive tests at `web/src/primitives/dialog.test.ts` (5 cases).
 - **[2.8 / LOW]** `v-help-overlay` `.shortcut-keys` 100px literal — DEFER to Story 7.6 (tokens hygiene).
 - **[2.9 / LOW]** `v-chapter-copy` `pointer-events: none` prevents copy-paste — DEFER to Epic 4 (encounter chapters).
 - **[2.9 / LOW]** `v-chapter-copy` short-viewport collision risk — DEFER to Story 6.2 (HUD compaction).
@@ -984,3 +984,11 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 > **Entry format:** `**[X.1 → X.Y]** <definition name> — <one-line semantic contract>` plus a sub-bullet linking the X.1 Dev Notes section. Closure happens when the consumer Story X.Y is implemented and the PROVISIONAL marker is resolved (either confirmed or amended via Rule 5). At closure, strike through the entry with a `**CLOSED by Story X.Y (date): <one-line>**` annotation.
 
 _(Currently empty — Epic 6 does not introduce any X.1-style multi-story foundation; the section is in place for any future epic with that shape. Add new forward-links here as Story-X.1 stories ship.)_
+
+---
+
+## Deferred from: code review of story 6.4 (2026-05-24)
+
+- **[6.4 / LOW]** `<v-timeline-scrubber>` `aria-valuenow` NaN-safety hardening — the Story 6.4 numeric `aria-valuenow` contract (`String(this.simEt)`) is correct, but no production-side guard rejects the degenerate case where `simEt` could become `NaN` or `undefined` from a malformed clock subscription. The defense test at `web/tests/story-6-4-defense.test.ts:134` pins `Number.isFinite(Number(valueNow))` only on the normal-mount path. A future hardening could clamp `valueNow` to `String(MISSION_START_ET)` when `!Number.isFinite(this.simEt)` and emit a `console.warn`. Not a Story 6.4 regression — pre-existing surface. **Suggested resolution:** add a one-line `isFinite` guard in `render()` before the `String(this.simEt)` coercion; surface a diagnostic warn when the guard fires. **Routing:** Epic 7 polish or the next Story-6.x cleanup pass.
+
+- **[6.4 / LOW]** `web/src/primitives/dialog.test.ts:50-70` — the "activate failure surfaces as console.warn" test currently accepts EITHER outcome (warned OR silently succeeded), because happy-dom tolerates `focus-trap.activate()` against detached hosts and the throw path may not fire. The test as-shipped pins ONLY the contract that IF a warn fires, the message contract is correct. Strengthening would require a more aggressive happy-dom fixture that forces the throw (e.g., a sinon-style replacement on `createFocusTrap` returning a stub whose `activate()` throws synchronously). **Suggested resolution:** refactor the test to inject a throwing stub via dependency injection (would require widening `createDialogFocusTrap`'s seam or extracting an internal factory). **Routing:** non-blocking; revisit if a dialog activation failure ever escapes the warn channel.

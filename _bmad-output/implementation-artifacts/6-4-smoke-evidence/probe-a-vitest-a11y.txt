@@ -1,0 +1,9 @@
+
+ RUN  v4.1.6 C:/git/Voyager/web
+
+
+ Test Files  14 passed (14)
+      Tests  60 passed (60)
+   Start at  14:09:03
+   Duration  6.91s (transform 2.47s, setup 0ms, import 9.34s, tests 8.71s, environment 18.61s)
+

@@ -1,8 +1,11 @@
 import { html, css, type TemplateResult } from 'lit';
-import { createFocusTrap, type FocusTrap } from 'focus-trap';
 
 import { BaseElement } from './base-element';
 import { isTextInputFocused } from '../lib/text-input-focus';
+import {
+  createDialogFocusTrap,
+  type DialogFocusTrap,
+} from '../primitives/dialog';
 
 /**
  * `<v-help-overlay>` — top-right "?" toggle that opens a centered modal
@@ -272,7 +275,7 @@ export class VHelpOverlay extends BaseElement {
     window.location.assign(url);
   };
 
-  private focusTrap: FocusTrap | null = null;
+  private focusTrap: DialogFocusTrap | null = null;
   private detachGlobalKeys: (() => void) | null = null;
   private triggerWasKeyboard = false;
 
@@ -358,32 +361,23 @@ export class VHelpOverlay extends BaseElement {
   private activateFocusTrap(): void {
     const dialog = this.shadowRoot?.querySelector<HTMLElement>('.dialog');
     if (dialog === null || dialog === undefined) return;
-    this.focusTrap = createFocusTrap(dialog, {
-      escapeDeactivates: false, // Esc handled by us
-      clickOutsideDeactivates: false, // scrim click handled by us
-      returnFocusOnDeactivate: false, // we restore focus explicitly
+    // Story 6.4 AC6 — Rule 9 third-consumer extraction lands at
+    // `primitives/dialog.ts`. The Voyager-flavoured focus-trap (defensive
+    // try/catch + console.warn, no escape-deactivate, no click-outside
+    // deactivate, no return-focus-on-deactivate, shadow-root descent,
+    // displayCheck disabled for jsdom/happy-dom) is now centralised.
+    this.focusTrap = createDialogFocusTrap({
+      host: dialog,
       initialFocus: () =>
         this.shadowRoot?.querySelector<HTMLButtonElement>('.close') ?? dialog,
-      tabbableOptions: {
-        getShadowRoot: true,
-        displayCheck: 'none',
-      },
+      componentName: 'v-help-overlay',
     });
-    try {
-      this.focusTrap.activate();
-    } catch {
-      // Activation can fail in test environments without layout — the
-      // dialog keydown handler keeps the dialog functional regardless.
-    }
+    this.focusTrap.activate();
   }
 
   private deactivateFocusTrap(): void {
     if (this.focusTrap !== null) {
-      try {
-        this.focusTrap.deactivate();
-      } catch {
-        // ignore — same defensive posture as activate()
-      }
+      this.focusTrap.deactivate();
       this.focusTrap = null;
     }
   }
@@ -434,6 +428,7 @@ export class VHelpOverlay extends BaseElement {
         aria-modal="true"
         aria-labelledby="help-title"
         aria-hidden=${this.open ? 'false' : 'true'}
+        ?inert=${!this.open}
         @keydown=${this.onDialogKeyDown}
       >
         <h1 class="dialog-title" id="help-title">Keyboard shortcuts</h1>

@@ -157,8 +157,14 @@ export class VHudInstruments extends BaseElement {
   }
 
   private renderRow(sc: SpacecraftId): TemplateResult {
+    // Story 6.4 AC1 a11y fix — drop `role="row"`. `role="row"` is only
+    // valid inside an explicit `role="grid"` / `role="table"` /
+    // `role="treegrid"` ancestor (axe-core `aria-required-parent`
+    // critical). The HUD instruments panel is not a grid — it's a
+    // labelled inline list. `role="group"` keeps the row-grouped
+    // semantics for screen readers without trying to be a grid.
     return html`
-      <div class="row" role="row" aria-label="${sc} instrument status">
+      <div class="row" role="group" aria-label="${sc} instrument status">
         <span class="craft-label" aria-hidden="true">${sc}</span>
         <span class="instrument-list">
           ${INSTRUMENTS_IN_ORDER.map((inst, i) => {
