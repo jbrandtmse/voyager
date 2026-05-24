@@ -74,7 +74,12 @@ export class VChapterIndex extends BaseElement {
     css`
       :host {
         position: fixed;
-        top: var(--v-edge-margin);
+        /* BUG-E5-008 (2026-05-24): pushed BELOW the HUD top-right column
+           (date / attitude indicator / distance, ~100px tall) so the
+           hamburger icon stops overlapping the HUD text. Previously
+           anchored to top: var(--v-edge-margin); collided with the
+           date row at the same y-coordinate. */
+        top: calc(var(--v-edge-margin) + 116px);
         right: var(--v-edge-margin);
         z-index: var(--v-z-modal);
         display: block;

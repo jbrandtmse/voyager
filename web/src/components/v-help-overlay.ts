@@ -53,7 +53,12 @@ export class VHelpOverlay extends BaseElement {
     css`
       :host {
         position: fixed;
-        top: var(--v-edge-margin);
+        /* BUG-E5-008 (2026-05-24): pushed BELOW the HUD top-right column
+           to match v-chapter-index. Help icon was overlapping the HUD
+           date row at top: var(--v-edge-margin). The 44px right-offset
+           preserves the original "stacked-to-the-left-of-chapter-index"
+           horizontal arrangement. */
+        top: calc(var(--v-edge-margin) + 116px);
         right: calc(var(--v-edge-margin) + 44px);
         z-index: var(--v-z-modal);
         display: block;

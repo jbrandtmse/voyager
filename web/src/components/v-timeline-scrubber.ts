@@ -165,8 +165,16 @@ export class VTimelineScrubber extends BaseElement {
     css`
       :host {
         position: fixed;
-        left: var(--v-edge-margin);
-        right: var(--v-edge-margin);
+        /* BUG-E5-009 (2026-05-24): shifted left edge RIGHT by play-button
+           width (44px) + gap (12px) = 56px so the leftmost chapter-marker
+           labels (V1L / V2L) stop overlapping the play button glyph.
+           Right edge shifted LEFT by speed-multiplier width (172px) + gap
+           (12px) = 184px so the rightmost decade labels don't underlap
+           the speed multiplier. Both apply to mission AND detail variants;
+           the detail variant overrides bottom (further below) but
+           inherits the horizontal gutter. */
+        left: calc(var(--v-edge-margin) + 56px);
+        right: calc(var(--v-edge-margin) + 184px);
         bottom: var(--v-edge-margin);
         z-index: var(--v-z-scrubber);
         display: block;
