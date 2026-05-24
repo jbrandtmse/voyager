@@ -632,7 +632,7 @@ When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` dro
 
 ## Deferred from: code review of story-4-0-epic-3-deferred-cleanup (2026-05-22)
 
-### [4.0 / LOW] `_extract_knot_ets_in_band` boundary tests don't pin `band_lo == knot` / `band_hi == knot` exact-equality cases
+### [4.0 / LOW] `_extract_knot_ets_in_band` boundary tests don't pin `band_lo == knot` / `band_hi == knot` exact-equality cases — REVIEWED by Story 5.0 (2026-05-23): still applies; carries to next `_extract_knot_ets_in_band` touch (Story 7.x kernel-drift verifier or Epic 7 polish)
 
 **Severity:** LOW (filter is inclusive `band_lo <= a <= band_hi` and behaves correctly at the boundary; coverage gap only)
 **Surfaced by:** Story 4.0 code review § EC-1.
@@ -640,7 +640,7 @@ When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` dro
 **Resolution:** Add two one-line tests pinning `band_lo == knot` and `band_hi == knot` boundary cases. Defensive only.
 **Routing:** Epic 7 polish pass, OR fold into the next bake-tier story that touches `_extract_knot_ets_in_band` (e.g., Story 7.x kernel-drift verifier).
 
-### [4.0 / LOW] `web/src/dev/ephemeris-perf.ts` ET-span computation picks attitude file as first/last entry post-Story-4.0
+### [4.0 / LOW] `web/src/dev/ephemeris-perf.ts` ET-span computation picks attitude file as first/last entry post-Story-4.0 — REVIEWED by Story 5.0 (2026-05-23): still applies; carries to Story 6.x perf-pass OR Epic 7 polish (DEV-only harness, no AC/NFR impact)
 
 **Severity:** LOW (DEV-only harness; not production; not in CI)
 **Surfaced by:** Story 4.0 code review § BH-5b (post-`ephemeris-service.ts` filter fix audit).
@@ -648,7 +648,7 @@ When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` dro
 **Resolution:** Mirror the production fix from `ephemeris-service.ts:67` — filter `body.files` to `kind === 'trajectory'` before computing the ET span. Two-line change.
 **Routing:** Story 6.x perf-pass (when the perf harness gets re-baselined for Epic 4/5 trajectory shapes), OR Epic 7 polish.
 
-### [4.0 / LOW] ADR-0004 § Body Layout per Kind cadence example numbers are triply stale (still cites pre-Story-3.1 "10-sec / 1-min / daily" schedule)
+### [4.0 / LOW] ADR-0004 § Body Layout per Kind cadence example numbers are triply stale (still cites pre-Story-3.1 "10-sec / 1-min / daily" schedule) — REVIEWED by Story 5.0 (2026-05-23): still applies; carries to next bake cadence story OR next ADR-housekeeping pass (structural ADR commitment unchanged, only descriptive numbers diverged)
 
 **Severity:** LOW (the ADR's structural commitment — explicit-ET column-0 storage + `cadence_seconds` informational — IS honored by Story 4.0; only the descriptive example numbers are stale)
 **Surfaced by:** Story 4.0 code review § AA-1 (Rule 6 ADR cross-check).
@@ -658,7 +658,7 @@ When Story 3.1 is amended, the `compared` count rises and `synthesized-skip` dro
 
 ## Deferred from: Story 4.0 lead-driven Chrome DevTools MCP smoke (2026-05-22)
 
-### [4.0-smoke / LOW] Play button overlaps the mission scrubber at the lower-left HUD chrome region
+### [4.0-smoke / LOW] Play button overlaps the mission scrubber at the lower-left HUD chrome region — REVIEWED by Story 5.0 (2026-05-23): still applies; carries to Story 6.2 (HUD compaction polish — same scope window as the top-right chrome density LOW; ship both together)
 
 **Severity:** LOW (pre-existing visual layout defect from Stories 1.9 / 1.10 / 1.11; not a Story 4.0 regression — Story 4.0 touched zero UI layout code)
 **Surfaced by:** Story 4.0 lead-driven Chrome DevTools MCP smoke (user-reported during the smoke; confirmed by bbox probe).
@@ -681,7 +681,7 @@ Recommendation: (a) — least intrusive, preserves the existing visual hierarchy
 
 **Routing:** **Story 6.2** (`<v-hud>` dismiss/restore and final HUD compaction polish per Epic 6). The "final HUD compaction polish" scope explicitly covers HUD-element layout fixes like this one. If the defect is visible enough to embarrass the launch, an earlier hotfix story can pick it up, but Story 6.2 is the natural landing.
 
-### [4.0-smoke / LOW] Top-right HUD chrome density — date readout visually clusters with chapter-index + help icons
+### [4.0-smoke / LOW] Top-right HUD chrome density — date readout visually clusters with chapter-index + help icons — REVIEWED by Story 5.0 (2026-05-23): still applies; carries to Story 6.2 (HUD compaction polish — paired with lower-left LOW above)
 
 **Severity:** LOW (pre-existing visual layout defect from Stories 1.11 / 2.3 / 2.8; not a Story 4.0 regression)
 **Surfaced by:** Story 4.0 lead-driven Chrome DevTools MCP smoke (user-reported; confirmed in screenshot).
@@ -712,7 +712,7 @@ Recommendation: (a) — same scope window as the lower-left fix (`[4.0-smoke / L
 
 The following LOW-severity items surfaced during Story 4.1 code review (`/epic-cycle 4` code-review stage). All are defensive-only; no current consumer triggers any of them.
 
-1. **[4.1 / LOW]** `ViewFrameService` identity-transform sentinel — the wrapper object is `Object.freeze`'d but the inner `Float64Array` (`originOffsetWorld`) is NOT frozen. A future consumer that writes through `transform.originOffsetWorld[0] = 5` would silently corrupt the shared cross-frame identity sentinel, NaN-poisoning every subsequent identity-branch frame.
+1. **[4.1 / LOW]** `ViewFrameService` identity-transform sentinel — the wrapper object is `Object.freeze`'d but the inner `Float64Array` (`originOffsetWorld`) is NOT frozen. A future consumer that writes through `transform.originOffsetWorld[0] = 5` would silently corrupt the shared cross-frame identity sentinel, NaN-poisoning every subsequent identity-branch frame. _Story 5.0 (2026-05-23): still applies; carries to next ViewFrame touch._
 
    **Why deferred:** every current consumer (RenderEngine.tick at `web/src/render/render-engine.ts:293-299` is the only one) READS the array; nothing writes. Story 4.2's VoyagerCameraController will also be read-only against this surface. The defensive hardening (e.g. `Object.freeze(new Float64Array(...))` if Float64Array supported it, or always returning a fresh small array even on the identity branch) is correct but costs a per-frame allocation in the cruise hot path — undesirable on every-frame-cruise.
 
@@ -720,7 +720,7 @@ The following LOW-severity items surfaced during Story 4.1 code review (`/epic-c
 
    **Routing:** any future story that touches `view-frame.ts` (Story 4.2 VoyagerCameraController is the natural landing — it composes ViewFrame's output into camera state).
 
-2. **[4.1 / LOW]** `ViewFrameService` does not guard against NaN / Infinity components from `EphemerisService.getPosition`. The `alpha * bodyPos[i]` multiplication propagates `NaN` / `±Infinity` straight through to the worldGroup transform, which then NaN-poisons the floating-origin Float32 cast.
+2. **[4.1 / LOW]** `ViewFrameService` does not guard against NaN / Infinity components from `EphemerisService.getPosition`. The `alpha * bodyPos[i]` multiplication propagates `NaN` / `±Infinity` straight through to the worldGroup transform, which then NaN-poisons the floating-origin Float32 cast. _Story 5.0 (2026-05-23): still applies; carries to next ViewFrameService hardening pass._
 
    **Why deferred:** the bake's invariants prevent NaN/Infinity in chunk samples (bake/tests/test_bake_defense.py finite-vector checks), and the runtime ChunkLoader doesn't synthesize samples. EphemerisService.getPosition contract is `WorldVec3 | null`; null already routes to identity. A future kernel-data-corruption incident or a manifest-vs-chunk mismatch could surface this — pin as documented behaviour via `view-frame-qa-gaps.test.ts:111-132` so a future hardening pass with `Number.isFinite` gates is visible at test time.
 
@@ -734,7 +734,7 @@ The following LOW-severity items surfaced during Story 4.1 code review (`/epic-c
 
 The following items surfaced during Story 4.2 code review (`/epic-cycle 4` code-review stage) and were not auto-resolved inline. MED-1 / LOW-1 / LOW-3 / LOW-6 from the same review WERE auto-resolved into `web/src/render/voyager-camera-controller.ts`; only the items below remain.
 
-1. **[4.2 / MED]** Pinch-to-zoom (two-finger touch) not implemented (AC1 partial coverage).
+1. **[4.2 / MED]** Pinch-to-zoom (two-finger touch) not implemented (AC1 partial coverage). _Story 5.0 (2026-05-23): still applies; carries to Epic 6 touch-coverage story per existing routing — paired with the broader touch-support pass._
 
    **What's missing:** AC1 names "wheel/pinch → zoom (log-scale step per notch)". The controller wires `wheel` against the canvas but does NOT handle two-finger touch pinch. The internal `GestureState` is single-pointer (`pointerId: number`, not a Map), so multi-touch isn't tracked. Touch-device users have no zoom path today.
 
@@ -744,7 +744,7 @@ The following items surfaced during Story 4.2 code review (`/epic-cycle 4` code-
 
    **Routing:** Lead to triage at Story 4.2 close or Epic 4 retro; if (b), add to Story 4.5 / 4.7 scope or a dedicated Epic 6 story.
 
-2. **[4.2 / LOW]** No probe test for non-degenerate scene matrix at zoom clamp bounds (AC5 partial coverage).
+2. **[4.2 / LOW]** No probe test for non-degenerate scene matrix at zoom clamp bounds (AC5 partial coverage). _Story 5.0 (2026-05-23): still applies; carries to next `voyager-camera-controller.ts` touch._
 
    **What's missing:** AC5 says "verified by a probe test at both clamp distances (camera.position magnitude == clamp bound; render produces a non-degenerate scene matrix)". Existing tests pin that wheel zoom can't push the camera past the clamps (`web/src/render/voyager-camera-controller.test.ts:166-187`), but no test positions the camera AT the clamp distances and asserts `camera.matrixWorldInverse` / `camera.projectionMatrix` have finite, non-NaN entries.
 
@@ -758,7 +758,7 @@ The following items surfaced during Story 4.2 code review (`/epic-cycle 4` code-
 
 The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stub-EphemerisService → AC7 Rule-5 amendment; F2 ADR-0006 UASTC-vs-ETC1S → ADR-0006 Story-4.3 amendment block). The four LOW items below were deferred per the standard X.0 deferred-work pattern.
 
-1. **[4.3 / LOW]** `EphemerisService.boundaryStalled` is service-wide; per-body loop can clear stale flag.
+1. **[4.3 / LOW]** `EphemerisService.boundaryStalled` is service-wide; per-body loop can clear stale flag. _Story 5.0 (2026-05-23): still applies; carries to the future story that wires `<v-speed-multiplier>` to the narrower signal._
 
    **What's the issue:** The flag is set true on a `getStateAt` cache-miss and cleared on ANY successful `getStateAt`. In the per-frame loop (`CelestialBodies.tick` iterates 10 cruise bodies; `MissionPhaseFSM.update` iterates 2 spacecraft × 4 gas giants = 8 distance queries) a successful body-B lookup masks a stalled body-A. The QA test pins this as the explicit contract (`web/src/services/ephemeris-service.qa.test.ts:260-291`).
 
@@ -768,7 +768,7 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 
    **Routing:** A future story that wires `<v-speed-multiplier>` to `ephemerisService.boundaryStalled` (likely Epic 4 Story 4.5 or 4.6 when the encounter chapter actually exercises the cache-miss path).
 
-2. **[4.3 / LOW]** `GPUCapabilityProbe.adequateForEightK` is a hand-coded `MAX_TEXTURE_SIZE >= 16384` heuristic.
+2. **[4.3 / LOW]** `GPUCapabilityProbe.adequateForEightK` is a hand-coded `MAX_TEXTURE_SIZE >= 16384` heuristic. _Story 5.0 (2026-05-23): still applies; carries to Epic 6 polish OR Story 7.x perf-hardening (per existing routing)._
 
    **What's the issue:** The heuristic uses `MAX_TEXTURE_SIZE >= 16384` as a proxy for "1 GB+ VRAM, can host an 8K KTX2 layer." Defensible for desktop GPUs (every 2014+ desktop class reports 16384+) but breaks down for: (a) high-memory mobile chips (Apple A-series, Snapdragon 8-gen) that report 16384 but have memory pressure from the OS / browser frame; (b) Intel integrated GPUs that report 16384 with shared system memory; (c) embedded GPUs that may misreport.
 
@@ -778,7 +778,7 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 
    **Routing:** Epic 6 polish (tier-aware texture selector) OR Story 7.x perf-hardening (memory budgeting). Whichever lands first.
 
-3. **[4.3 / LOW]** `web/tests/build-textures-e2e.test.ts` writes test fixtures into the real `web/textures-src/gas-giants/` directory.
+3. **[4.3 / LOW]** `web/tests/build-textures-e2e.test.ts` writes test fixtures into the real `web/textures-src/gas-giants/` directory. _Story 5.0 (2026-05-23): still applies; carries to next `web/scripts/build_textures.ts` touch (or a test-hygiene pass)._
 
    **What's the issue:** Lines 132-135 + 177-180 of the E2E test compute `REPO_TEXTURES_SRC = join(__dirname, '..', 'textures-src', 'gas-giants')` and write a `${Date.now()}-keyed-slug-4k.png` fixture into the REAL repo source tree before invoking `buildOne`. The `finally` block removes the file, but a test-process crash between `writeFixturePng` (line 135) and the `finally` (line 154) leaks the fixture as an LFS-tracked PNG into the repo (per `.gitattributes` `web/textures-src/**/*.png filter=lfs`).
 
@@ -788,7 +788,7 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 
    **Routing:** Any future story that touches `web/scripts/build_textures.ts` (e.g. when 8K source data becomes available for a future tier upgrade), or a test-hygiene pass.
 
-4. **[4.3 / LOW]** `bake_trajectories.py:758` print-statement `total_vtrjs` drifts when moons + encounter bands emit.
+4. **[4.3 / LOW]** `bake_trajectories.py:758` print-statement `total_vtrjs` drifts when moons + encounter bands emit. _Story 5.0 (2026-05-23): still applies; carries to next bake-pipeline story (likely Story 5.1 if PBD bake extensions land there — address inline if so)._
 
    **What's the issue:** Line 758 prints `total_vtrjs = total_segments + len(CELESTIAL_BODIES)` — this count was correct before Story 4.3. Story 4.3 adds 18 encounter-band records (6 encounters × 3 bands) plus up to 13 moon trajectory chunks (when satellite SPKs are furnished). The bake's summary print line under-counts the actual emit by up to 31 chunks.
 
@@ -802,7 +802,7 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 
 ## Deferred from: code review of story 4-6 (2026-05-23)
 
-1. **[4.6 / LOW]** `MISSION_FACTS.md` V2J interior-sweep paragraph uses a `MM/DD` slash format once.
+1. **[4.6 / LOW]** `MISSION_FACTS.md` V2J interior-sweep paragraph uses a `MM/DD` slash format once. _Story 5.0 (2026-05-23): still applies; carries to next MISSION_FACTS editorial pass (likely Story 5.1 PBD copy authoring — address inline if so)._
 
    **What's the issue:** The new "Voyager 2 Jupiter encounter — interior sweep timeline" section's closing paragraph reads "the actual span from Callisto (07/08 12:21 UT) to Io (07/09 23:17 UT) is roughly 35 hours." All canonical instants elsewhere in the file (and in the same section's table) use full ISO-8601 timestamps. This single paragraph uses `07/08` / `07/09` US-style slash dates without a year, inside parenthetical commentary.
 
@@ -811,3 +811,71 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
    **Suggested resolution:** Either restate as "Callisto (1979-07-08 12:21 UT)" / "Io (1979-07-09 23:17 UT)" or drop the parenthetical entirely (the table immediately above already cites both instants in ISO form). Trivial when MISSION_FACTS is next edited.
 
    **Routing:** Any future MISSION_FACTS editorial pass (Story 4.7's V2U / V2N additions are the obvious next opportunity).
+
+---
+
+## Deferred from: code review of story 5-1 (2026-05-23)
+
+1. **[5.1 / LOW]** AC5 "idle on cold-load" interpretation has a half-open-on-right boundary tension with `pbdSubstateAt(PBD_ANCHOR_ET) === turning`.
+
+   **What's the issue:** AC5 states "the dedicated module's `idle` substate is active ... for the anchor ET cold-load when no playback is active per the substate's chronological position — `idle` precedes `turning` in the PBD_SUBSTATE_ORDER chronology." The Dev Agent Record's completion note interprets this as: "ANY ET below the anchor is `idle`, and the cinematic arc begins AT the anchor with `turning`." `pbdSubstateAt(PBD_ANCHOR_ET) === turning` is pinned by `substates.test.ts:99`. The `PaleBlueDot` instance starts at `_currentSubstate = idle` (the constructor default at `index.ts:126`), so the DEV `__voyagerDebug.paleBlueDot.currentSubstate` accessor reads `idle` at cold-load BEFORE the first `paleBlueDot.update(et)` call lands — which only happens once the Path A subscriber flips `paleBlueDotActive = true` AND the engine's onFrame block ticks. If the engine's onFrame fires at all on a paused cold-load (i.e. ticking the render loop with the same paused ET each frame), the PaleBlueDot's substate will advance to `turning` on that first tick.
+
+   **Why deferred:** The empirical resolution is the lead's AC7 Chrome DevTools MCP smoke — it reads `__voyagerDebug.paleBlueDot.currentSubstate` at cold-load and either confirms `idle` (the as-documented Dev Agent Record interpretation, which would be the case if onFrame DOES NOT tick on paused cold-load) or surfaces `turning` (which would be the as-implemented behaviour, requiring the test/AC interpretation to converge). Story 5.1's substate-machine + module logic is internally consistent regardless of which the smoke shows — only the interpretation of AC5's specific wording would need to be amended (Rule 5) if the smoke shows `turning`. The integration tests pass with the current interpretation.
+
+   **Suggested resolution:** Lead's AC7 MCP smoke will resolve this empirically. If the cold-load smoke shows `turning` (i.e., onFrame ticks on paused cold-load → module's first update is at the anchor ET → substate flips to `turning`), amend AC5's wording per Rule 5 to read "the substate at the cold-load PAUSED anchor ET is `turning` (the first substate of the cinematic arc); `idle` precedes the arc and is observable only when scrubbing BEFORE the anchor." If the smoke shows `idle`, the Dev Agent Record interpretation stands and this deferral can be dismissed.
+
+   **Routing:** Resolved by the lead's AC7 Chrome DevTools MCP smoke. If amendment needed, fold into the Story 5.1 smoke evidence's notes.
+
+2. **[5.1 / LOW]** `pale-blue-dot-integration.test.ts:148-172` reverse-scrub re-entry test exercises only `director.update`, not the gated per-frame block.
+
+   **What's the issue:** The reverse-scrub re-entry test ("module activates on reverse-scrub re-entry to the PBD window") drives `director.update(et)` directly to verify that the Path A subscriber re-flips `paleBlueDotActive = true` on reverse re-entry. It does NOT exercise the actual per-frame gate (`if (paleBlueDotActive) paleBlueDot.update(et)`) — it only asserts on the subscriber-controlled `active` boolean. The test name says "module activates" but the assertion is on the subscriber's local variable, not on the module's substate.
+
+   **Why deferred:** The two adjacent tests (`:78-118` "module update fires ONLY while chapter is in held state" and `:120-146` "module update does NOT fire outside the PBD window") together DO exercise the gated per-frame path including the activation flag. The reverse-scrub test's purpose is to verify the subscriber's reverse-direction semantics (that the `held` re-entry transition from `passed` correctly flips active back to `true`), which is a director-side property — the gated per-frame loop is incidental to that contract.
+
+   **Suggested resolution:** Optionally extend the reverse-scrub test to also wire the per-frame gate (mirror the `tick()` helper from the `:93` test) and assert on `pbd.currentSubstate` after the reverse re-entry tick. ~10 lines. Not load-bearing; the existing coverage is sufficient.
+
+   **Routing:** Story 5.2 or 5.3 (which will add their own reverse-scrub integration tests on top of the same subscriber) — address inline if convenient.
+
+---
+
+## Deferred from: code review of story 5-2 (2026-05-23)
+
+1. **[5.2 / MED]** `AttitudeApplier.pbdOverrideProvider` is a public mutable field with no single-assignment guard.
+
+   **What's the issue:** `pbdOverrideProvider: PlatformQuatOverrideProvider | null = null;` is a public mutable instance field on `AttitudeApplier` (`web/src/render/attitude-applier.ts:117`). The canonical injection happens once at `main.ts:690` (`attitudeApplier.pbdOverrideProvider = paleBlueDot;`), but the API allows accidental replacement by any subsequent code path — there's no setter-method guard, no `Object.defineProperty(... writable: false)` lock, no "set once and freeze" discipline.
+
+   **Why deferred:** Consistent with the project's prevailing "constructor-injected or post-construction-assigned services" pattern (ADR-0015 doctrine; mirrors the `engine.setViewFrame(...)` setter pattern + `paleBlueDot.setServices(...)` post-construction injection). The mutable shape is intentional — the dependency lands post-`ManifestLoader.then` and the field can't be constructor-injected at boot time. The JSDoc at `attitude-applier.ts:107-117` makes the contract explicit ("Wired by main.ts (Story 5.1 Path A subscriber pattern)"). MED rather than LOW only because future agents could write code that toggles the override at runtime (e.g. "during this animation, disable the override") without realizing the override-provider semantics is meant to be single-assignment.
+
+   **Suggested resolution:** Either (a) introduce a `setPbdOverrideProvider(provider)` setter that throws on second-assignment (the strictest interpretation) or (b) wrap the field with a one-time-assignment helper (`assignOnce()`) that throws on the second call. ~5 lines + a unit test that asserts the second-assignment throw. Could also be a non-throwing "warn-once" if we want to preserve hot-reload ergonomics. Not load-bearing; the field's single canonical writer is the manifest-loader `.then` block.
+
+   **Routing:** Story 5.3 or 5.4 (next stories that touch PBD subsystem wire-up) — address inline if convenient, or fold into an Epic 5 retrospective hardening pass.
+
+2. **[5.2 / LOW]** `TurnChoreography.tick()` allocates one fresh `THREE.Quaternion` per frame during a SLERP window.
+
+   **What's the issue:** `turn-choreography.ts:397` constructs a new `THREE.Quaternion()` per call to `tick()` while a SLERP is in progress (the `slerpQuaternions` destination buffer). The applier consumes it once and the branded `quaternion(...)` wrapper produces a fresh `Quaternion` brand for the caller. Two allocations per frame during SLERP windows (Quaternion + branded). The pattern is consistent with the existing AttitudeService slerp call (Story 3.2 § Completion Note 9 — "slerpQuaternions allocates a Three.js Quaternion that we read once and drop").
+
+   **Why deferred:** V8 nursery sweep absorbs the per-frame transients cheaply (the AttitudeApplier zero-allocation contract documented at `attitude-applier.ts:14-19` explicitly acknowledges this pattern). PBD SLERP windows are short (400ms wall-clock per `--v-duration-slow`); even at 60Hz the per-substate-transition garbage is ~24 quaternions = ~960 bytes / transition / spacecraft, with ~10 substate transitions across the cinematic arc. Negligible relative to the ~150 MB bundle and per-frame matrix uniforms.
+
+   **Suggested resolution:** Optional zero-allocation pass — pre-allocate a single `THREE.Quaternion` destination inside `TurnChoreography` and reuse it (mirror the cache pattern in `AttitudeApplier`). The branded wrapper would also need a `mutating` variant. Worth ~20 lines of code; only do this if a future profiling pass flags PBD SLERP allocations.
+
+   **Routing:** Story 5.3 / 5.4 or an Epic 7 polish pass — only address if profiling surfaces an actionable signal.
+
+3. **[5.2 / LOW]** Rule 5 amendment #1 in epics.md references the PRE-amendment copy ("already implicit"); the as-shipped Story 5.2 also amended `copy.ts` with the explicit "reconstructed from ephemeris constraints" sentence (T5.2).
+
+   **What's the issue:** The Story 5.2 Rule 5 amendment block in `_bmad-output/planning-artifacts/epics.md` describing the Option B AC6 choice says the copy "now mentions 'narrow-angle camera sweeps' and 'the spacecraft turns back' (already implicit)" — but the dev's actual implementation (T5.2) ALSO appended the explicit "scan-platform aim shown here is reconstructed from ephemeris constraints; the body turn is from the historical CK" sentence to `copy.ts`. The amendment block's wording about "already implicit" is slightly stale relative to the as-shipped copy. The binding Option-B decision (indicator unchanged, caveat in copy) is recorded correctly; only the descriptive parenthetical is out of date.
+
+   **Why deferred:** Pure editorial nit; the binding interpretation is correct. A future contributor reading the amendment block would see the Option-B decision and the "in copy" routing, then read `copy.ts` and discover the explicit sentence — no contradiction, just a slight stylistic mismatch in how the amendment narrates the copy contents.
+
+   **Suggested resolution:** A 1-line edit to the amendment block updating the "already implicit" parenthetical to reference the explicit sentence ("now contains an explicit 'reconstructed from ephemeris constraints' sentence per Story 5.2 T5.2"). Trivial.
+
+   **Routing:** Story 5.3 (next PBD story — likely to touch `epics.md` PBD section again) or any future epics.md editorial pass.
+
+4. **[5.2 / LOW]** `PaleBlueDot.currentSubstate` accessor is not reset by `dispose()`.
+
+   **What's the issue:** `PaleBlueDot.dispose()` (`web/src/chapters/pale-blue-dot/index.ts:323-327`) clears listeners + resets choreography + sets `currentTargetNaifId = null`, but does NOT reset `_currentSubstate` — it remains at whatever value it last advanced to. The `currentSubstate` getter (line 204) therefore returns the pre-dispose value. The override-lifecycle test at `pale-blue-dot-override-lifecycle.test.ts:189-200` asserts `currentTargetNaifId` + `currentPlatformOverrideQuat` are null post-dispose but does NOT assert on `currentSubstate`, so the inconsistency is implicit and untested.
+
+   **Why deferred:** Production wire-up calls `update(et)` per frame after dispose-and-reactivate sequences (the per-frame loop in `main.ts:226-228` is unconditional within the active window), so any stale `currentSubstate` value is overwritten on the next `update(et)`. The accessor is DEV-only via `__voyagerDebug.paleBlueDot.currentSubstate`, so the inconsistency is only observable in DEV smoke probes that interrogate the module after a manual `dispose()` call — not a real production code path.
+
+   **Suggested resolution:** Either (a) reset `_currentSubstate = PbdSubstate.idle` in `dispose()` (the strict-reset interpretation; matches the "no stale state after dispose" doctrine) or (b) document the divergence in the `dispose()` JSDoc and add a unit test pinning the observed behaviour ("currentSubstate retains last value post-dispose; production code re-drives via update()"). Trivial either way.
+
+   **Routing:** Story 5.3 or 5.4 — address inline when next touching `PaleBlueDot.dispose()` semantics, or fold into an Epic 5 polish pass.

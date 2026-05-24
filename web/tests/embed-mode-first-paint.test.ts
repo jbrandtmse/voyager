@@ -88,6 +88,61 @@ describe('Story 2.5 AC2 — first-paint conditional chrome mounting', () => {
   });
 });
 
+describe('Story 5.3 AC8 — embed mode preserves PBD photo composites (simulation, not chrome)', () => {
+  // The composite layer is constructed in `main.ts` (NOT first-paint) and
+  // appends a `<div class="pbd-composite-layer">` container to the canvas
+  // parent. AC8 requires that this container remains in the DOM in embed
+  // mode (composites are simulation, not chrome per Story 5.3 spec line
+  // 2049). Since first-paint does NOT construct the composite layer, the
+  // strongest test we can author at this surface is:
+  //
+  //   1. embed mode does NOT install any document-level CSS that would
+  //      `display: none` an element with class `pbd-composite-layer`.
+  //   2. constructing the layer directly inside a simulated embed-mode
+  //      `startFirstPaint(...)` call still produces a DOM-attached
+  //      container.
+  //
+  // The integration test at
+  // `tests/pale-blue-dot-composite-integration.test.ts` covers AC8 via
+  // the real PaleBlueDot + PbdCompositeLayer wire-up; this block extends
+  // the embed-mode test surface to assert that no chrome-skip pathway in
+  // `first-paint.ts` removes the composite container.
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+    window.history.replaceState(null, '', '/');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('first-paint in embed mode does NOT inject any CSS that hides `.pbd-composite-layer`', () => {
+    startFirstPaint(document.body, { embedEnabled: true });
+    // Manually create a composite-layer container to see if any embed-mode
+    // CSS rule would hide it. We probe the computed display + visibility.
+    const probe = document.createElement('div');
+    probe.className = 'pbd-composite-layer';
+    document.body.appendChild(probe);
+    const computed = window.getComputedStyle(probe);
+    // No embed-mode chrome-skip rule should be matching this class.
+    expect(computed.display).not.toBe('none');
+    expect(computed.visibility).not.toBe('hidden');
+  });
+
+  it('first-paint in non-embed mode also does NOT inject any CSS hiding `.pbd-composite-layer`', () => {
+    startFirstPaint(document.body, { embedEnabled: false });
+    const probe = document.createElement('div');
+    probe.className = 'pbd-composite-layer';
+    document.body.appendChild(probe);
+    const computed = window.getComputedStyle(probe);
+    expect(computed.display).not.toBe('none');
+    expect(computed.visibility).not.toBe('hidden');
+  });
+});
+
 describe('Story 3.6 AC7 — embed mode skips <v-attitude-indicator> inside <v-hud>', () => {
   beforeEach(() => {
     vi.useFakeTimers();

@@ -36,6 +36,14 @@
 /textures/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Story 5.3 PBD photo-plate composites (NASA Planetary Photojournal
+# PIA00452 + PIA00453, public domain). Each plate filename embeds an
+# 8-char SHA-256 content hash (e.g. `earth.dd46ad00.png`) per the
+# Story 1.14 immutable-asset discipline — filename changes on byte
+# change, so long-cache is safe.
+/images/pbd/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # HTML entry points must re-validate so a new deploy is picked up
 # immediately. A 1-hour max-age plus implicit revalidation balances
 # CDN load against freshness on the few requests per visitor that

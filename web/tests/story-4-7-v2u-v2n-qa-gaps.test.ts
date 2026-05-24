@@ -629,29 +629,31 @@ describe('Story 4.7 QA gap 6 — copyForChapter dispatch coverage across all 6 g
     expect(slug).toBe('v2-heliopause');
   });
 
-  it('non-encounter chapters (launches / PBD) leave the copy panel empty after FR30 closure', async () => {
-    // The non-populated set after Story 4.7 is exactly: launches (V1+V2)
-    // and pale-blue-dot. All six gas-giant encounters now resolve to
-    // non-null copy.
-    const unpopulatedSlugs = ['launch-v1', 'launch-v2', 'pale-blue-dot'];
+  it('launch chapters leave the copy panel empty (Story 5.1 populated PBD copy; launches remain copy-less)', async () => {
+    // Amended in place per Rule 5: Story 5.1 added PBD copy via the
+    // dedicated module. The remaining chapters without copy (excluding
+    // heliopauses, which route through heliopauseCopyForSlug) are the
+    // two launch chapters.
+    const unpopulatedSlugs = ['launch-v1', 'launch-v2'];
     for (const slug of unpopulatedSlugs) {
       const displayed = await displayedSlugAtAnchor(slug);
       expect(
         displayed,
-        `${slug} unexpectedly rendered copy — only the six gas-giant encounters carry copy after FR30 closure`,
+        `${slug} unexpectedly rendered copy — launches do not carry copy`,
       ).toBeNull();
     }
   });
 
-  it('exactly the six gas-giant encounters carry ChapterSpec.copy in ALL_CHAPTERS (FR30 closure invariant)', () => {
+  it('exactly seven chapters carry ChapterSpec.copy in ALL_CHAPTERS post-Story-5.1 (six gas-giants + PBD)', () => {
     // Defense pin: the count of populated chapters across ALL_CHAPTERS
-    // is exactly 6 (the gas-giant encounters). If Story 5.x lands
-    // another populated chapter or a regression removes one, this test
-    // surfaces it immediately.
+    // is now 7 (six gas-giant encounters + PBD). Story 5.1 amended in
+    // place per Rule 5; previous FR30-closure count of 6 is the
+    // pre-Story-5.1 baseline.
     const populatedSlugs = ALL_CHAPTERS.filter(
       (c) => c.copy !== undefined,
     ).map((c) => c.slug);
     const expectedSlugs = [
+      'pale-blue-dot',
       'v1-jupiter',
       'v2-jupiter',
       'v1-saturn',

@@ -165,8 +165,22 @@ export class VTimelineScrubber extends BaseElement {
     css`
       :host {
         position: fixed;
-        left: var(--v-edge-margin);
-        right: var(--v-edge-margin);
+        /* BUG-E5-009 (2026-05-24): shifted left edge RIGHT by play-button
+           width (44px) + gap (12px) = 56px so the leftmost chapter-marker
+           labels (V1L / V2L) stop overlapping the play button glyph.
+           Right edge shifted LEFT to accommodate the speed-multiplier's
+           readout text at high speeds — the readout grows wider than the
+           172px slider track when the text is "1,000,000× — 11.57 days/
+           sec" (~194px). Originally 184px gutter; bumped to 222px after
+           v2-uranus chapter smoke (2026-05-24) showed the detail-scrubber
+           right-edge label "JAN 29, 1986" still being obscured by the
+           readout's leftmost characters. 222 = 194 (readout) + 12 (gap)
+           + 16 (slop for clamp on smaller viewports).
+           Both apply to mission AND detail variants; the detail variant
+           overrides bottom (further below) but inherits the horizontal
+           gutter. */
+        left: calc(var(--v-edge-margin) + 56px);
+        right: calc(var(--v-edge-margin) + 222px);
         bottom: var(--v-edge-margin);
         z-index: var(--v-z-scrubber);
         display: block;

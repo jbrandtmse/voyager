@@ -58,3 +58,11 @@ A pure-declarative approach can't model PBD's choreography without becoming bloa
 - **Pure module class for all 11.** Rejected: 10 chapters become 10 boilerplate classes implementing nearly-identical lifecycle methods. The data-vs-code asymmetry of "10 short specs and 1 substantial module" matches reality.
 - **PBD as a special-case branch inside `ChapterDirector`.** Rejected: pollutes the director with PBD-specific knowledge that doesn't generalize; breaks the symmetry of registration.
 - **Mini-DSL for choreography (JSON or YAML keyframes for PBD).** Rejected: the photo-plate compositing logic is inherently imperative (which target to composite when, with what fade timing); a DSL would either be Turing-complete (i.e., a programming language) or too restrictive.
+
+## Story 5.1 amendment — Path A integration topology (2026-05-23)
+
+Story 5.1 landed the PBD module class (`web/src/chapters/pale-blue-dot/`) and chose **Path A** integration: `ChapterDirector` itself is unchanged (no `register(spec | module)` overload). Instead the PBD module's `update(currentEt)` is wired from `web/src/main.ts` via a dedicated subscriber that activates on `held` enter / deactivates on `from === 'held'` exit; the per-frame block calls `paleBlueDot.update(et)` only while activated.
+
+Rationale: Path A satisfies the architectural commitment ("Both register through the same `ChapterDirector.register(spec | module)`") via the PBD module's re-exported `ChapterSpec` — `ALL_CHAPTERS` consumes the spec view uniformly with the other 10 chapters; the module class is the imperative escape hatch consumed by the main.ts subscriber. Path B (extending `ChapterDirector` with a `register(spec | module)` overload that dispatches `update(et)` to registered modules) is acceptable per the story spec but would have added a director-side imperative-dispatch surface that no other chapter uses. Path A keeps the director pure (no PBD-specific knowledge) and limits the special-case wiring to a single block in `main.ts`.
+
+The `ChapterModule` interface (a superset of `ChapterSpec`) is declared in `web/src/types/chapter.ts` per Story 5.1 AC3 as the registration-unification surface. The PBD module class implements it; future chapters that warrant imperative behaviour (none in the current epic plan) would follow the same pattern.

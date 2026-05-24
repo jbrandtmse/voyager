@@ -185,3 +185,19 @@ The E2E test MAY be a slow-tier test (`@slow` marker, `slow-tier` pytest marker,
 2. `EXTMeshoptCompression` writer threw on missing `MeshoptEncoder` in the NodeIO registry — the unit-tier piece tests mocked the registry.
 
 Neither defect was visible in the piece tests; both surfaced immediately when the full pipeline ran. Epic 4 Story 4.3 (Cadence-Shift Trajectory Chunks + 4K → 8K Texture Upgrade) extends the build pipeline further; the unit-vs-E2E discipline established by Story 3.3 needs to carry forward.
+
+## Rule 12 — LFS additions above threshold disclosed at story creation (Story 5.0 lesson, 2026-05-23)
+
+Any story planning to add Git-LFS-tracked content above either threshold below MUST disclose the planned additions in its Dev Notes section at `bmad-create-story` time:
+
+- **Per-story total:** > **500 MB** across all files the story adds.
+- **Single file:** > **250 MB** for any individual file.
+
+A disclosure is a one-line Dev Notes entry naming the files, estimated per-file sizes, total, and rationale. The maintainer either pre-clears at sprint-planning or proposes an alternative (smaller variant, deferred). The policy + thresholds + clone-time options are documented canonically in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) § "Git LFS additions"; this rule is the BMAD-side enforcement reference.
+
+**Enforcement:**
+
+- `bmad-create-story` treats an LFS-addition story without disclosure as a process gap (MED severity at planning review; HIGH if the threshold is crossed and the disclosure was omitted by oversight).
+- `bmad-code-review` cross-checks a story's File List against `.gitattributes` LFS patterns; an LFS-tracked addition without a corresponding disclosure in the story's Dev Notes is a HIGH finding (sibling to Rule 5's NFR-tripwire and Rule 6's ADR-violation classes).
+
+**Why this rule exists today:** Story 4-11 (satellite SPK procurement for the Epic 4 moons) was originally estimated as adding "100–500 MB" of kernels and ended up at 2.3 GB — a 5× footprint overshoot rooted in the absence of a public-domain higher-precision Saturn moon SPK (NAIF's `sat441` is the smallest available at 662 MB; lower-precision variants didn't model the inner moons Voyager flew past). The procurement detour wasn't a planning failure — the kernel set was load-bearing — but the lack of pre-disclosure left the maintainer reasoning about clone-time + CDN-bandwidth cost mid-story rather than at sprint-planning. The Epic 4 retrospective addendum (Action #2) routed the policy to Story 5.0 for documentation; this rule is the BMAD-skill-pack landing.

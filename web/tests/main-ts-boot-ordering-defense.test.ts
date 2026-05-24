@@ -67,21 +67,32 @@ describe('Story 4.1 — main.ts boot-ordering invariants', () => {
       ).toBeLessThan(seedIdx);
     });
 
-    it('subscriber is installed AFTER firstPaintHandle so the HUD attitude-indicator handle is available', () => {
+    it('attitude-indicator subscriber is installed AFTER firstPaintHandle so the HUD attitude-indicator handle is available', () => {
       // The subscriber's body reads
       // `firstPaintHandle.hud.attitudeIndicator?.setActiveSpacecraft(...)`,
       // so `firstPaintHandle` must be in scope when the subscriber's
       // closure captures it. The wire's `?.` optional chain makes the
       // call no-op when the indicator isn't yet mounted, but the variable
       // reference itself needs to resolve.
+      //
+      // Story 5.1 amended in place per Rule 5: the test originally
+      // used the first `chapterDirector.subscribe(` occurrence, which
+      // worked when the only subscriber was the Story 4.1 attitude-
+      // indicator wire. Story 5.1 added a PBD-module activation
+      // subscriber BEFORE firstPaintHandle (intentionally — it doesn't
+      // read from firstPaintHandle); the attitude-indicator subscriber
+      // is identified by its `setActiveSpacecraft(naifId)` body
+      // signature.
       const firstPaintIdx = indexOfMatch(/const\s+firstPaintHandle\s*=\s*startFirstPaint\(/);
-      const subscribeIdx = indexOfMatch(/chapterDirector\.subscribe\(/);
+      const attitudeSubscriberIdx = indexOfMatch(
+        /firstPaintHandle\.hud\.attitudeIndicator\?\.setActiveSpacecraft\(/,
+      );
       expect(firstPaintIdx).toBeGreaterThanOrEqual(0);
-      expect(subscribeIdx).toBeGreaterThanOrEqual(0);
+      expect(attitudeSubscriberIdx).toBeGreaterThanOrEqual(0);
       expect(
         firstPaintIdx,
-        'firstPaintHandle must be constructed before the subscriber captures it',
-      ).toBeLessThan(subscribeIdx);
+        'firstPaintHandle must be constructed before the attitude-indicator subscriber captures it',
+      ).toBeLessThan(attitudeSubscriberIdx);
     });
 
     it('subscriber handler reads from firstPaintHandle.hud.attitudeIndicator via optional chaining', () => {

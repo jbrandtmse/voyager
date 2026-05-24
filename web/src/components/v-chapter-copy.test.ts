@@ -181,12 +181,17 @@ describe('Story 4.5 AC5 — V1J encounter copy renders when held', () => {
 });
 
 describe('Story 2.9 / 4.5 AC5 — non-copy chapters ignored', () => {
-  it('does NOT render copy for pale-blue-dot (Epic 5 owns PBD copy)', async () => {
+  it('DOES render copy for pale-blue-dot (Story 5.1 — PBD copy landed)', async () => {
+    // Amended in place per Rule 5 (Story 5.1 landed the PBD chapter
+    // copy via the dedicated module's re-exported ChapterSpec — the
+    // V1J pattern). The test's pre-Story-5.1 wording asserted that
+    // Epic 5 was deferred; Story 5.1 IS the Epic 5 landing, so the
+    // assertion flips: PBD MUST now render its copy block when held.
     const pbd = requireChapter('pale-blue-dot');
     const { el, director } = await mount();
     director!.update(pbd.anchorEt);
     await el.updateComplete;
-    expect(el.displayedSlug).toBeNull();
+    expect(el.displayedSlug).toBe('pale-blue-dot');
     el.remove();
   });
 
@@ -236,10 +241,18 @@ describe('Story 2.9 AC1 — late-mount seeding', () => {
   });
 
   it('clears if director.activeChapter is a copy-less chapter at mount time', async () => {
-    const pbd = requireChapter('pale-blue-dot');
+    // Amended in place per Rule 5 — pre-Story-5.1 the test used PBD as
+    // the "copy-less chapter" sentinel. Story 5.1 populated PBD copy
+    // via the dedicated module's re-exported ChapterSpec, so a
+    // copy-less chapter is now any of the launch / cruise / heliopause
+    // chapters. We pick launch-v1 since launches are the only
+    // remaining `copy === undefined` chapters in ALL_CHAPTERS post-
+    // Story 5.1 (heliopauses have their copy stitched through
+    // heliopause-copy.ts).
+    const launchV1 = requireChapter('launch-v1');
     const director = new ChapterDirector(ALL_CHAPTERS);
-    director.update(pbd.anchorEt);
-    expect(director.activeChapter?.slug).toBe('pale-blue-dot');
+    director.update(launchV1.anchorEt);
+    expect(director.activeChapter?.slug).toBe('launch-v1');
 
     const el = document.createElement('v-chapter-copy') as VChapterCopy;
     el.chapterDirector = director;

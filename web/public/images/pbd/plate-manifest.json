@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "web/scripts/build_pbd_plates.ts (Story 5.3 T1)",
+  "plateSize": 128,
+  "plates": [
+    {
+      "body": "venus",
+      "sourcePia": "PIA00453",
+      "filename": "venus.08f78ea9.png",
+      "sha256": "08f78ea943377525755429a3635d2a79b52954265b4a806db94009a4c2e9f252",
+      "bytes": 29198
+    },
+    {
+      "body": "earth",
+      "sourcePia": "PIA00452",
+      "filename": "earth.dd46ad00.png",
+      "sha256": "dd46ad0004bf3b20ac9ade85db6eb5461defd7686cd0cc53af2948943627bcd0",
+      "bytes": 28508
+    },
+    {
+      "body": "jupiter",
+      "sourcePia": "PIA00453",
+      "filename": "jupiter.d52291f0.png",
+      "sha256": "d52291f0134d53dfd2feb22a8f63dfbaa92d8c95fcdaa9969329c07a1f91d672",
+      "bytes": 19164
+    },
+    {
+      "body": "saturn",
+      "sourcePia": "PIA00453",
+      "filename": "saturn.1e6fa076.png",
+      "sha256": "1e6fa07614217c600b5119b21262c6b80e5f5a342c29ae3e4bda71fabda73a23",
+      "bytes": 24703
+    },
+    {
+      "body": "uranus",
+      "sourcePia": "PIA00453",
+      "filename": "uranus.ee43392b.png",
+      "sha256": "ee43392b0c3aa22e85ff45d80d4611dbd58655f878b8fbb7abbddb9f04d94f0b",
+      "bytes": 23339
+    },
+    {
+      "body": "neptune",
+      "sourcePia": "PIA00453",
+      "filename": "neptune.dfd2e020.png",
+      "sha256": "dfd2e020fd068bb3e2674621ec8ae80e8037829de239d701b5f0bbc9e17d871d",
+      "bytes": 28432
+    }
+  ]
+}

@@ -627,15 +627,19 @@ describe('Story 4.5 QA gap 7 — VoyagerCameraController honours chapter default
 // Gap 8 — ChapterSpec.copy / defaultFraming optionality at runtime
 // ====================================================================
 
-describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (Story 4.5 + 4.6 + 4.7 populated, FR30 closed)', () => {
-  it('exactly SIX chapters carry a ChapterSpec.copy field after Story 4.7 (the six gas-giant encounters)', () => {
+describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (Story 4.5 + 4.6 + 4.7 populated, FR30 closed; Story 5.1 adds PBD copy)', () => {
+  it('exactly SEVEN chapters carry a ChapterSpec.copy field after Story 5.1 (six gas-giant encounters + PBD)', () => {
+    // Amended in place per Rule 5: Story 5.1 added PBD copy via the
+    // dedicated module's re-exported ChapterSpec (six gas-giants from
+    // Stories 4.5 / 4.6 / 4.7 + PBD from Story 5.1 = 7 total).
     const chaptersWithCopy = ALL_CHAPTERS.filter(
       (c) => c.copy !== undefined,
     );
-    expect(chaptersWithCopy.length).toBe(6);
+    expect(chaptersWithCopy.length).toBe(7);
     const slugs = chaptersWithCopy.map((c) => c.slug).sort();
     expect(slugs).toEqual(
       [
+        'pale-blue-dot',
         'v1-jupiter',
         'v1-saturn',
         'v2-jupiter',
@@ -664,11 +668,16 @@ describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (
     );
   });
 
-  it('cruise / launch / PBD / heliopause chapters leave both fields undefined (gas-giants only after FR30 closure)', () => {
+  it('cruise / launch / heliopause chapters leave both fields undefined (PBD carries copy without defaultFraming per Story 5.1)', () => {
+    // Amended in place per Rule 5: Story 5.1 populated PBD copy via
+    // the dedicated module; PBD's `defaultFraming` remains undefined
+    // because the choreographed turn (Story 5.2) drives framing per-
+    // substate rather than via declarative defaultFraming. PBD is the
+    // sole "copy without defaultFraming" exception, documented in the
+    // pairing-invariant test below.
     const slugsExpectedClean = [
       'launch-v1',
       'launch-v2',
-      'pale-blue-dot',
       'v1-heliopause',
       'v2-heliopause',
     ];
@@ -677,25 +686,27 @@ describe('Story 4.5 QA gap 8 — ChapterSpec.copy / defaultFraming optionality (
       expect(chapter, `unknown slug ${slug}`).not.toBeNull();
       expect(
         chapter!.copy,
-        `${slug} unexpectedly populated copy — FR30 closure is gas-giant-only`,
+        `${slug} unexpectedly populated copy — non-encounter, non-PBD chapters stay clean`,
       ).toBeUndefined();
       expect(
         chapter!.defaultFraming,
-        `${slug} unexpectedly populated defaultFraming — FR30 closure is gas-giant-only`,
+        `${slug} unexpectedly populated defaultFraming — non-encounter chapters stay clean`,
       ).toBeUndefined();
     }
   });
 
-  it('all chapters that DO carry copy also carry a matching defaultFraming (Story 4.5 pairing invariant)', () => {
-    // For Story 4.5, the only chapter populating either field is V1J,
-    // and it populates both. As Stories 4.6 / 4.7 land, the encounter
-    // pattern is "copy + defaultFraming together" — the lone V1J case
-    // pins the invariant.
+  it('all gas-giant chapters that DO carry copy also carry a matching defaultFraming; PBD is the documented Story 5.1 exception (copy without defaultFraming per ADR-0014)', () => {
+    // For Stories 4.5 / 4.6 / 4.7 the encounter pattern is "copy +
+    // defaultFraming together". Story 5.1 introduces PBD: copy IS
+    // populated, but defaultFraming is undefined because PBD's
+    // framing is choreographed per-substate by Story 5.2 (declarative
+    // defaultFraming would conflict — see ADR-0014 Story 5.1
+    // amendment block + Story 5.1 file Dev Notes § "Critical context").
     for (const chapter of ALL_CHAPTERS) {
-      if (chapter.copy !== undefined) {
+      if (chapter.copy !== undefined && chapter.slug !== 'pale-blue-dot') {
         expect(
           chapter.defaultFraming,
-          `${chapter.slug} carries copy but no defaultFraming — encounter chapters ship both together`,
+          `${chapter.slug} carries copy but no defaultFraming — encounter chapters ship both together; PBD is the only allowed exception`,
         ).toBeDefined();
       }
     }
