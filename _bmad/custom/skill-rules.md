@@ -288,3 +288,37 @@ Run results are committed to `docs/accessibility/manual-test-runs/<YYYY-MM-DD>.m
 - The lead is the binding gate — the dev / QA agents cannot run the screen-reader passes themselves, so this rule is primarily a planning-stage and review-stage cue.
 
 **Why this rule exists today:** Story 6.4 (2026-05-24) authored the canonical manual-checklist + first run record + photosensitive audit + axe-core full coverage. Before Story 6.4, manual a11y testing was implicit ("the project supports keyboard-only" — but no checklist enumerated what that means or when it gets re-run). UX-DR36 mandated the explicit gate; this rule routes the obligation into BMAD planning + review workflows so it doesn't quietly slide off the deploy checklist between phases.
+
+## Rule 17 — Differentiator-perception friendly-user testing is the v1 launch gate (applies to `bmad-create-story`, lead, dev/QA roles)
+
+Voyager's PRD commits the v1 launch to a qualitative gate: 5–10 friendly first-time users (plus ≥ 1 assistive-technology user) run the session protocol at [`docs/testing/friendly-user-protocol.md`](../../docs/testing/friendly-user-protocol.md); the launch ships only if the differentiator-perception threshold is met AND no critical / serious AT-user finding remains unresolved.
+
+The three protocol documents under [`docs/testing/`](../../docs/testing/) are the binding pre-launch user-testing contract:
+
+- [`docs/testing/friendly-user-recruitment.md`](../../docs/testing/friendly-user-recruitment.md) — persona match criteria, vendor list (Fable Tech Labs / IDRC / Knowbility for AT users), consent + privacy commitments, compensation, timeline.
+- [`docs/testing/friendly-user-protocol.md`](../../docs/testing/friendly-user-protocol.md) — 8 ordered probes (Probes #5 V1 Jupiter unprompted attitude + #6 PBD unprompted reconstruction are the differentiator-perception gate), exit-interview Likert ratings + open-ended quote capture, AT-user special-handling section, facilitator notes.
+- [`docs/testing/friendly-user-findings.md`](../../docs/testing/friendly-user-findings.md) — empty template populated post-session-execution; renders the binding PASS / BLOCKED verdict in section 8.
+
+**Launch-gate PASS criterion (binding):**
+
+- ≥ 50% of measured users perceive attitude reconstruction unprompted at the V1 Jupiter encounter (Probe #5), AND
+- ≥ 50% of measured users perceive PBD reconstruction unprompted (Probe #6), AND
+- No critical or serious AT-user finding remains unresolved.
+
+**BLOCKED** otherwise. A BLOCKED verdict triggers the redesign-and-rerun routing enumerated in the findings doc's section 8 (V1 Jupiter UI affordances / PBD choreography pacing / AT remediation; fresh participants for the re-run).
+
+**Blocking semantic:** the gate MUST PASS before the v1 ship. Story 6.5's initial commit ships the THREE PROTOCOL DOCUMENTS + this rule + a closed pointer to the Epic 5 retro Action item #7; that commit does NOT itself signal launch-gate satisfaction. The PASS signal only fires when the maintainer's follow-up commit populates `friendly-user-findings.md` with session data and renders a PASS verdict in section 8.
+
+**Enforcement:**
+
+- `bmad-create-story` for any Epic 7 story (operational substrate + launch readiness) MUST cross-check [`docs/testing/friendly-user-findings.md`](../../docs/testing/friendly-user-findings.md) section 8 "Launch-gate verdict" line. If the verdict is not PASS, surface a HIGH finding at story creation. The story may still be authored (planning work is not gated on the verdict), but the finding documents that the launch-gate is not yet satisfied — Epic 7's `7-9-public-launch-playbook-and-launch-gate-pre-flight` story in particular references this verdict as a precondition.
+- `bmad-code-review` does NOT additionally police this at code-review time. The launch-gate is a qualitative session-driven verdict, not a code review surface. (If a code change touches the protocol docs themselves, the reviewer cross-checks for Rule 5 amendment discipline as usual.)
+- The lead is the binding gate for execution: the dev / QA agents cannot recruit participants or run sessions, so this rule is primarily a planning-stage and pre-launch cue. The lead schedules session execution out-of-band per the recruitment doc's timeline.
+
+**Why this rule exists today:** the PRD's launch-gate commitment ("differentiator-perception result becomes the launch gate" — PRD § "Success criteria") was previously implicit policy: no codified threshold, no named protocol, no enforcement path. Story 6.5 (2026-05-25) authored the three protocol documents + this rule. Without the rule, the launch-gate verdict could quietly slide off the pre-ship checklist (the same failure mode Rule 16 codified for the manual a11y checklist). Without the protocol docs, "friendly-user testing" reads to a contributor as "do some testing" rather than "run THIS protocol against THIS persona and render the verdict in THIS document". The rule + the docs + the findings template close the loop.
+
+**Examples:**
+
+- Acceptable Epic 7 story state (per `bmad-create-story` planning): "Story 7.9 cross-checked `docs/testing/friendly-user-findings.md` section 8 — verdict is PASS as of [commit hash]; launch-readiness pre-flight items proceed."
+- Unacceptable Epic 7 story state: "Story 7.9 proceeds to launch playbook without referencing the findings doc verdict." `bmad-create-story` surfaces this as a HIGH finding.
+- Acceptable re-run routing (BLOCKED verdict): the findings doc's section 8 enumerates the redesign scope; remediation lands as PRs against the relevant chapter stories; Story 6.5 is RE-ENTERED with fresh recruits; the findings doc is amended with a "Re-run round 2" section appended.
