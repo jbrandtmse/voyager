@@ -241,6 +241,56 @@ export const waitForStableFrame = async (
     // tolerance absorbs the residual variance.
     await page.waitForTimeout(FRAME_STABILITY_FALLBACK_WAIT_MS);
   }
+
+  // Condition 5 — PBD photo-composite layer opacity stability (added
+  // 2026-05-24, Epic 5 cross-review). The composite plates from
+  // Story 5.3 are HTML `<img>` elements OUTSIDE the WebGL canvas, so
+  // Condition 4's canvas fingerprint can't see them. A plate mid-fade
+  // (opacity transitioning 0 → 1 or 1 → 0) slips through Condition 4
+  // and lands in the screenshot at an indeterminate opacity, causing
+  // 2%+ pixel-diffs that flake the L4 PBD baselines.
+  //
+  // Wait for every `.pbd-composite-layer img` to reach a settled
+  // opacity (== 0 OR == 1 — never a transient value in between). Two
+  // consecutive samples 200ms apart must both report the same settled
+  // state. No-op when the composite layer isn't mounted (every chapter
+  // other than PBD).
+  if (await page.locator('.pbd-composite-layer').count() > 0) {
+    const COMPOSITE_SETTLE_SAMPLE_GAP_MS = 200;
+    const COMPOSITE_SETTLE_MAX_ATTEMPTS = 30;
+    let compositeStable = false;
+    for (let attempt = 0; attempt < COMPOSITE_SETTLE_MAX_ATTEMPTS; attempt++) {
+      const sampleOpacities = async () =>
+        await page.evaluate(() => {
+          const plates = Array.from(
+            document.querySelectorAll<HTMLImageElement>('.pbd-composite-layer img'),
+          );
+          return plates.map((p) => parseFloat(getComputedStyle(p).opacity));
+        });
+      const first = await sampleOpacities();
+      const allSettledFirst = first.every((o) => o === 0 || o === 1);
+      if (!allSettledFirst) {
+        await page.waitForTimeout(COMPOSITE_SETTLE_SAMPLE_GAP_MS);
+        continue;
+      }
+      await page.waitForTimeout(COMPOSITE_SETTLE_SAMPLE_GAP_MS);
+      const second = await sampleOpacities();
+      if (
+        second.length === first.length &&
+        first.every((o, i) => o === second[i] && (o === 0 || o === 1))
+      ) {
+        compositeStable = true;
+        break;
+      }
+      if (Date.now() >= deadline) break;
+    }
+    if (!compositeStable) {
+      // Defensive: composite layer never settled — fall back to a fixed
+      // wait that's just longer than the fade duration (--v-duration-base
+      // 200ms + slop). Playwright's tolerance absorbs the residual.
+      await page.waitForTimeout(300);
+    }
+  }
 };
 
 /**

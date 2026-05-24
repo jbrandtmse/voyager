@@ -90,6 +90,16 @@ const fallbackAndProbePlugin = (): Plugin => {
         const probeBody = buildProbeInline(mainEntry.url);
         const probeTag = `<script>${probeBody}</script>`;
         let out = html.replace(FEATURE_PROBE_PLACEHOLDER, probeTag);
+        // BUG-007 fix (2026-05-24, Epic-5 cross-review): inject the
+        // main CSS link tag. Vite's auto-injection doesn't fire because
+        // the FEATURE_PROBE substitution above replaces the static
+        // `<script type="module" src>` tag with a dynamic import. The
+        // CSS file is built but never loaded without this injection.
+        // No-op in dev mode (ctx.bundle is undefined).
+        if (ctx.bundle !== undefined) {
+          const cssUrl = resolveMainCssFromBundle(ctx.bundle);
+          out = injectMainCssLink(out, cssUrl);
+        }
         // Story 2.6 AC2 — inject the homepage default OG meta tags.
         // Per-chapter HTML shells are emitted in generateBundle below
         // (different output paths require a different lifecycle hook).
@@ -215,10 +225,16 @@ const ogCardsPlugin = (): Plugin => {
           // bundle shape.
           const mainEntryUrl = resolveMainEntryFromBundle(bundle);
           const probeTag = `<script>${buildProbeInline(mainEntryUrl)}</script>`;
-          const probedRootHtml = rootHtml.replace(
+          let probedRootHtml = rootHtml.replace(
             FEATURE_PROBE_PLACEHOLDER,
             probeTag,
           );
+          // BUG-007 fix (2026-05-24): inject the main CSS link into
+          // the per-chapter shells too — same root cause as the
+          // homepage. Without this, every /c/<slug>/ deep-link lands
+          // on a page with broken token-derived layout.
+          const cssUrl = resolveMainCssFromBundle(bundle);
+          probedRootHtml = injectMainCssLink(probedRootHtml, cssUrl);
           for (const chapter of ALL_CHAPTERS) {
             const entry = idx.get(chapter.slug);
             if (entry === undefined) continue;
@@ -252,6 +268,64 @@ const resolveMainEntryFromBundle = (
     }
   }
   return '/src/main.ts';
+};
+
+/**
+ * Locate the hashed `/assets/main-XXXX.css` URL for the `main` entry's
+ * extracted CSS file. Vite's normal CSS auto-injection only fires when
+ * the entry is referenced by a static `<script type="module" src>` tag.
+ * Story 1.8's capability probe REPLACES that tag with an inline `<script>`
+ * that uses `import()` for the JS bundle — that's a dynamic import, and
+ * Vite does NOT auto-inject the CSS link for dynamic-imported entries.
+ *
+ * The fix is to discover the CSS file from the bundle and inject the
+ * `<link rel="stylesheet">` ourselves, in both transformIndexHtml (root
+ * index.html) and generateBundle (per-chapter shells).
+ *
+ * Returns null if no main CSS asset is found (e.g., during partial test
+ * builds). Callers must tolerate null gracefully.
+ *
+ * BUG-007 (2026-05-24, found by Epic-5 cross-review): without this
+ * injection, every production-built page loads with broken layout —
+ * `--v-edge-margin` and ~20 other tokens are unset, collapsing all
+ * four HUD corners to (0,0) and making chapter copy / scrubber /
+ * attribution panel render without their token-derived spacing.
+ */
+const resolveMainCssFromBundle = (
+  bundle: Record<string, unknown>,
+): string | null => {
+  for (const [fileName, chunk] of Object.entries(bundle)) {
+    const c = chunk as { type?: string; name?: string; names?: string[] };
+    // Vite/Rollup names the CSS asset extracted from the `main` entry
+    // with `name === 'main'` and `type === 'asset'`; the filename
+    // includes the hashed `main-XXXX.css` form.
+    if (c.type === 'asset' && fileName.endsWith('.css') && (c.name === 'main' || (c.names ?? []).includes('main'))) {
+      return `/${fileName}`;
+    }
+    // Defensive fallback: any asset matching `assets/main-*.css`.
+    if (c.type === 'asset' && /^assets\/main-[^/]*\.css$/.test(fileName)) {
+      return `/${fileName}`;
+    }
+  }
+  return null;
+};
+
+/**
+ * Inject `<link rel="stylesheet" href="...">` into the document `<head>`
+ * if not already present. Idempotent — if a link to the same href already
+ * exists, returns the html unchanged. Placed BEFORE `</head>` so it loads
+ * alongside the font preloads and before the inline FEATURE_PROBE script
+ * dynamic-imports the main bundle.
+ */
+const injectMainCssLink = (html: string, cssUrl: string | null): string => {
+  if (cssUrl === null) return html;
+  if (html.includes(`href="${cssUrl}"`)) return html;
+  const linkTag = `<link rel="stylesheet" crossorigin href="${cssUrl}">`;
+  // Inject right before the closing </head> so it pairs with the other
+  // <link rel="preload"> tags above it.
+  const headCloseIdx = html.indexOf('</head>');
+  if (headCloseIdx === -1) return html;
+  return html.slice(0, headCloseIdx) + `    ${linkTag}\n  ` + html.slice(headCloseIdx);
 };
 
 /**
