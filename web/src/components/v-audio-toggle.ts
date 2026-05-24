@@ -2,6 +2,7 @@ import { html, css, type TemplateResult } from 'lit';
 
 import { BaseElement } from './base-element';
 import { isTextInputFocused } from '../lib/text-input-focus';
+import { isHelpOverlayOpen } from '../lib/help-overlay-state';
 import type { AudioPlaybackService } from '../services/audio-playback-service';
 
 /**
@@ -221,9 +222,11 @@ const installGlobalShortcut = (
     // AC3 — suppress G when the <v-help-overlay> modal is open. The
     // overlay reflects its `open` reactive property as the `data-open`
     // attribute (per `static properties = { open: { ..., reflect: true,
-    // attribute: 'data-open' } }` in v-help-overlay.ts), so a document
-    // query for `[data-open]` on the element is the cheapest correct
-    // probe — no cross-component reference required.
+    // attribute: 'data-open' } }` in v-help-overlay.ts); the probe is
+    // a document query for `[data-open]` on the element. Story 6.2
+    // Rule-9 extraction: the helper now lives at
+    // `web/src/lib/help-overlay-state.ts` so `<v-hud>`'s H-shortcut can
+    // consume it too without duplicating the probe.
     if (isHelpOverlayOpen(target)) return;
     e.preventDefault();
     toggle.toggleAudio();
@@ -232,25 +235,6 @@ const installGlobalShortcut = (
   return () => {
     target.removeEventListener('keydown', onKeyDown);
   };
-};
-
-/**
- * AC3 helper — returns true if a `<v-help-overlay>` is currently open.
- *
- * The overlay reflects its `open` reactive property to the `data-open`
- * attribute on the host element (see `v-help-overlay.ts` `static
- * properties`). When the overlay is closed the attribute is absent;
- * when open the attribute is present (the boolean reflect emits the
- * empty string or `"true"`, both of which match the CSS selector
- * `[data-open]`).
- *
- * Returns false when no `<v-help-overlay>` is in the DOM (e.g. embed
- * mode skips the overlay mount — Story 2.8 / Story 2.5).
- */
-const isHelpOverlayOpen = (target: Document): boolean => {
-  const overlay = target.querySelector('v-help-overlay');
-  if (overlay === null) return false;
-  return overlay.hasAttribute('data-open');
 };
 
 if (typeof customElements !== 'undefined' && !customElements.get('v-audio-toggle')) {

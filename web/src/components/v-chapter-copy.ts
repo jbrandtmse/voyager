@@ -94,14 +94,65 @@ const copyForChapter = (chapter: ChapterSpec): ChapterCopyBlock | null => {
  * chapter) are ignored without throwing — Epic 4 will register additional
  * handlers via the same lookup pattern.
  */
+/**
+ * Story 6.2 AC4 — bottom-sheet drawer state for narrow viewports
+ * (< 1024 px). Three discrete states cover the user's intent:
+ *
+ *   - 'collapsed': only the lede (chapter title sentence) is shown
+ *     (1 line tall).
+ *   - 'partial':   lede + 2 lines of body — the AC4-mandated default
+ *     for narrow-viewport entries (lede + 2 body lines ≈ 3 lines
+ *     total). User can drag UP for more, DOWN for less.
+ *   - 'full':      drawer covers the bottom 2/3 of the viewport.
+ *
+ * Kept as a string union (not an enum) to mirror the substate-string
+ * pattern from `<v-timeline-scrubber>` / `ChapterDirector`.
+ */
+export type ChapterCopyDrawerState = 'collapsed' | 'partial' | 'full';
+
+/**
+ * Story 6.2 AC4 — narrow-viewport breakpoint matching Story 1.7's
+ * tablet breakpoint (`max-width: 1023px`). Re-declared here as the
+ * media-query string consumed by `matchMedia` so the component does
+ * not silently fork the project's structural breakpoint set.
+ */
+const NARROW_MEDIA_QUERY = '(max-width: 1023px)';
+
 export class VChapterCopy extends LitElement {
   /** Lit Light DOM idiom — render onto the host element itself. */
   override createRenderRoot(): HTMLElement {
     return this;
   }
 
+  static override properties = {
+    /**
+     * Story 6.2 AC4 — true when the viewport is narrow enough to
+     * switch from right-side panel to bottom-sheet drawer layout
+     * (matches `(max-width: 1023px)`). Reflected to `data-narrow` so
+     * the chapter-copy CSS can apply the bottom-sheet positioning.
+     * Rule 10 — declare-only + ctor-body initialised.
+     */
+    narrowViewport: { type: Boolean, reflect: true, attribute: 'data-narrow' },
+    /**
+     * Story 6.2 AC4 — drawer state at narrow viewports. Reflected as
+     * `data-drawer="collapsed|partial|full"` so the CSS can size the
+     * drawer accordingly. Initial value is 'partial' (the AC's
+     * "default" state: lede + 2 lines).
+     */
+    drawerState: {
+      type: String,
+      reflect: true,
+      attribute: 'data-drawer',
+    },
+  };
+
+  declare narrowViewport: boolean;
+  declare drawerState: ChapterCopyDrawerState;
+
   private _chapterDirector: ChapterDirector | null = null;
   private directorUnsub: (() => void) | null = null;
+  private mediaQueryList: MediaQueryList | null = null;
+  private mediaListener: ((e: MediaQueryListEvent) => void) | null = null;
 
   /**
    * Currently displayed copy block, or null when no chapter is `held`.
@@ -111,6 +162,12 @@ export class VChapterCopy extends LitElement {
   private currentCopy: ChapterCopyBlock | null = null;
   /** Slug of the chapter whose copy is shown (for the data-slug attribute). */
   private currentSlug: string | null = null;
+
+  constructor() {
+    super();
+    this.narrowViewport = false;
+    this.drawerState = 'partial';
+  }
 
   get chapterDirector(): ChapterDirector | null {
     return this._chapterDirector;
@@ -134,6 +191,25 @@ export class VChapterCopy extends LitElement {
       this.subscribeToDirector(this._chapterDirector);
       this.seedFromActiveChapter(this._chapterDirector);
     }
+    // Story 6.2 AC4 — wire matchMedia for narrow-viewport detection.
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.mediaQueryList = window.matchMedia(NARROW_MEDIA_QUERY);
+      this.narrowViewport = this.mediaQueryList.matches;
+      this.mediaListener = (e: MediaQueryListEvent): void => {
+        this.narrowViewport = e.matches;
+      };
+      if (typeof this.mediaQueryList.addEventListener === 'function') {
+        this.mediaQueryList.addEventListener('change', this.mediaListener);
+      } else if (
+        typeof (this.mediaQueryList as unknown as {
+          addListener?: (l: (e: MediaQueryListEvent) => void) => void;
+        }).addListener === 'function'
+      ) {
+        (this.mediaQueryList as unknown as {
+          addListener: (l: (e: MediaQueryListEvent) => void) => void;
+        }).addListener(this.mediaListener);
+      }
+    }
   }
 
   override disconnectedCallback(): void {
@@ -142,7 +218,74 @@ export class VChapterCopy extends LitElement {
       this.directorUnsub();
       this.directorUnsub = null;
     }
+    if (this.mediaQueryList !== null && this.mediaListener !== null) {
+      if (typeof this.mediaQueryList.removeEventListener === 'function') {
+        this.mediaQueryList.removeEventListener('change', this.mediaListener);
+      } else if (
+        typeof (this.mediaQueryList as unknown as {
+          removeListener?: (l: (e: MediaQueryListEvent) => void) => void;
+        }).removeListener === 'function'
+      ) {
+        (this.mediaQueryList as unknown as {
+          removeListener: (l: (e: MediaQueryListEvent) => void) => void;
+        }).removeListener(this.mediaListener);
+      }
+      this.mediaQueryList = null;
+      this.mediaListener = null;
+    }
   }
+
+  /**
+   * Story 6.2 AC4 — public API for keyboard / pointer drivers to cycle
+   * the drawer state. The state machine:
+   *
+   *   collapsed → partial → full → collapsed → ...
+   *
+   * Used by the grab-handle's Enter keystroke (Subtask 3.4).
+   */
+  cycleDrawerState(): void {
+    if (this.drawerState === 'collapsed') this.drawerState = 'partial';
+    else if (this.drawerState === 'partial') this.drawerState = 'full';
+    else this.drawerState = 'collapsed';
+  }
+
+  /**
+   * Story 6.2 AC4 — step the drawer "up" (partial → full or collapsed →
+   * partial); a no-op when already 'full'.
+   */
+  expandDrawer(): void {
+    if (this.drawerState === 'collapsed') this.drawerState = 'partial';
+    else if (this.drawerState === 'partial') this.drawerState = 'full';
+  }
+
+  /**
+   * Story 6.2 AC4 — step the drawer "down" (full → partial or partial →
+   * collapsed); a no-op when already 'collapsed'.
+   */
+  collapseDrawer(): void {
+    if (this.drawerState === 'full') this.drawerState = 'partial';
+    else if (this.drawerState === 'partial') this.drawerState = 'collapsed';
+  }
+
+  /** Story 6.2 AC4 — keyboard handler for the grab-handle button. */
+  private onGrabHandleKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this.expandDrawer();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this.collapseDrawer();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Toggle between partial and full per Subtask 3.4.
+      this.drawerState = this.drawerState === 'full' ? 'partial' : 'full';
+    }
+  };
+
+  /** Story 6.2 AC4 — click handler for the grab-handle. */
+  private onGrabHandleClick = (): void => {
+    this.cycleDrawerState();
+  };
 
   private subscribeToDirector(director: ChapterDirector): void {
     this.directorUnsub = director.subscribe(this.onTransition);
@@ -204,6 +347,21 @@ export class VChapterCopy extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     const copy = this.currentCopy;
+    // Story 6.2 AC4 — grab-handle rendered for narrow viewports only.
+    // The handle is a focusable button so keyboard users can adjust the
+    // drawer state via Enter / ArrowUp / ArrowDown.
+    const grabHandle = this.narrowViewport
+      ? html`<button
+          type="button"
+          class="v-chapter-copy-drawer-handle"
+          aria-label="Adjust chapter detail drawer"
+          aria-expanded=${this.drawerState === 'full' ? 'true' : 'false'}
+          @click=${this.onGrabHandleClick}
+          @keydown=${this.onGrabHandleKeyDown}
+        >
+          <span aria-hidden="true" class="v-chapter-copy-drawer-grip"></span>
+        </button>`
+      : null;
     if (copy === null) {
       // Render an empty article so the DOM node is stable (eases CSS fade-
       // in/out targeting) but contains no editorial content. Hidden via the
@@ -221,6 +379,7 @@ export class VChapterCopy extends LitElement {
         data-slug=${this.currentSlug ?? ''}
         aria-live="polite"
       >
+        ${grabHandle}
         <h2 class="v-chapter-copy-lede">${copy.lede}</h2>
         ${copy.paragraphs.map(
           (p) => html`<p class="v-chapter-copy-paragraph">${p}</p>`,

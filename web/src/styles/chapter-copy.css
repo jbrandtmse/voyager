@@ -48,3 +48,98 @@ v-chapter-copy .v-chapter-copy-paragraph {
 v-chapter-copy .v-chapter-copy-paragraph:last-child {
   margin-bottom: 0;
 }
+
+/* Story 6.2 AC4 — bottom-sheet drawer at narrow viewports (< 1024px).
+   The right-side panel layout (top: 50%, right: edge, vertical-centred)
+   switches to a bottom-anchored sheet positioned ABOVE the scrubber
+   chrome. The scrubber sits at bottom: var(--v-edge-margin) with a
+   12-px track + 22-px (half of the 44-px hit area) above the visible
+   thumb glyph, so the drawer must clear roughly
+   `var(--v-edge-margin) + 44px` of vertical space to avoid the
+   scrubber's interactive zone. `--v-space-2` adds breathing room. */
+v-chapter-copy[data-narrow] {
+  /* Sheet anchored to the viewport bottom, full-width minus edge
+     margins. The transition routes through the central duration token
+     (reduced-motion collapses to 0 via global.css). */
+  top: auto;
+  right: var(--v-edge-margin);
+  left: var(--v-edge-margin);
+  transform: none;
+  bottom: calc(var(--v-edge-margin) + 44px + var(--v-space-2));
+  width: auto;
+  max-height: calc(
+    100vh - var(--v-edge-margin) - 44px - var(--v-space-2) - var(--v-space-4)
+  );
+  pointer-events: auto; /* drawer is interactive at narrow viewports */
+  overflow: hidden;
+  transition:
+    max-height var(--v-duration-base) var(--v-ease-out),
+    bottom var(--v-duration-base) var(--v-ease-out);
+}
+
+v-chapter-copy[data-narrow] .v-chapter-copy {
+  position: relative;
+  background: var(--v-color-bg-elevated);
+  border-top: 1px solid var(--v-color-divider);
+  padding: var(--v-space-3) var(--v-space-4);
+  overflow: hidden;
+}
+
+/* Drawer state sizing — three discrete heights. We use max-height
+   transitions so the drawer animates smoothly between states.
+   Approximations:
+     collapsed: ~1 line (just the lede sentence, truncated)
+     partial:   3 lines (lede + 2 body lines) — the AC4 default
+     full:      2/3 of the viewport */
+v-chapter-copy[data-narrow][data-drawer='collapsed'] {
+  max-height: calc(2em + var(--v-space-3) * 2);
+}
+
+v-chapter-copy[data-narrow][data-drawer='partial'] {
+  max-height: calc(4em + var(--v-space-3) * 2 + var(--v-space-4));
+}
+
+v-chapter-copy[data-narrow][data-drawer='full'] {
+  max-height: calc(
+    66vh - var(--v-edge-margin) - 44px - var(--v-space-2)
+  );
+}
+
+/* Drawer grab-handle — a small affordance at the top of the sheet so
+   users can drag it (pointer) or step it (keyboard ArrowUp/Down). */
+v-chapter-copy .v-chapter-copy-drawer-handle {
+  display: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  height: 16px;
+  padding: 0;
+  margin: calc(var(--v-space-2) * -1) 0 var(--v-space-2) 0;
+  cursor: ns-resize;
+  position: relative;
+}
+
+v-chapter-copy[data-narrow] .v-chapter-copy-drawer-handle {
+  display: block;
+}
+
+v-chapter-copy .v-chapter-copy-drawer-handle:focus-visible {
+  outline: 2px solid var(--v-color-focus);
+  outline-offset: 2px;
+}
+
+v-chapter-copy .v-chapter-copy-drawer-grip {
+  display: block;
+  width: 32px;
+  height: 4px;
+  background: var(--v-color-fg-muted);
+  border-radius: 2px;
+  margin: 6px auto 0 auto;
+}
+
+/* Story 6.2 AC4 — reduced-motion: drawer state changes are instant
+   cuts. The --v-duration-base token already collapses to 0ms under
+   prefers-reduced-motion: reduce (global.css), so this CSS does not
+   need its own @media block. The transition simply becomes a 0ms
+   "transition" — i.e. an instant change. */
