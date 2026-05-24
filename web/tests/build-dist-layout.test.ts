@@ -402,13 +402,63 @@ describe.skipIf(!distAvailable)(
       }
     }, 90_000);
 
-    it('catches a missing CSS-link regression (synthetic BUG-E5-007)', async () => {
-      // The load-bearing case — proves this test would catch the
-      // original defect. We intercept the HTML response and strip the
-      // `<link rel="stylesheet">` tag, simulating BUG-E5-007's failure
-      // mode. The HUD corners should collapse: at least three of the
-      // four corners should fail their gutter check (the unstyled
-      // corners stack at the document origin).
+    it('catches a missing CSS-link regression (synthetic BUG-E5-007 — delta-based)', async () => {
+      // ## What this test proves
+      //
+      // The load-bearing case — proves this spec would catch the original
+      // defect (BUG-E5-007: main CSS file unlinked from dist/index.html
+      // shipped, all automated tiers passed because they asserted on
+      // text/pixel-diff-vs-self rather than layout consequence).
+      //
+      // ## Why delta-based detection (Story 6.3 code review, 2026-05-24)
+      //
+      // The ORIGINAL form of this test (pre-Story-6.3) asserted that ≥3
+      // of the 4 HUD-corner gutter thresholds FAIL when the `<link>` tag
+      // is stripped — predicated on the assumption that absent
+      // `--v-edge-margin` resolves to 0 and corners collapse to the
+      // document origin. Story 6.2 AC7 (Epic 5 retro Action item #8)
+      // added explicit `var(--v-edge-margin, 16px)` fallbacks to all four
+      // corner rules INSIDE `<v-hud>`'s Shadow-DOM `<style>` block. Those
+      // shadow-DOM rules ride along with the JS bundle (NOT the external
+      // `main-*.css`), so under the synthetic strip the corners still
+      // land at `16px` — every gutter threshold passes, violation
+      // counter stays at 0, and the test fails loudly without surfacing
+      // a real regression.
+      //
+      // The Story 6.2 defensive fallback is the correct improvement
+      // (corners are load-bearing layout pivots — they MUST land
+      // sensibly even under partial CSS failure). The test's premise was
+      // over-specified to ONE particular failure mode.
+      //
+      // **Resolution (Story 6.3 code review, option b — delta-based):**
+      // measure the HUD-corner layout TWICE in the same test — first
+      // with the CSS link present (baseline), then with it stripped — and
+      // assert that the two layouts DIFFER by a meaningful amount. If
+      // stripping the external CSS bundle produces an identical layout,
+      // either the bundle no longer contributes anything load-bearing
+      // (a real concern that surfaces here) OR the regression-coverage
+      // contract is broken. If the layouts differ, the test still
+      // catches a CSS-load failure — independent of whether the failure
+      // mode is "collapse to (0,0)" or "collapse to (16px,16px)" or
+      // anything in between.
+      //
+      // The delta-based form survives future defensive additions: any
+      // surface that depends on the external CSS bundle for ANY of its
+      // computed-style properties will still produce a non-zero delta.
+      //
+      // ## Methodology
+      //
+      // 1. Open page A — CSS link present (normal production load).
+      // 2. Open page B — CSS link stripped via `page.route()` intercept.
+      // 3. Read the HUD-corner rects AND the mission-scrubber rect
+      //    (scrubber lives in LIGHT DOM — it does NOT have the shadow-
+      //    DOM fallback, so it's the most sensitive delta surface).
+      // 4. Assert at least one of the following deltas exceeds a
+      //    meaningful threshold (50px on any single rect dimension OR
+      //    the scrubber's bounding rect differs in width/position by
+      //    ≥50px). The scrubber check is the load-bearing signal —
+      //    a CSS-link strip MUST shift the scrubber's gutter since
+      //    its `--v-edge-margin`-derived margins live in external CSS.
       //
       // Page.route() interception is preferable to copying dist/ to a
       // tempfile + spinning a second server: the production-build
@@ -416,135 +466,192 @@ describe.skipIf(!distAvailable)(
       // entry is rewritten. The intercept is scoped to the root URL
       // only — sub-resources pass through.
       if (browser === null) throw new Error('browser failed to launch');
-      const ctx = await browser.newContext({
-        viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
-        deviceScaleFactor: 1,
-        reducedMotion: 'reduce',
-      });
-      const page = await ctx.newPage();
-      try {
-        await page.route(`${baseUrl}/`, async (route, request) => {
-          if (request.url().replace(/\/$/, '') !== baseUrl) {
-            await route.continue();
-            return;
+
+      // Helper: open a context, optionally with CSS-link stripping,
+      // navigate to /, wait for HUD mount, sample landmarks.
+      const sampleLandmarks = async (
+        stripCss: boolean,
+      ): Promise<{
+        topLeft: DOMRect | null;
+        topRight: DOMRect | null;
+        bottomLeft: DOMRect | null;
+        bottomRight: DOMRect | null;
+        scrubber: DOMRect | null;
+      }> => {
+        const ctx = await browser!.newContext({
+          viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
+          deviceScaleFactor: 1,
+          reducedMotion: 'reduce',
+        });
+        const page = await ctx.newPage();
+        try {
+          if (stripCss) {
+            await page.route(`${baseUrl}/`, async (route, request) => {
+              if (request.url().replace(/\/$/, '') !== baseUrl) {
+                await route.continue();
+                return;
+              }
+              const original = readFileSync(ROOT_HTML, 'utf-8');
+              const stripped = original.replace(
+                /<link\s+rel="stylesheet"\s+(?:crossorigin\s+)?href="\/assets\/main-[^"]+\.css">\s*/,
+                '',
+              );
+              // Sanity check: the substitution must have actually
+              // removed a tag; if it didn't, the assertion below would
+              // still pass (false confidence). Throw to make the test
+              // fail loudly.
+              if (stripped === original) {
+                throw new Error(
+                  'CSS-link strip regex did not match — defense test cannot prove regression coverage',
+                );
+              }
+              await route.fulfill({
+                status: 200,
+                contentType: 'text/html; charset=utf-8',
+                body: stripped,
+              });
+            });
           }
-          const original = readFileSync(ROOT_HTML, 'utf-8');
-          const stripped = original.replace(
-            /<link\s+rel="stylesheet"\s+(?:crossorigin\s+)?href="\/assets\/main-[^"]+\.css">\s*/,
-            '',
-          );
-          // Sanity check: the substitution must have actually removed a
-          // tag; if it didn't, the assertion below would still pass
-          // (false confidence). Throw to make the test fail loudly.
-          if (stripped === original) {
-            throw new Error(
-              'CSS-link strip regex did not match — defense test cannot prove regression coverage',
+
+          await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
+          // Wait briefly for the HUD to mount — under the stripped-CSS
+          // condition, the title card may never dismount cleanly, but
+          // the HUD shadow root still mounts.
+          await page
+            .waitForFunction(
+              () => {
+                const hud = document.querySelector('v-hud');
+                if (hud === null) return false;
+                return hud.shadowRoot?.querySelector('.corner.top-left') !== null;
+              },
+              undefined,
+              { timeout: 30_000, polling: 250 },
+            )
+            .catch(() => {
+              /* tolerate timeout — sampler below interrogates state */
+            });
+
+          return await page.evaluate(() => {
+            const hud = document.querySelector('v-hud');
+            const sr = hud?.shadowRoot;
+            const readShadow = (sel: string): DOMRect | null => {
+              if (sr === null || sr === undefined) return null;
+              const el = sr.querySelector(sel);
+              if (el === null) return null;
+              return (el as HTMLElement)
+                .getBoundingClientRect()
+                .toJSON() as DOMRect;
+            };
+            const scrubberEl = document.querySelector(
+              'v-timeline-scrubber[variant="mission"]',
             );
-          }
-          await route.fulfill({
-            status: 200,
-            contentType: 'text/html; charset=utf-8',
-            body: stripped,
+            const scrubber =
+              scrubberEl === null
+                ? null
+                : ((scrubberEl as HTMLElement)
+                    .getBoundingClientRect()
+                    .toJSON() as DOMRect);
+            return {
+              topLeft: readShadow('.corner.top-left'),
+              topRight: readShadow('.corner.top-right'),
+              bottomLeft: readShadow('.corner.bottom-left'),
+              bottomRight: readShadow('.corner.bottom-right'),
+              scrubber,
+            };
           });
-        });
+        } finally {
+          await ctx.close();
+        }
+      };
 
-        await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
-        // Wait briefly for the HUD to mount even in the broken state —
-        // mount itself still works; only the layout collapses.
-        await page
-          .waitForFunction(
-            () => {
-              const hud = document.querySelector('v-hud');
-              if (hud === null) return false;
-              return hud.shadowRoot?.querySelector('.corner.top-left') !== null;
-            },
-            undefined,
-            { timeout: 30_000, polling: 250 },
-          )
-          .catch(() => {
-            /* tolerate timeout — assertion below interrogates state */
-          });
+      // Sample baseline (CSS link present) and stripped (CSS link absent)
+      // back-to-back. The two samples come from independent contexts so
+      // there is no cross-contamination via service workers / shared
+      // storage.
+      const baseline = await sampleLandmarks(false);
+      const stripped = await sampleLandmarks(true);
 
-        // Title card may never dismount cleanly without CSS; sample
-        // landmarks regardless. The binding signal: at least three of
-        // the four HUD corners collapse to the viewport origin (no
-        // `--v-edge-margin` token means `top/left/right/bottom` resolve
-        // to `auto` → 0).
-        const rects = await page.evaluate(() => {
-          const hud = document.querySelector('v-hud');
-          const sr = hud?.shadowRoot;
-          if (sr === null || sr === undefined) return null;
-          const read = (sel: string): DOMRect | null => {
-            const el = sr.querySelector(sel);
-            if (el === null) return null;
-            return (el as HTMLElement).getBoundingClientRect().toJSON() as DOMRect;
-          };
-          return {
-            topLeft: read('.corner.top-left'),
-            topRight: read('.corner.top-right'),
-            bottomLeft: read('.corner.bottom-left'),
-            bottomRight: read('.corner.bottom-right'),
-          };
-        });
+      // Define the "meaningful delta" threshold. 50px is comfortably
+      // larger than sub-pixel anti-alias jitter and font-metrics
+      // variation between paints; it's small enough that ANY genuine
+      // CSS-link-strip layout shift (corners moving by ~16px–24px due
+      // to lost gutter margins, scrubber expanding by hundreds of
+      // pixels due to lost edge gutter, etc.) registers as a delta.
+      const DELTA_THRESHOLD_PX = 50;
 
-        // The synthetic case proves the layout-invariant check fails
-        // (the test would catch the defect). Count violations against
-        // the same gutter thresholds the happy-path test uses.
-        expect(rects, 'HUD shadow root never rendered').not.toBeNull();
-        const violations: string[] = [];
-        // Note (code-review clarification, Story 6.0 review 2026-05-24):
-        // the top-left corner is INTENTIONALLY excluded from the
-        // violation counter. Under BUG-E5-007 (no CSS link) every
-        // `--v-edge-margin`-anchored gutter resolves to 0, so
-        // `top-left.left` is 0 — which trivially passes the happy-path
-        // `left < 200` check (0 < 200 is true). The top-left corner is
-        // structurally unable to fail in a way the other three corners
-        // can fail (right edges collapse leftward; bottom edges
-        // collapse upward). Counting only the THREE measurable
-        // collapse signals (top-right.right, bottom-left.bottom,
-        // bottom-right.right, bottom-right.bottom — that's actually
-        // four bottom/right checks against the right & bottom edges)
-        // is by design. The ≥3 threshold gives one bit of slack while
-        // proving regression coverage. Track the top-left rect only as
-        // a null-sanity probe (a missing rect is still a violation).
-        if (rects!.topLeft === null) {
-          violations.push('top-left-missing');
-        }
-        if (
-          rects!.topRight === null ||
-          rects!.topRight.right <= VIEWPORT_WIDTH - 200
-        ) {
-          violations.push('top-right');
-        }
-        if (
-          rects!.bottomLeft === null ||
-          rects!.bottomLeft.bottom <= VIEWPORT_HEIGHT - 100
-        ) {
-          violations.push('bottom-left');
-        }
-        if (
-          rects!.bottomRight === null ||
-          rects!.bottomRight.right <= VIEWPORT_WIDTH - 200
-        ) {
-          violations.push('bottom-right');
-        }
-        if (
-          rects!.bottomRight === null ||
-          rects!.bottomRight.bottom <= VIEWPORT_HEIGHT - 100
-        ) {
-          violations.push('bottom-right-bottom');
-        }
-        // At least 3 of the 4 gutter-edge invariants fail under the
-        // synthetic regression — proves regression coverage.
-        expect(
-          violations.length,
-          `expected ≥3 HUD-corner layout violations under synthetic missing-CSS-link, observed ${violations.length} (${violations.join(
-            ', ',
-          )})`,
-        ).toBeGreaterThanOrEqual(3);
-      } finally {
-        await ctx.close();
-      }
-    }, 90_000);
+      const rectDelta = (
+        a: DOMRect | null,
+        b: DOMRect | null,
+      ): number => {
+        // Treat a missing rect as a maximum delta — the absence of an
+        // expected landmark IS a layout regression.
+        if (a === null || b === null) return Number.POSITIVE_INFINITY;
+        // Compare the four canonical edge positions. The largest
+        // single-edge delta IS the binding signal — we don't sum,
+        // because summing would dilute a sharp single-edge shift
+        // (e.g., scrubber.right shifting by 200px) into a noisier
+        // mean.
+        return Math.max(
+          Math.abs(a.left - b.left),
+          Math.abs(a.right - b.right),
+          Math.abs(a.top - b.top),
+          Math.abs(a.bottom - b.bottom),
+        );
+      };
+
+      const deltas: { landmark: string; px: number }[] = [
+        { landmark: 'topLeft', px: rectDelta(baseline.topLeft, stripped.topLeft) },
+        { landmark: 'topRight', px: rectDelta(baseline.topRight, stripped.topRight) },
+        { landmark: 'bottomLeft', px: rectDelta(baseline.bottomLeft, stripped.bottomLeft) },
+        { landmark: 'bottomRight', px: rectDelta(baseline.bottomRight, stripped.bottomRight) },
+        { landmark: 'scrubber', px: rectDelta(baseline.scrubber, stripped.scrubber) },
+      ];
+
+      const meaningfulDeltas = deltas.filter((d) => d.px >= DELTA_THRESHOLD_PX);
+
+      // The binding signal: at least ONE landmark differs meaningfully
+      // between with-CSS and without-CSS. If every landmark is within
+      // a sub-50px window, then either the external CSS bundle does
+      // not contribute load-bearing layout (a real concern this test
+      // surfaces) OR the failure-mode landscape has shifted so far that
+      // this test can no longer prove regression coverage and needs to
+      // be re-targeted.
+      //
+      // In practice the scrubber landmark is the most sensitive delta:
+      // it lives in LIGHT DOM, its left/right margins are anchored to
+      // `--v-edge-margin` via external CSS rules WITHOUT a shadow-DOM
+      // fallback, so a missing CSS bundle widens the scrubber to span
+      // the full viewport (a delta of hundreds of pixels). The shadow-
+      // DOM-fallback'd HUD corners may shift by only ~8px (24px clamp
+      // floor → 16px fallback) which is below the threshold by design —
+      // the scrubber is what catches the regression.
+      expect(
+        meaningfulDeltas.length,
+        `expected ≥1 landmark to shift by ≥${DELTA_THRESHOLD_PX}px when CSS link is stripped, ` +
+          `observed ${meaningfulDeltas.length}. All landmark deltas:\n  ` +
+          deltas
+            .map((d) => `${d.landmark}: ${Math.round(d.px)}px`)
+            .join('\n  ') +
+          `\n\nIf every landmark is within ${DELTA_THRESHOLD_PX}px between with-CSS ` +
+          `and without-CSS, either (a) the external CSS bundle no longer contributes ` +
+          `load-bearing layout (a real concern surfacing here) or (b) every load-bearing ` +
+          `rule has been moved into a defensive shadow-DOM fallback. Re-target this ` +
+          `test at a new light-DOM consequence surface in either case.`,
+      ).toBeGreaterThanOrEqual(1);
+
+      // Belt-and-braces sanity: the scrubber-specific delta should
+      // dominate, since it has no shadow-DOM fallback. A future PR that
+      // adds a shadow-DOM fallback to the scrubber's gutter would
+      // surface here too (and SHOULD be paired with extending this
+      // test to a new light-DOM consequence surface — see audit doc
+      // § 8 forward-coupled obligations).
+      const scrubberDelta = rectDelta(baseline.scrubber, stripped.scrubber);
+      expect(
+        scrubberDelta,
+        `mission scrubber delta between with-CSS and without-CSS should exceed ` +
+          `${DELTA_THRESHOLD_PX}px (light-DOM gutter rules live in external CSS). ` +
+          `Observed: ${Math.round(scrubberDelta)}px.`,
+      ).toBeGreaterThanOrEqual(DELTA_THRESHOLD_PX);
+    }, 180_000);
   },
 );

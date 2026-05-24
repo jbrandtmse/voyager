@@ -940,6 +940,43 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 
 ---
 
+### Story 6.3 (QA, 2026-05-24)
+
+1. ~~**`[6.0/6.2 → 6.4 / MED]` `build-dist-layout.test.ts` synthetic BUG-E5-007 case invalidated by Story 6.2's defensive corner CSS fallback**~~ — **CLOSED by Story 6.3 code review (2026-05-24):** rewrote the synthetic case as delta-based detection (option b from the three proposed resolutions). The test now opens TWO contexts — one with the CSS link present (baseline), one with it stripped — and asserts that ≥1 landmark (HUD corners + mission scrubber) differs by ≥50px between the two samples. The light-DOM mission scrubber is the load-bearing delta surface: its gutter rules live in external CSS without a shadow-DOM fallback, so a missing main-*.css bundle widens it across the full viewport (delta of hundreds of pixels). The shadow-DOM-fallback'd HUD corners shift by only ~8px under the same condition (24px clamp floor → 16px fallback), below the threshold by design. The delta-based form is robust to future defensive additions — any surface that depends on the external bundle for ANY computed-style property still produces a detectable delta. Verification: `cd web && npx vitest run tests/build-dist-layout.test.ts` → 6/6 passed; `cd web && npm test` → 3669 passed / 10 skipped / **0 failures** (was 3668 + 1 fail). See review findings in `_bmad-output/implementation-artifacts/6-3-full-reduced-motion-sweep-across-all-chapters-and-components.md` § Review Findings.
+
+   <details><summary>Historical findings preserved</summary>
+
+1a. **`[6.0/6.2 → 6.4 / MED]` `build-dist-layout.test.ts` synthetic BUG-E5-007 case invalidated by Story 6.2's defensive corner CSS fallback**
+
+   **What's the issue:** `web/tests/build-dist-layout.test.ts > catches a missing CSS-link regression (synthetic BUG-E5-007)` fails deterministically on `epic6` HEAD (3 consecutive runs confirmed during Story 6.3 QA — all observe `0` violations, expected `≥3`). The failure was already documented as pre-existing by the Story 6.3 dev via `git stash + re-run` and is NOT introduced by Story 6.3 (verified independently by QA: the bypass fix at `v-timeline-scrubber.ts:398` touches an unrelated CSS surface). Root cause is Story 6.2 AC7 (`d3b4311` "feat(story-6.2): HUD dismiss/restore + narrow-viewport compaction + marker clustering" — Epic 5 retro Action item #8), which added explicit fallbacks to all four `<v-hud>` corner rules:
+
+   ```css
+   .corner.top-left  { top: var(--v-edge-margin, 16px);  left: var(--v-edge-margin, 16px); }
+   .corner.top-right { top: var(--v-edge-margin, 16px);  right: var(--v-edge-margin, 16px); }
+   .corner.bottom-left  { bottom: var(--v-edge-margin, 16px); left: var(--v-edge-margin, 16px); }
+   .corner.bottom-right { bottom: var(--v-edge-margin, 16px); right: var(--v-edge-margin, 16px); }
+   ```
+
+   These rules live in `<v-hud>`'s Shadow-DOM `<style>` block (NOT the external `main-*.css` bundle). When the synthetic test at `build-dist-layout.test.ts:405-548` intercepts the root HTML response and strips the `<link rel="stylesheet">` tag, the shadow-DOM rule still applies and the `16px` fallback keeps each corner properly positioned. Result: `top-right.right > VIEWPORT_WIDTH - 200`, `bottom-*.bottom > VIEWPORT_HEIGHT - 100` still all pass — the "violations" counter stays at 0. The test's premise (no CSS link ⇒ corners collapse to (0,0)) is over-specified post-Story 6.2; the defense pattern documented by `v-hud-corner-defensive.test.ts` now intentionally **prevents** the collapse the synthetic test was designed to detect.
+
+   The two surfaces are not in conflict on intent — they're both expressing the same defensive principle from different angles — but the regression test's specific failure-mode assumption no longer holds.
+
+   **Why deferred (not auto-fixed):** Story 6.3 is primarily AUDIT + DOCUMENTATION; root-causing was in scope but rewriting the synthetic case is not. The fix has multiple reasonable shapes (strip the `--v-edge-margin` token from `:root` as part of the intercept; strip the shadow-DOM `<style>` block too; assert on `<v-chapter-copy>` position which is light-DOM and DOES depend on the external CSS; or retire the synthetic case in favour of the corner-defensive test which now covers the same defect class via a different mechanism). Choosing the right shape requires a design decision the next maintenance pass should make explicitly.
+
+   **Suggested resolution:** Story 6.4 (axe-core a11y expansion) or a dedicated maintenance commit. Three options:
+
+   1. **Retire the synthetic case** — accept that Story 6.2's corner-defensive CSS makes the original BUG-E5-007 failure mode unreachable. Remove the `it('catches a missing CSS-link regression…')` block. `v-hud-corner-defensive.test.ts` already covers the load-bearing defense pattern from the inverse direction (assert tokens are referenced WITH a fallback). The static-parse tier in the same file (CSS link present in dist HTML) plus the cold-load layout invariants still cover the original BUG-E5-007 detection contract.
+   2. **Rewrite the strip to also remove the `--v-edge-margin` token** — patch the intercepted HTML so `:root { --v-edge-margin: ... }` is also stripped, defeating the shadow-DOM fallback. Restores the original assertion but couples the test to two implementation details instead of one.
+   3. **Re-target at a light-DOM consequence** — assert on `<v-chapter-copy>` or `<v-timeline-scrubber>` mission-variant gutters, which live in light DOM and DO depend on the external CSS bundle (no shadow-DOM fallback in play). Closest to the original BUG-E5-007 detection signal.
+
+   Option 3 most faithfully preserves the test's regression-coverage intent; option 1 is the lowest-risk delete if no other layout-collapse defense regression has surfaced since.
+
+   **Routing:** Story 6.4 (next Epic 6 story — natural landing) OR a maintenance commit between 6.3 and 6.4.
+
+   </details>
+
+---
+
 ## Forward-coupled provisional definitions
 
 > **Established by Story 6.0 (2026-05-24, Epic 5 retro Action item #6).** Landing place for cross-story coupled definitions introduced in a Story-X.1 foundation story and consumed by a named-but-not-yet-written future Story X.Y. Per [`_bmad/custom/skill-rules.md`](../../_bmad/custom/skill-rules.md) Rule 15, every PROVISIONAL definition gets a forward-link here so the consumer story's `bmad-create-story` planning gate sees the pending coupling.

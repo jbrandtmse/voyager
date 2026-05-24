@@ -395,7 +395,14 @@ export class VTimelineScrubber extends BaseElement {
         white-space: nowrap;
         pointer-events: none;
         opacity: 0;
-        transition: opacity 80ms ease;
+        /* Story 6.3 — route fade-in through --v-duration-fast (120ms baseline)
+           so prefers-reduced-motion collapses it to 0ms via global.css. The
+           previous bare 80ms literal bypassed the token and would have
+           persisted as an 80ms fade even under reduced-motion. The
+           transition-delay literals below are intentional hover-dwell + hide
+           timings (UX-DR22), NOT motion durations — they remain bare per the
+           reduced-motion audit (docs/accessibility/reduced-motion.md). */
+        transition: opacity var(--v-duration-fast) ease;
         transition-delay: 0ms;
       }
 
