@@ -237,6 +237,15 @@ export class VAboutPage extends LitElement {
         diff, not a silent regression.
       </p>
       <p>
+        The Golden Record audio layer that activates at the launch, Pale
+        Blue Dot, and heliopause chapters is <em>diegetic</em>: it is the
+        same NASA public-domain recording shipped on the actual
+        spacecraft, attached at the chapter markers as an artifact
+        reproduction. It is not a narration or voiceover. A spoken
+        narration layer is a v1.1 candidate; the current scope keeps the
+        Record's own bass-note elegy as the only audio Voyager carries.
+      </p>
+      <p>
         Source, build pipeline, and validation harness will be published
         when the project goes public. Until then, the technical research
         and architecture documents in this repository's

@@ -71,7 +71,7 @@ const ATTRIBUTION_ENTRIES: readonly AttributionEntry[] = [
     name: 'Voyager Golden Record audio',
     url: 'https://voyager.jpl.nasa.gov/golden-record/',
     description:
-      'NASA public domain. Placeholder credit; the audio surface will be wired into the experience in Story 6.1.',
+      'NASA public domain. Diegetic audio layer activated at the launch (V1, V2), Pale Blue Dot, and heliopause (V1, V2) chapter markers. Per-track sources, licenses, and curation reasoning are in THIRD_PARTY.md.',
   },
   {
     name: 'NASA Planetary Photojournal — Pale Blue Dot composite plates',

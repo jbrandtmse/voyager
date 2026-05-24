@@ -2,6 +2,7 @@ import { html, css, type TemplateResult } from 'lit';
 import { createFocusTrap, type FocusTrap } from 'focus-trap';
 
 import { BaseElement } from './base-element';
+import { isTextInputFocused } from '../lib/text-input-focus';
 
 /**
  * `<v-help-overlay>` — top-right "?" toggle that opens a centered modal
@@ -566,45 +567,6 @@ const installGlobalShortcuts = (
   return () => {
     target.removeEventListener('keydown', onKeyDown);
   };
-};
-
-const isTextInputElement = (el: Element | null): boolean => {
-  if (el === null) return false;
-  if (el instanceof HTMLInputElement) {
-    const type = (el.type ?? 'text').toLowerCase();
-    const NON_TEXT_TYPES = new Set([
-      'button',
-      'checkbox',
-      'radio',
-      'submit',
-      'reset',
-      'image',
-      'file',
-      'range',
-      'color',
-    ]);
-    return !NON_TEXT_TYPES.has(type);
-  }
-  if (el instanceof HTMLTextAreaElement) return true;
-  if (el instanceof HTMLElement && el.isContentEditable) return true;
-  return false;
-};
-
-const isTextInputFocused = (root: Document): boolean => {
-  // Walk through Shadow DOM hosts (mirror of v-chapter-index.ts).
-  let active: Element | null = root.activeElement;
-  let depth = 0;
-  while (active !== null && depth < 8) {
-    if (isTextInputElement(active)) return true;
-    const shadow = (active as Element & { shadowRoot?: ShadowRoot | null })
-      .shadowRoot;
-    if (shadow === null || shadow === undefined) return false;
-    const inner = shadow.activeElement;
-    if (inner === null || inner === active) return false;
-    active = inner;
-    depth++;
-  }
-  return false;
 };
 
 if (typeof customElements !== 'undefined' && !customElements.get('v-help-overlay')) {

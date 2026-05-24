@@ -223,7 +223,7 @@ development_status:
   # Epic 6: Audio, Reduced Motion and Full Accessibility Pass
   epic-6: in-progress
   6-0-epic-5-deferred-cleanup: done
-  6-1-golden-record-audio-bundle-v-audio-toggle-and-chapter-marker-activation: backlog
+  6-1-golden-record-audio-bundle-v-audio-toggle-and-chapter-marker-activation: done
   6-2-v-hud-dismiss-restore-and-final-hud-compaction-polish: backlog
   6-3-full-reduced-motion-sweep-across-all-chapters-and-components: backlog
   6-4-axe-core-ci-expansion-and-manual-accessibility-test-layer: backlog

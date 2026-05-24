@@ -17,6 +17,7 @@ import { installKeyboardShortcuts } from './keyboard-shortcuts';
 import '../components/v-title-card';
 import '../components/v-timeline-scrubber';
 import '../components/v-play-button';
+import '../components/v-audio-toggle';
 import '../components/v-speed-multiplier';
 import '../components/v-hud';
 import '../components/v-chapter-index';
@@ -24,6 +25,7 @@ import '../components/v-help-overlay';
 import '../components/v-chapter-copy';
 import type { VTimelineScrubber } from '../components/v-timeline-scrubber';
 import type { VPlayButton } from '../components/v-play-button';
+import type { VAudioToggle } from '../components/v-audio-toggle';
 import type { VSpeedMultiplier } from '../components/v-speed-multiplier';
 import type { VHud } from '../components/v-hud';
 import type { VChapterIndex } from '../components/v-chapter-index';
@@ -32,6 +34,7 @@ import type { VChapterCopy } from '../components/v-chapter-copy';
 import type { RenderEngine } from '../render/render-engine';
 import type { EphemerisService } from '../services/ephemeris-service';
 import type { ChapterDirector } from '../services/chapter-director';
+import type { AudioPlaybackService } from '../services/audio-playback-service';
 
 /**
  * Story 2.7 AC4 — mount the homepage "Attributions" footer link unless
@@ -122,6 +125,17 @@ export interface FirstPaintOptions {
    * cannot accidentally toggle the toggle button back on by editing CSS.
    */
   embedEnabled?: boolean;
+  /**
+   * Story 6.1 — caller-supplied `AudioPlaybackService`. When provided,
+   * first-paint mounts a `<v-audio-toggle>` alongside `<v-play-button>`
+   * and wires the service into its `.audioService` property. Omitting
+   * the option (e.g. legacy test mounts) skips mounting the toggle.
+   *
+   * The toggle is editorial CONTENT (it controls the simulation, not
+   * chrome) so it mounts in BOTH normal mode AND embed mode — the
+   * Story 2.5 chrome-skip discipline does not apply.
+   */
+  audioPlaybackService?: AudioPlaybackService;
 }
 
 export interface FirstPaintHandle {
@@ -136,6 +150,13 @@ export interface FirstPaintHandle {
    */
   detailScrubber: VTimelineScrubber | null;
   playButton: VPlayButton;
+  /**
+   * Story 6.1 — bottom-left audio toggle, mounted adjacent to the play
+   * button. `null` when no `audioPlaybackService` was wired (legacy
+   * test mounts that don't construct the service); always non-null in
+   * production (main.ts always constructs the service).
+   */
+  audioToggle: VAudioToggle | null;
   speedMultiplier: VSpeedMultiplier;
   hud: VHud;
   /**
@@ -235,6 +256,19 @@ export const startFirstPaint = (
   playButton.clockManager = clockManager;
   playButton.style.visibility = 'hidden';
   host.appendChild(playButton);
+
+  // Story 6.1 — Golden Record audio toggle, mounted adjacent to the
+  // play button. The toggle owns its own document-level `G` keyboard
+  // shortcut (registered in connectedCallback). Setting `audioService`
+  // BEFORE appendChild ensures the connectedCallback path can subscribe
+  // synchronously without a microtask race.
+  let audioToggle: VAudioToggle | null = null;
+  if (options.audioPlaybackService !== undefined) {
+    audioToggle = document.createElement('v-audio-toggle') as VAudioToggle;
+    audioToggle.audioService = options.audioPlaybackService;
+    audioToggle.style.visibility = 'hidden';
+    host.appendChild(audioToggle);
+  }
 
   const speedMultiplier = document.createElement(
     'v-speed-multiplier',
@@ -345,6 +379,9 @@ export const startFirstPaint = (
       detailScrubber.style.visibility = '';
     }
     playButton.style.visibility = '';
+    if (audioToggle !== null) {
+      audioToggle.style.visibility = '';
+    }
     speedMultiplier.style.visibility = '';
     hud.style.visibility = '';
     // Story 2.5 — chapterIndex is null in embed mode (not appended).
@@ -377,6 +414,7 @@ export const startFirstPaint = (
     scrubber.remove();
     detailScrubber?.remove();
     playButton.remove();
+    audioToggle?.remove();
     speedMultiplier.remove();
     hud.remove();
     chapterIndex?.remove();
@@ -392,6 +430,7 @@ export const startFirstPaint = (
     scrubber,
     detailScrubber,
     playButton,
+    audioToggle,
     speedMultiplier,
     hud,
     chapterIndex,

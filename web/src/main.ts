@@ -25,6 +25,11 @@ import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
 import { ClockManager } from './services/clock-manager';
 import { ChapterDirector } from './services/chapter-director';
+import {
+  AudioPlaybackService,
+  GOLDEN_RECORD_CHAPTER_SLUGS,
+  isGoldenRecordSlug,
+} from './services/audio-playback-service';
 import { URLSync } from './services/url-sync';
 import { URLRouter } from './services/url-router';
 import { EmbedModeState } from './services/embed-mode-state';
@@ -262,6 +267,45 @@ const bootstrap = (): void => {
     }
   });
 
+  // Story 6.1 AC5 — Golden Record audio layer. Path A topology per
+  // ADR-0014 / Rule-9 of skill-rules (Story 5.1 PaleBlueDot precedent):
+  // a dedicated ChapterDirector subscriber narrows on the 5 Golden-
+  // Record slugs and forwards `to === 'held'` / `from === 'held'` to
+  // the AudioPlaybackService, which owns the audio chain end-to-end
+  // (no extension of ChapterDirector itself).
+  //
+  // The service is constructed unconditionally at boot — the toggle is
+  // OFF by default, so the audio chain stays idle until the user
+  // presses G or clicks <v-audio-toggle>. Session-id-gated localStorage
+  // persistence is internal to the service; main.ts does not see it.
+  const audioPlaybackService = new AudioPlaybackService();
+  chapterDirector.subscribe((event) => {
+    const slug = event.chapter.slug;
+    if (!isGoldenRecordSlug(slug)) return;
+    if (event.to === 'held') {
+      audioPlaybackService.onChapterEnter(slug);
+    } else if (event.from === 'held') {
+      audioPlaybackService.onChapterExit(slug);
+    }
+  });
+  // Forward ClockManager play/pause to the audio service so the audio
+  // pauses (and resumes) in lockstep with the simulation (AC5 last
+  // bullet). The clock subscriber fires on every state change; we
+  // filter to playing-vs-paused transitions internally via the
+  // service's onPlayStateChange guard.
+  clockManager.subscribe((state) => {
+    audioPlaybackService.onPlayStateChange(state.playing);
+  });
+  // The service is constructed during the playing===true seed (the
+  // default), but the very first ClockManager seed below might pause
+  // (URL-driven scrubTo always pauses). Forward the current play state
+  // explicitly so the service starts from a consistent snapshot.
+  audioPlaybackService.onPlayStateChange(clockManager.playing);
+  // Suppress the unused-local linter rule for `GOLDEN_RECORD_CHAPTER_SLUGS`
+  // — we import it for documentary clarity (the count + identity of the
+  // slugs is what the subscriber narrows against via the type-guard).
+  void GOLDEN_RECORD_CHAPTER_SLUGS;
+
   engine.onFrame((et: number) => {
     chapterDirector.update(et);
     // Story 5.1 AC3 — drive the PBD module only while it's active
@@ -310,6 +354,14 @@ const bootstrap = (): void => {
       //   __voyagerDebug.pbdCompositeLayer.rootElement -> HTMLDivElement
       // and asserts on the layer's at-peak-ET state per AC9.
       pbdCompositeLayer,
+      // Story 6.1 AC7 — DEV surface for the lead-driven Chrome DevTools
+      // MCP smoke. The smoke probes
+      //   __voyagerDebug.audioPlaybackService.isOn() -> boolean
+      //   __voyagerDebug.audioPlaybackService.getState() -> AudioState
+      //   __voyagerDebug.audioPlaybackService.toggle() -> void
+      // and asserts on the toggle's chapter-window activation behavior
+      // at /c/launch-v1, /c/pale-blue-dot, etc.
+      audioPlaybackService,
     };
   }
 
@@ -348,6 +400,11 @@ const bootstrap = (): void => {
       // Story 2.5 — skip mounting `<v-chapter-index>` (and future
       // chrome elements) when embed mode is enabled. AC2.
       embedEnabled: embedMode.enabled,
+      // Story 6.1 — wire the audio service into <v-audio-toggle>. The
+      // toggle is editorial CONTENT (not chrome) so it mounts even in
+      // embed mode; first-paint's chrome-skip discipline does not gate
+      // it.
+      audioPlaybackService,
     },
   );
 

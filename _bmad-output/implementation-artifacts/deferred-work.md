@@ -906,6 +906,40 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
 
 ---
 
+### Story 6.1 (code review, 2026-05-24)
+
+1. **`[6.1 / LOW]` `<v-chapter-index>` still inlines a Shadow-DOM-walk text-input-focus helper that wasn't consolidated into `web/src/lib/text-input-focus.ts`**
+
+   **What's the issue:** Story 6.1's Rule 9 primitive extraction consolidated the `isTextInputFocused` Shadow-DOM walk used by `<v-help-overlay>` and `<v-audio-toggle>` into `web/src/lib/text-input-focus.ts`. A similar (but slightly different — different walk bounds, different non-text-input-type set) helper is still inlined in `web/src/components/v-chapter-index.ts` per the extracted module's docstring at lines 24–31 ("the chapter-index inlines a similar walk but with different bounds — its consolidation is deferred to a future story to keep Story 6.1's diff focused"). This is an acceptable Rule 9 posture (the helper now has TWO consumers — the second-consumer trigger has fired); the chapter-index becomes the THIRD consumer when it eventually gets consolidated.
+
+   **Why deferred:** Story 6.1 scope is the audio bundle + toggle + chapter-marker activation. Consolidating the chapter-index helper would require auditing the divergence between the two walk implementations (the bound limit + the non-text-input-type set differ) and either folding both into the shared helper or carrying two parametrized variants. Keeping Story 6.1's diff focused is the right call.
+
+   **Suggested resolution:** when the next story touches `<v-chapter-index>` keyboard handling, audit the inlined `isTextInputFocused`-style helper against `web/src/lib/text-input-focus.ts` and either consolidate (preferred) or document the divergence as intentional. The audit is mechanical: grep for `activeElement` + Shadow-DOM walks in `v-chapter-index.ts`, compare against the extracted helper's behavior, decide.
+
+   **Routing:** any future story touching `<v-chapter-index>` keyboard / focus discipline; otherwise fold into an Epic 6 polish pass.
+
+2. **`[6.1 / LOW]` `AudioPlaybackService.syncEngine()` does not wrap audio-engine method calls in try/catch — engine throws propagate to caller**
+
+   **What's the issue:** `web/src/services/audio-playback-service.ts:syncEngine()` invokes `this.audioEngine.prepare(...)`, `fadeIn(...)`, `fadeOut(...)`, `pause(...)`, `resume(...)` without service-level try/catch. The Story 6.1 QA defense file at `web/tests/story-6-1-qa-defense.test.ts:214-282` PINS this current "throws propagate" posture against a synthetic-throwing engine stub. In practice, the production `DefaultAudioEngine` catches its own errors at the engine layer and `console.warn`s, so real-world failures do not propagate up through the service. The Story 6.1 code-review MED-1 fix added `.catch(() => {})` to the underlying `audio.play()` Promise rejections (which addresses the realistic autoplay-blocked failure path); deeper engine-call hardening is deferred.
+
+   **Why deferred:** the realistic failure mode (autoplay-policy `NotAllowedError` on `audio.play()`) is now hardened inline (Story 6.1 code-review MED-1). The remaining "synthetic engine throws" failure path is hypothetical — the production engine catches its own errors. Adding service-level try/catch wrap is defensible code-hygiene but not load-bearing.
+
+   **Suggested resolution:** if a future story introduces a NON-default `AudioEngineLike` (e.g., a Web Audio decoder variant or a server-streaming engine), revisit the service's hardening posture. At that point, wrap each engine call in `try { this.audioEngine.<method>(...); } catch (err) { console.warn('[AudioPlaybackService] engine throw:', err); }` and update the QA defense test (lines 214-282) to assert `.not.toThrow()` once the hardening lands.
+
+   **Routing:** any future story that adds a new `AudioEngineLike` implementation, OR an Epic 7 audio-hardening pass.
+
+3. **`[6.1 / LOW]` Golden Record audio is placeholder silence — real-track procurement is gated on maintainer authorization**
+
+   **What's the issue:** Per the Story 6.1 dev's explicit fallback-branch decision (the JPL canonical URL returned 302→missing.html during the dev cycle), the 5 `.m4a` files at `web/public/audio/golden-record/` are silent AAC-LC placeholders (~32 KB each, ~160 KB total). The entire runtime codepath is exercised end-to-end with these placeholders; only the audio content is provisional. The curation doc at `docs/audio/golden-record-curation.md` carries the procurement checklist and a "Placeholder audio — real procurement deferred pending maintainer authorization" callout. `THIRD_PARTY.md` § Golden Record audio assets describes the wiring honestly without claiming the placeholder content is the real Record audio.
+
+   **Why deferred:** procurement requires network access to NASA-hosted sources (or Library of Congress National Recording Registry, etc.) AND a per-track license-confirmation audit. Both fall outside the dev-agent's sandbox capability and the audit demands maintainer judgement. The runtime contract (slug-to-URL map, service activation, component toggle, ChapterDirector wire-up) is locked in and survives the placeholder→real swap unchanged — only the blob content at the LFS paths changes.
+
+   **Suggested resolution:** maintainer-driven track-by-track procurement per the curation doc's checklist (lines 33–60). The swap is in-place at the same LFS paths; no code or runtime changes required. Update curation doc's "Per-track curation reasoning" section + `THIRD_PARTY.md` § Golden Record with finalized titles + source URLs + per-file SHA-256 checksums (currently all 5 share `99bad3d3...` because they encode identical silence).
+
+   **Routing:** maintainer (not a Story); pre-merge gate per the curation doc. Optional Story 6.2 / 6.3 dev-supervised swap once the maintainer has authorized the specific track set.
+
+---
+
 ## Forward-coupled provisional definitions
 
 > **Established by Story 6.0 (2026-05-24, Epic 5 retro Action item #6).** Landing place for cross-story coupled definitions introduced in a Story-X.1 foundation story and consumed by a named-but-not-yet-written future Story X.Y. Per [`_bmad/custom/skill-rules.md`](../../_bmad/custom/skill-rules.md) Rule 15, every PROVISIONAL definition gets a forward-link here so the consumer story's `bmad-create-story` planning gate sees the pending coupling.

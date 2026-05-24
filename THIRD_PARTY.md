@@ -416,3 +416,100 @@ simulation). The story spec records the rationale.
 
 Each plate PNG is ~20-30 KB; six plates total ~150 KB. Well below LFS
 thresholds, so no LFS tracking; committed directly to the repo.
+
+## Voyager Golden Record audio assets (Story 6.1)
+
+Story 6.1 wires the diegetic Voyager Golden Record audio layer into five
+chapter-marker activation windows (V1 launch, V2 launch, Pale Blue Dot,
+V1 heliopause, V2 heliopause). The runtime contract — toggle off by
+default, session-id-gated localStorage persistence, 1500 ms cross-fade,
+silence outside Golden-Record windows — is documented in the per-track
+curation doc at
+[`docs/audio/golden-record-curation.md`](docs/audio/golden-record-curation.md).
+
+### Source + license posture
+
+The Voyager Golden Record contents are NASA public domain. The canonical
+landing page is <https://voyager.jpl.nasa.gov/golden-record/> (JPL public
+site; redirected to a missing-page placeholder in the procurement
+sandbox at Story 6.1 dev time — see the curation doc's "Procurement
+deferred" section for the resolution path). Library of Congress's
+[National Recording Registry](https://www.loc.gov/programs/national-recording-preservation-board/recording-registry/)
+also references the recordings; per-track public-domain confirmation is
+the maintainer's pre-merge gate for the real-audio swap.
+
+### Placeholder audio — real procurement deferred pending maintainer authorization
+
+**Important:** the five `.m4a` files currently committed at
+`web/public/audio/golden-record/` are **silent AAC-LC placeholders**
+generated via `ffmpeg -f lavfi -i anullsrc -t 90 -c:a aac -b:a 96k`. They
+encode 90 s of digital silence at 44.1 kHz mono, 96 kbps, ~32 KB each
+(~160 KB total). Real procurement (per-track source URL identification +
+NASA public-domain confirmation + ~6 MB AAC-LC encoding) is
+**deferred pending maintainer authorization** — the curation doc carries
+the procurement checklist. The placeholder posture is the same pattern
+Story 5.3 used for early PBD plate placeholders before the canonical
+Photojournal grids landed: the entire codepath (service activation +
+component toggle + chapter-window gating + integration test + lead
+Chrome DevTools MCP smoke) works end-to-end; only the audio content is
+provisional. The future real-audio patch is a transparent in-place blob
+swap at the LFS layer (the file paths and runtime contracts do not
+change).
+
+### Per-track inventory
+
+Each entry lists the chapter slug, the file path, encoding, current
+placeholder size, and the real-procurement target (which the curation
+doc carries as a checklist). Common encoding for the placeholder
+posture: AAC-LC, 90 s, mono, 96 kbps, ~32 KB per file.
+
+- **`launch-v1`** — `web/public/audio/golden-record/launch-v1.m4a` —
+  real-procurement target: NASA Voyager Golden Record (track TBD —
+  candidate: a greeting from the 55-languages cohort or a launch-window
+  Sounds-of-Earth selection). Placeholder pending procurement audit.
+
+- **`launch-v2`** — `web/public/audio/golden-record/launch-v2.m4a` —
+  real-procurement target: NASA Voyager Golden Record (track TBD —
+  candidate: a complementary greeting or Sounds-of-Earth selection to
+  V1's pick for the launch-window pair). Placeholder pending procurement
+  audit.
+
+- **`pale-blue-dot`** —
+  `web/public/audio/golden-record/pale-blue-dot.m4a` — real-procurement
+  target: NASA Voyager Golden Record (track TBD — candidate: Sounds of
+  Earth or J. S. Bach, Brandenburg Concerto No. 2, first movement).
+  Placeholder pending procurement audit.
+
+- **`v1-heliopause`** —
+  `web/public/audio/golden-record/v1-heliopause.m4a` — real-procurement
+  target: NASA Voyager Golden Record (track TBD — candidate: Senegalese
+  percussion or Navajo "Night Chant"). Placeholder pending procurement
+  audit.
+
+- **`v2-heliopause`** —
+  `web/public/audio/golden-record/v2-heliopause.m4a` — real-procurement
+  target: NASA Voyager Golden Record (track TBD — candidate: Beethoven
+  Cavatina (String Quartet No. 13) or Blind Willie Johnson "Dark Was the
+  Night, Cold Was the Ground"). Placeholder pending procurement audit.
+
+### Placeholder checksums (SHA-256, for reproducibility)
+
+All five placeholders share the same SHA-256 because they are byte-
+identical encodings of digital silence at identical settings — this is
+correct for the placeholder posture and will diverge per-track once real
+audio lands.
+
+- `launch-v1.m4a`      `99bad3d3fa29e4c9209a2da9a7506f69d127bfd0a40096fc22018b9f086ce5ae`
+- `launch-v2.m4a`      `99bad3d3fa29e4c9209a2da9a7506f69d127bfd0a40096fc22018b9f086ce5ae`
+- `pale-blue-dot.m4a`  `99bad3d3fa29e4c9209a2da9a7506f69d127bfd0a40096fc22018b9f086ce5ae`
+- `v1-heliopause.m4a`  `99bad3d3fa29e4c9209a2da9a7506f69d127bfd0a40096fc22018b9f086ce5ae`
+- `v2-heliopause.m4a`  `99bad3d3fa29e4c9209a2da9a7506f69d127bfd0a40096fc22018b9f086ce5ae`
+
+### Audio bundle LFS / footprint
+
+The five `.m4a` files are LFS-tracked under
+`web/public/audio/**/*.m4a` in `.gitattributes`. Current placeholder
+total ~160 KB; post-real-procurement target ~30 MB (5 × ~6 MB at AAC-LC
+96 kbps mono/stereo). Both totals are well under Rule 12's 500 MB per-
+story and 250 MB single-file disclosure thresholds — disclosure here is
+voluntary (Story 6.1 Dev Notes).
