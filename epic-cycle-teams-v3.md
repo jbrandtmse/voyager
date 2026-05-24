@@ -291,24 +291,31 @@ If `Agent` is a deferred tool in this harness, load its schema via `ToolSearch` 
 ## Task Sequence
 
 **Per Epic (setup, executed once per epic before any stories):**
-1. **Lead** executes `/bmad-sprint-planning` directly (ensures `sprint-status.yaml` is current).
-2. If a previous epic's retrospective or `deferred-work.md` has unresolved items, **Lead** reviews them, triages, and creates Story X.0 via `/bmad-create-story` (see "Retrospective Review & Story X.0 Creation" below).
+
+1. **Lead** verifies a working tree is clean across the parent repo and every submodule listed in `.gitmodules`; halts on dirty state (see "Source Control Branching" below).
+2. **Lead** verifies (or, with user authorization, creates) the feature branch `feature/{TICKET}_{Description}` in the parent repo and every submodule where work will take place — per Rule SC-1 in "Source Control Branching" below.
+3. **Lead** verifies (or creates) the epic branch `epic{N}` off the feature branch in every repo where work will take place — per Rule SC-2.
+4. **Lead** executes `/bmad-sprint-planning` directly (ensures `sprint-status.yaml` is current).
+5. If a previous epic's retrospective or `deferred-work.md` has unresolved items, **Lead** reviews them, triages, and creates Story X.0 via `/bmad-create-story` (see "Retrospective Review & Story X.0 Creation" below).
 
 **Per Story (executed once per story in the epic):**
+
 1. **Lead** executes `/bmad-create-story` directly (no agent — prevents race-ahead).
 2. Agent: `/bmad-dev-story`.
 3. **Lead** executes any ADR-tooled AC verifications (see ADR-Aware Execution).
 4. Agent: `/bmad-qa-generate-e2e-tests`.
 5. Agent: `/bmad-code-review`.
 6. **Lead** performs per-story smoke (see Per-Story Smoke).
-7. **Lead** commits and pushes to git.
+7. **Lead** commits and pushes — **only to the epic branch** in every affected repo, never to main/master/develop (Rule SC-3 + SC-6).
 
 **End of Epic (executed once per epic after all stories):**
+
 1. **Lead** pauses and asks user: "Would you like to run a retrospective?" If yes, execute `/bmad-retrospective` **in interactive mode** — the skill's elicitation must reach the user.
+2. **Lead** pauses and asks user: "Merge `epic{N}` into `feature/{TICKET}_{Description}` and delete the epic branch (local + remote)?" — per Rule SC-4. If yes, performs the merge + delete in each affected repo (submodules first, parent last; mirrors the per-story Submodule Commit Order). If another epic was running in parallel and already merged to feature, the `git pull origin feature/...` step picks up that work before this merge — see Rule SC-8 for parallel-epic mechanics.
 
 ## Execution Guidelines
 
-Each pipeline-stage task is delegated via the `Agent` tool. The lead invokes lead-side skills (sprint planning, story creation, retrospective, code review during silent-extraction fallback) directly via the `Skill` tool.
+Each pipeline-stage task is delegated via the `Agent` tool. The lead invokes lead-side skills (sprint planning, story creation, retrospective) directly via the `Skill` tool. If a stage-agent's return is missing the closing-summary sections, the lead extracts the file list from `git status --short` against the story's `Files to Modify` table — this is normal extraction (the v3 reliable path), not a recovery from silence.
 
 Automatically resolve all HIGH and MED severity issues found during code review using your best judgment and BMAD guidance.
 
@@ -517,13 +524,39 @@ A clarification-needed return is NOT logged as `<stage>_complete` — log it as 
 Lead resolves project ADR registry path (typically docs/adr/) — persisted for every spawn prompt and per-story Layer-1 gate
 
 For each epic in range:
-  Lead executes /bmad-sprint-planning via Skill tool; logs sprint_planning_complete
-  If Epic N-1 retrospective exists OR deferred-work.md has unresolved items:
-    Lead reads both sources, triages, creates Story X.0 via /bmad-create-story; logs retro_review_complete
-  Else:
-    Lead logs retro_review_skipped reason=no_predecessor_no_deferred_work
+  Lead verifies clean working tree (parent + every submodule); halts on dirty state
 
-  For each story (or batch — see Smart Parallelism) including X.0:
+  # Resume-mode detection (see Resume Semantics)
+  For each affected repo, lead determines mode by cross-referencing:
+    - cycle-log-epic-{N}.md existence + entries
+    - sprint-status.yaml story states for this epic
+    - epic{N} branch presence locally and on remote
+  Modes per repo: FRESH | RESUME | REMOTE_ONLY | LOCAL_ONLY | AMBIGUOUS | INTEGRITY_ERROR
+    INTEGRITY_ERROR or AMBIGUOUS → halt and surface to user
+    LOCAL_ONLY                   → halt and ask user (remote deletion intentional?)
+    REMOTE_ONLY                  → `git fetch origin && git checkout epic{N}`; then RESUME
+    RESUME                       → run Cross-stage integrity checks; on pass, set resume point
+    FRESH                        → fall through to SC-1 / SC-2 below
+
+  # SC-1 / SC-2 — only when (or where) FRESH
+  For each repo in FRESH mode:
+    Lead verifies feature branch `feature/{TICKET}_{Description}` exists
+      If missing → STOP and ask user: should it be created, what TICKET + Description, and which root (origin/develop / origin/main / origin/master)?
+      On user authorization → validate name; branch off the user-specified root; push to remote; logs feature_branch_created
+    Lead verifies epic branch `epic{N}` exists
+      If missing → branch off the feature branch (deterministic from epic number); push to remote; logs epic_branch_created
+  Lead checks every affected repo out to epic{N}; logs epic_branch_checked_out
+
+  Lead executes /bmad-sprint-planning via Skill tool; logs sprint_planning_complete
+  If Epic N-1 retrospective exists OR deferred-work.md has unresolved items, AND no prior retro_review_* entry for this epic:
+    Lead reads both sources, triages, creates Story X.0 via /bmad-create-story; logs retro_review_complete
+  Else if no prior retro_review_* entry:
+    Lead logs retro_review_skipped reason=no_predecessor_no_deferred_work
+  Else:
+    (resume case — gate already passed in a prior session; skip)
+
+  For each story (or batch — see Smart Parallelism) including X.0, starting from the resume point computed above:
+    Lead asserts current branch == epic{N} in every affected repo (defense for Rule SC-3 + SC-6); halts on mismatch
     Lead executes /bmad-create-story directly (pipeline gate, including Integration AC validation)
     Lead captures story file path
     Lead records spawn_at=<UTC> and model=<id> at the moment of each Agent call
@@ -533,10 +566,16 @@ For each epic in range:
     Lead invokes Agent for /bmad-qa-generate-e2e-tests → reads return for ## Tests Added → logs qa_complete
     Lead invokes Agent for /bmad-code-review → reads return → logs cr_complete
     Lead performs per-story smoke (lead-side); logs smoke_complete
-    Lead commits + pushes (submodules first if applicable)
+    Lead asserts current branch == epic{N} (defense before commit); commits + pushes ONLY to epic{N} (submodules first if applicable)
     Lead logs committed; next story or next batch
 
   Lead pauses: "Would you like to run a retrospective?" → if yes, execute /bmad-retrospective via Skill tool
+  Lead pauses: "Merge epic{N} → feature branch and delete epic{N} (local + remote)?" → if yes:
+    For each affected repo, submodules-first then parent:
+      checkout feature branch; pull latest; merge --no-ff epic{N}; push feature branch; delete epic{N} local + remote
+    Logs epic_merged_to_feature
+  Else:
+    Lead logs epic_merge_skipped reason=<short>
   Lead logs epic complete; next epic
 ```
 
@@ -634,6 +673,239 @@ After sprint planning and before building the story list, review the previous ep
 7. **Skip Story X.0 ONLY if both sources are empty.** If no previous retro AND no deferred-work entries: log skip, proceed. If retro is missing but deferred-work has items, do NOT skip — still execute steps 5–6 from the deferred-work source.
 8. Log the retrospective review and Story X.0 creation in the cycle log.
 
+### Source Control Branching (Critical Gates)
+
+These gates fire **at the very start of each epic**, before sprint planning or any story work. They apply uniformly to the parent repo and every submodule listed in `.gitmodules`. If the project is multi-repo (separate repositories under one umbrella rather than git submodules), the user must enumerate the affected repos up-front — the rules apply to each.
+
+**Precondition — clean working tree.** Before evaluating any branching rule, the lead runs `git status --short` against the parent repo and every submodule and halts with a clear message if any are dirty. Switching branches with uncommitted work can corrupt state; this guard is non-negotiable.
+
+#### Rule SC-1 — Feature branch verification (epic-start gate)
+
+At the beginning of each epic, the lead checks for a feature branch in every affected repo. The branch name follows the project's configured pattern (see "Tracker format flexibility" below); the default is `feature/{TICKET}_{Description}` where `{TICKET}` is an external tracker ID and `{Description}` is a kebab-case or snake-case summary.
+
+- **If the feature branch exists locally** (or on the remote, fetch-discoverable): check it out and verify it's up to date with its remote. Continue.
+- **If the feature branch does NOT exist:** **STOP** and ask the user:
+  1. Should the feature branch be created?
+  2. What is the exact TICKET (e.g., `PROJ-1234` for JIRA, `ENG-45` for Linear, `42` for GitHub Issues, `SPIKE` / `EXPLORE` / `REFACTOR` for ticketless work — validated against the project's `ticket_format` regex)?
+  3. What is the exact Description (e.g., `attitude-reconstruction`)?
+  4. Which root does it branch from? Default precedence: `origin/develop` (preferred if it exists) → `origin/main` → `origin/master`. The lead surfaces the candidates the repo actually has and asks the user to confirm.
+
+  On user authorization: validate the resulting branch name against the configured `feature_pattern`, validate `{TICKET}` against `ticket_format`, then run `git fetch origin && git checkout -b <validated-name> origin/{root} && git push -u origin <validated-name>` (per affected repo). Log `feature_branch_created` in the cycle log.
+
+The feature branch lifecycle ENDS where? Merging the feature branch into `develop` / `main` is **out of scope** for `/epic-cycle` — that's a PR-review / code-owner workflow performed by humans. `/epic-cycle` creates and merges INTO the feature branch only.
+
+##### Tracker format flexibility (per-project configuration)
+
+The default branch-naming convention assumes a JIRA-style tracker — but real projects use JIRA, Linear, GitHub Issues, Azure DevOps, or no tracker at all. The lead reads the project's branch-naming config from the **first** of these locations to exist:
+
+1. `_bmad/custom/branch-naming.yaml` (project-specific override; preferred)
+2. A `## Branch naming` section in the project's CLAUDE.md (inline config)
+3. The default, embedded in this rule (used when neither override is present)
+
+**Config schema:**
+
+```yaml
+# _bmad/custom/branch-naming.yaml
+feature_pattern: "feature/{TICKET}_{Description}"  # template with {TICKET} and {Description} placeholders
+ticket_format: "^([A-Z]+-\\d+|SPIKE|EXPLORE|REFACTOR)$"  # regex; tracker IDs OR named exceptions
+ticket_required: true   # if false, {TICKET} placeholder may be empty / omitted
+description_format: "^[a-z][a-z0-9-]{2,60}$"  # kebab-case, 3-60 chars, starts with letter
+separator: "_"          # between TICKET and Description in the template
+```
+
+**Defaults if no config is found:**
+
+| Field | Default value |
+| --- | --- |
+| `feature_pattern` | `feature/{TICKET}_{Description}` |
+| `ticket_format` | `^[A-Z]+-\d+$` (JIRA/Linear-style) |
+| `ticket_required` | `true` |
+| `description_format` | `^[a-z][a-z0-9-]{2,60}$` |
+| `separator` | `_` |
+
+**Validation flow at SC-1 user prompt:**
+
+1. Lead asks user for `{TICKET}` and `{Description}` (showing an example derived from the configured pattern).
+2. Lead validates each against the configured regex.
+3. If invalid: surface the mismatch (e.g., "Input `my widget` doesn't match `description_format` `^[a-z][a-z0-9-]{2,60}$` — spaces aren't allowed; use `my-widget`"). Offer: (a) re-enter, (b) override and use as-is (logs a warning), (c) update the project config.
+4. If valid: render the branch name from `feature_pattern` and confirm with the user before creating.
+
+**Ticketless work (spikes, exploration, refactors).** The default `ticket_format` regex above explicitly allows `SPIKE`, `EXPLORE`, and `REFACTOR` as named exceptions so a quick exploratory branch like `feature/SPIKE_audio-latency-probe` validates cleanly. Projects can broaden or narrow this list in `branch-naming.yaml`.
+
+**Branch-name safety.** Regardless of the configured patterns, the lead refuses any branch name that contains spaces, shell metacharacters (`*`, `?`, `[`, `]`, `;`, `&`, `|`, `<`, `>`, `$`, `` ` ``, newline), or git-reserved sequences (`..`, `@{`, leading `-`, trailing `.`). These are non-negotiable safety guards, independent of the project config.
+
+#### Rule SC-2 — Epic branch verification (epic-start gate)
+
+After the feature branch is in place, the lead checks for an epic branch named `epic{N}` (where `{N}` is the current epic number — `epic1`, `epic2`, `epic3`, etc.) in every affected repo.
+
+- **If `epic{N}` exists locally** (or on the remote): check it out. Continue.
+- **If `epic{N}` does NOT exist:** create it deterministically off the feature branch — no user prompt needed; the name is fully derived from the epic number. `git checkout feature/{TICKET}_{Description} && git pull && git checkout -b epic{N} && git push -u origin epic{N}` (per affected repo). Log `epic_branch_created`.
+
+**Resume semantics:** mid-epic resume should find `epic{N}` already in place. If the lead is resuming an epic that has prior `committed` entries in the cycle log but `epic{N}` is missing from the local tree AND the remote, that is a workspace-integrity error — halt and surface to the user. Do NOT silently re-create the branch in that case, since it would orphan prior commits.
+
+#### Rule SC-3 — Commits go ONLY to the epic branch
+
+Every commit produced during the epic cycle — story commits, hotfix commits, retrospective document commits — lands on the `epic{N}` branch in the affected repo. The lead asserts `git branch --show-current == "epic{N}"` immediately before every `git commit` invocation and halts on mismatch. This applies to submodules too (each submodule's HEAD must be on its own `epic{N}` before the parent's `git add <submodule-path>` step).
+
+The per-story push frequency is "after every story's commit lands on `epic{N}`," which means `epic{N}` is the working remote until end-of-epic.
+
+#### Rule SC-4 — End-of-epic merge gate (user decision point)
+
+After the retrospective gate (whether the user opted in or not), the lead pauses and asks:
+
+> "Epic {N} is complete. Merge `epic{N}` into `feature/{TICKET}_{Description}` and delete the epic branch (local + remote) in every affected repo?"
+
+If **yes**, the lead executes the merge — **submodules-first, then the parent** (mirrors per-story Submodule Commit Order to avoid broken pointers on the feature branch's remote):
+
+For each affected repo, ordered submodules-first:
+
+1. `git checkout feature/{TICKET}_{Description}`
+2. `git pull origin feature/{TICKET}_{Description}` (in case it moved while the epic was in flight)
+3. `git merge --no-ff epic{N} -m "Merge epic{N}: <one-line summary>"` (preserves the epic branch's commit graph as a visible group)
+4. `git push origin feature/{TICKET}_{Description}`
+5. `git branch -d epic{N}` (local — refuses if not fully merged, which is the safety we want)
+6. `git push origin --delete epic{N}` (remote)
+
+If submodules are involved, the parent's merge step (3) brings in submodule pointer updates that already exist on `epic{N}` from the per-story commits (the per-story flow committed each submodule first, then bumped the parent's pointer). Because the submodules' own feature branches were merged in the preceding pass, those pointers now resolve cleanly on the submodules' remotes. Verify with `git submodule status` before the final parent push.
+
+If **no**, the lead logs `epic_merge_skipped` and leaves `epic{N}` intact. The branches remain for later out-of-band merging or for a continuation session.
+
+#### Rule SC-5 — Epic re-open recreates the epic branch
+
+If an epic is re-opened (e.g., the next epic's retrospective surfaces work that belongs on the prior epic, or the user explicitly reopens), the `epic{N}` branch must be recreated. Recreation policy:
+
+- If the prior `epic{N}` was merged into feature and deleted: branch a NEW `epic{N}` off the current feature-branch HEAD. This picks up any feature-branch progress made in the interim.
+- If the prior `epic{N}` was never merged and still exists: check it out as-is; do not branch a parallel epic{N}.
+
+In either case, log `epic_branch_reopened reason=<short>` in the cycle log.
+
+#### Rule SC-6 — NEVER commit directly to `main`, `master`, or `develop`
+
+The lead refuses any commit (story, retrospective, hotfix, anything) when the current branch is `main`, `master`, or `develop` in any affected repo. This is an absolute defensive default — the workflow itself never originates such a commit. If the user explicitly directs a direct-to-trunk commit (e.g., emergency hotfix outside the epic cycle), that is OUT of scope for `/epic-cycle` and the user performs it manually.
+
+This pairs naturally with GitHub/GitLab branch protection on `main`/`master`/`develop`; the local-side rule is defense-in-depth.
+
+#### Rule SC-7 — If unsure where to commit, STOP and ask
+
+Branching state can drift across sessions (someone renamed a branch upstream, the project switched from `main` to `master` mid-flight, a submodule's parent branch isn't what's expected). If at any point the lead cannot confidently identify the right branch to commit to — including, but not limited to, finding multiple feature branches with similar names, finding the epic branch missing mid-resume, finding the parent branch ambiguous between `develop` and `main` — **STOP** and ask the user. Do not guess; the cost of a wrong commit is far higher than the cost of a clarification round.
+
+#### Rule SC-8 — Parallel epics on the same feature branch
+
+Multiple `/epic-cycle` runs may execute concurrently against the same feature branch — typically when different agents are driving Epic A and Epic B at the same time. The git mechanics:
+
+**Per-agent isolation: one working tree per agent.** Git only allows one HEAD per working directory, so concurrent agents on different epic branches require either:
+
+- `git worktree add <path> epic{N}` — the recommended mechanism. Each agent operates in its own worktree (`/path/to/repo-epic4`, `/path/to/repo-epic5`), sharing the same `.git` object store. Branches, commits, and pushes are independent per worktree. Cleanup: `git worktree remove <path>` after the epic merges and the branch is deleted.
+- Separate full clones — heavier but simpler.
+
+A single working directory running two agents on different epic branches is **not** supported — it would require constant branch-switching with no way to keep the agents' file-state consistent.
+
+**Branch creation under parallelism (Rule SC-2 extension).** Each agent runs Rule SC-2 independently. The `epic{N}` branch is created off `feature/{TICKET}_{Description}`'s **current HEAD at the moment that agent starts the epic**. Two consequences:
+
+1. If Epic A and Epic B start near-simultaneously, both `epic4` and `epic5` branch off the same feature commit. No conflict expected at merge time unless they touched overlapping files.
+2. If Epic A is already in flight (its `epic4` exists) and Epic B starts later, AND something landed on feature in between (e.g., a hotfix, or Epic A already merged), `epic5` is created off a NEWER feature HEAD than `epic4` was. The two epics' branch points differ. This is fine — the `--no-ff` merge at Rule SC-4 handles three-way reconciliation.
+
+**Per-story commits under parallelism (Rule SC-3).** Each agent's per-story commits land on its own `epic{N}` branch. Independent branches, independent remotes — no git-level race condition. Each agent's pre-commit branch assertion (`git branch --show-current == "epic{N}"`) is per-agent and per-worktree.
+
+**Merge serialization (Rule SC-4 extension).** The actual `git push` to feature is a single-writer point on the remote, so the SC-4 merge gate must serialize across agents. Two cases:
+
+1. **Coordinated:** Both agents reach Rule SC-4 (end-of-epic merge prompt) at different wall-clock times. Each agent's SC-4 sequence starts with `git pull origin feature/{TICKET}_{Description}` — if Epic A already merged its work to feature, Epic B's pull picks that up before Epic B's own merge runs. Standard three-way merge from there.
+2. **Near-simultaneous:** If two agents' merge prompts surface to the user at the same time, the user picks the order. The second agent re-pulls feature after the first lands, then merges. Do NOT attempt to push without re-pulling — a stale-pointer push will be rejected by the remote anyway (`git push` requires fast-forward to the remote tip).
+
+**Conflict handling at merge time.** If `git merge --no-ff epic{N}` into feature produces conflicts (either against another epic's already-merged work, against a hotfix on feature, or against any other commits that landed since `epic{N}` was branched), the lead **STOPs** and surfaces the conflict to the user. Auto-resolution is forbidden — git's heuristic conflict markers can silently drop intentional changes. The user resolves the conflict in the working tree, then signals the lead to continue (`git add <resolved> && git commit && git push`).
+
+Submodules are independent under this rule too: each submodule's `epic{N}` merges into its own feature branch sequentially, and conflicts there require user resolution per-submodule before the parent's submodule pointer is bumped.
+
+**Out-of-scope coordination:** if Epic A and Epic B's planning artifacts overlap (both stories' ACs touch the same files), that's a sprint-planning conflict the user must resolve before running them in parallel — not something `/epic-cycle` can sense or prevent. The rule of thumb: if two epics' Files to Modify tables overlap by more than ~20%, run them sequentially.
+
+#### Sub-repository vs submodule terminology
+
+"Submodule" = a git submodule (`.gitmodules` registers it; `git -C <path>` operates on it as a child repo). "Sub-repository" = a non-submodule child repo under one umbrella (some projects keep `web/` and `bake/` as separate repos under one orchestrating directory). Rules SC-1 through SC-7 apply to both. The lead must know up-front which model the project uses; if ambiguous, this is itself a Rule SC-7 STOP-and-ask trigger.
+
+### Resume Semantics (Critical)
+
+`/epic-cycle` is designed to be resumable. A session may stop mid-epic — by interrupt, by context exhaustion, by the user explicitly pausing, or by a clarification gate that waits across days — and a later session must pick up exactly where the prior one left off without re-doing work and without skipping work.
+
+#### Resume-mode detection (epic-start)
+
+When `/epic-cycle` is invoked for an epic, the lead determines its mode before running SC-1 / SC-2:
+
+1. Read `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md`.
+2. Read `_bmad-output/implementation-artifacts/sprint-status.yaml` for this epic's stories.
+3. For each affected repo, check whether `epic{N}` exists locally and on the remote.
+
+Cross-reference yields one of these modes:
+
+| Cycle log | `epic{N}` local | `epic{N}` remote | Mode | Action |
+| --- | --- | --- | --- | --- |
+| Missing / empty | Missing | Missing | **FRESH** | Run SC-1, SC-2, create the branch. |
+| Missing / empty | Exists | Exists | **AMBIGUOUS** | Halt; ask the user whether to (a) adopt the existing branch and start writing the cycle log against it (any commits already on the branch are accepted as-is and not retroactively logged), (b) start a new epic under a different `N`, or (c) inspect manually and decide. |
+| Has entries | Exists | Exists | **RESUME** | Compute the resume point from the log (below). |
+| Has entries | Missing | Exists | **REMOTE_ONLY** | `git fetch origin && git checkout epic{N}` then RESUME. |
+| Has entries | Exists | Missing | **LOCAL_ONLY** | Halt; ask the user whether the remote branch was deleted (push local up, or abandon). |
+| Has entries | Missing | Missing | **INTEGRITY_ERROR** | Halt loudly. The log claims prior work that the branches no longer carry. Surface to the user. |
+
+The detection runs **per affected repo** (parent + submodules). Different repos may legitimately be in different modes — e.g., the parent is RESUME (already has prior commits) while a submodule is FRESH (no work landed in it yet for this epic). That's fine; handle each independently.
+
+#### Resume-point computation (within-epic)
+
+For a repo in RESUME mode, the resume point is the earliest stage of the earliest story that hasn't reached its terminal stage. The terminal stage is `committed` for normal stories.
+
+Algorithm:
+
+1. Read the cycle log line-by-line. Each line is TAB-separated as documented in "Cycle Log Format (enables resume)".
+2. Bucket entries by story ID. Within each bucket, the highest-stage entry is the story's current resume anchor.
+3. The earliest story whose anchor is **not** `committed` is the resume point. The next pipeline stage after the anchor is where work resumes.
+4. If a story has a `<stage>_clarification_requested` entry without a subsequent `<stage>_complete`, the resume point is "answer the clarification + re-spawn that stage's agent." The lead surfaces the question to the user before spawning anything.
+5. For parallel batches, compute per-story anchors first, then identify the earliest stage across the batch — that's where the batch resumes. Re-spawn only the agents for stories that haven't yet reached that stage.
+
+#### Cross-stage integrity checks (executed before any further work)
+
+Before resuming any stage, the lead runs these checks on the affected repo's `epic{N}` HEAD:
+
+1. **Cycle log `committed sha=X` must be reachable on `epic{N}`.** For every `committed` entry, verify `git -C <repo> merge-base --is-ancestor X epic{N}`. If false, the local branch has drifted from what the log claims (force-push, history rewrite, hard reset). Halt.
+2. **Local and remote `epic{N}` HEADs match.** `git rev-parse epic{N}` == `git rev-parse origin/epic{N}` (post-fetch). If they differ in a non-fast-forward way, halt. If local is strictly ahead, log a `resume_local_ahead` advisory and push. If local is strictly behind, fetch + fast-forward.
+3. **`sprint-status.yaml` story status agrees with the cycle log.** A story marked `done` in YAML with no `committed` entry in the log, OR a `committed` entry with the story still marked `backlog`, is a divergence — surface to the user.
+4. **Submodule pointer consistency.** If `epic{N}` on the parent recorded a submodule pointer at commit `S`, the submodule's `epic{N}` must contain `S`. Mismatches surface as INTEGRITY_ERROR per the table above.
+
+#### Resume-mode interactions with parallel epics (Rule SC-8)
+
+If Epic A is being resumed and Epic B was running in parallel and merged to feature while Epic A was sleeping, the resume check is unchanged for Epic A — Epic A's `epic{N}` is unaffected by what happened to feature. The three-way reconciliation happens at Epic A's eventual SC-4 merge.
+
+If Epic A is being resumed and its own `epic{N}` was force-pushed by another contributor during the pause (e.g., someone rebased the branch from a different worktree), Check 1 fails and the lead halts. Force-pushes mid-epic are not silently recoverable.
+
+#### Resume across the Story X.0 / retro-review gate
+
+The retro-review gate (Story X.0 creation) fires once per epic. Detect via the cycle log:
+
+- Has `retro_review_complete` or `retro_review_skipped` entry → already done, skip.
+- No such entry → run the gate.
+
+If the gate ran but Story X.0 creation was interrupted (the gate entry is present but Story X.0 has no `story_created` entry), treat Story X.0 as the first incomplete story and resume there.
+
+#### Resume across the Sprint Planning gate
+
+Sprint planning is idempotent — `sprint-status.yaml` is regenerated each run. Always re-run on resume, even if a prior `sprint_planning_complete` entry exists; the skill is a no-op when the YAML is already current. The cycle log is append-only, so the new entry coexists with the prior one — the highest-timestamp entry is the authoritative "current" record.
+
+#### Workspace-integrity errors are not auto-recoverable
+
+The INTEGRITY_ERROR row in the detection table above (and the cross-stage check failures) **must halt**. Auto-recovery paths like "the branches must have been pruned; recreate them" lose work. The user is the only entity that can authorize a recovery action, because only the user knows whether the missing state was intentional (cleanup) or accidental (mistake).
+
+When halting on an integrity error, the lead surfaces:
+
+1. What the log says happened (story IDs, stages, recorded shas).
+2. What the workspace shows (branches present/missing, HEAD shas).
+3. The specific check that failed.
+4. Options for the user (re-create from log, abandon log, inspect manually).
+
+Never guess.
+
+#### Resume vs starting a new epic (epic boundary)
+
+If the cycle log for epic N is missing but the cycle log for epic N-1 exists and shows the N-1 epic completed, that's a normal **FRESH** start for epic N. SC-1 / SC-2 fire to create the new branch. The retro-review gate fires to triage epic N-1's deferred items into Story N.0.
+
+If the cycle log for epic N is present with entries AND the cycle log for epic N+1 is also present with entries, two epics are in flight (parallel per Rule SC-8). Both must be resumed independently in their respective worktrees.
+
 ### Sprint Planning Per Epic (Critical Gate)
 
 Before processing any stories for an epic:
@@ -666,7 +938,7 @@ If yes — the story is **service-introducing** — it MUST contain at least one
 
 If NOT service-introducing (pure refactor, doc-only, internal cleanup, defect-fix), this check finds no work; proceed.
 
-The skill customization for `/bmad-create-story` enforces Rule 1 in `on_complete`. This workflow gate is defense-in-depth.
+This workflow gate is the binding enforcement. (v3 retired `on_complete` hooks from the BMAD `.toml` customizations — the project's skill-rules file documents Rule 1 as a guideline; this `/bmad-create-story` gate is what actually halts when the rule is violated.)
 
 ### Context Handoff Between Stages (Critical)
 
@@ -729,18 +1001,18 @@ When an agent returns with a `## Clarification Needed` section instead of the cl
 
 **In a parallel batch:** if one agent in the batch returns with `## Clarification Needed` while others return cleanly, the lead surfaces the question and re-spawns *only that story's* agent. The other stories advance to the next stage normally; the clarified story rejoins the batch at the next barrier when its re-spawn returns.
 
-## Submodule Commit Order (Critical, if Applicable)
+## Submodule / Sub-Repository Commit Order (Critical, if Applicable)
 
-**Applies only to projects with git submodules.** Skip this section if `.gitmodules` is absent or empty.
+**Applies to projects with git submodules OR sub-repositories** (separate child repos under one umbrella). Skip this section if neither applies (single-repo project).
 
-When stories modify files in submodule directories:
+When stories modify files in child-repo directories:
 
-1. **Commit and push inside each affected submodule first** (`git -C <submodule-path> add ... && git -C <submodule-path> commit && git -C <submodule-path> push`).
-2. **Then commit and push in the parent repo**, staging both parent files AND the updated submodule pointers (`git add <submodule-path>`).
+1. **Commit and push inside each affected child first** (`git -C <child-path> add ... && git -C <child-path> commit && git -C <child-path> push`). For git submodules, this also produces an updated submodule pointer the parent will reference.
+2. **Then commit and push in the parent repo.** For git submodules, the parent stages both parent files AND the updated submodule pointer (`git add <submodule-path>`). For sub-repositories, the parent's commit references the children only at the workflow level (no submodule pointer to update) — but the children should still be pushed first so any cross-child dependencies are visible on their remotes.
 
 If the parent is pushed with a submodule pointer that doesn't exist on the submodule's remote, other developers get checkout failures. Always submodules-first.
 
-After each story, run `git -C <submodule-path> status --short` for every submodule listed in `.gitmodules` to determine which (if any) have changes.
+After each story, run `git -C <child-path> status --short` for every affected child (those listed in `.gitmodules`, plus any sub-repos the project enumerates) to determine which (if any) have changes.
 
 ## Completion Logging
 
@@ -760,7 +1032,21 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 
 - Fields separated by a single literal TAB character (`\t`), not runs of spaces.
 - The **metadata** field is whitespace-separated `key=value` pairs. Values are comma-separated lists when multi-valued; values must NOT contain spaces or tabs (percent-encode if needed). Keys are lowercase snake_case.
-- Valid stages, in order: `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete`; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed`), `committed`, `epic_summary` (optional, once per epic after the last committed entry — see Workflow Telemetry). Clarification events use `<stage>_clarification_requested` and are followed by the eventual `<stage>_complete` on re-spawn.
+- Two entry kinds share the same TAB-separated shape, distinguished by the second field:
+  - **Story-level entries**: second field is `Story <id>` (e.g., `Story 3.3`). The vast majority of log entries.
+  - **Epic-level entries**: second field is `Epic <N>` (e.g., `Epic 3`). Used for events that aren't tied to a single story — branch lifecycle and the optional epic summary.
+- **Valid story-level stages, in order:** `story_created`, `dev_complete`, `adr_verifications_complete` (optional, between `dev_complete` and `qa_complete`; one line per story regardless of AC count), `qa_complete`, `cr_complete`, `smoke_complete` (mandatory, between `cr_complete` and `committed`), `committed`. Clarification events use `<stage>_clarification_requested` and are followed by the eventual `<stage>_complete` on re-spawn.
+- **Valid epic-level stages** (Source Control + workflow lifecycle):
+  - `feature_branch_created` — Rule SC-1 created the feature branch in one or more repos. Metadata: `repos=<paths>` (comma-separated) `ticket=<id>` `description=<desc>` `root=<origin/branch>`.
+  - `epic_branch_created` — Rule SC-2 created `epic{N}` in one or more repos. Metadata: `repos=<paths>` `from=<feature-branch-sha>`.
+  - `epic_branch_checked_out` — Lead checked out `epic{N}` at epic start (resume or after creation). Metadata: `repos=<paths>` `head=<sha>`.
+  - `epic_branch_reopened` — Rule SC-5 recreated `epic{N}` after a prior merge. Metadata: `reason=<short>` `from=<feature-branch-sha>`.
+  - `sprint_planning_complete` — Sprint-planning gate done. Metadata: optional model/duration.
+  - `retro_review_complete` or `retro_review_skipped` — Retro-review + Story X.0 gate done. Metadata: `source_retro=<path-or-empty>` `included=<count>` `deferred=<count>` `dropped=<count>` for complete; `reason=<short>` for skipped.
+  - `resume_local_ahead` — Resume integrity check 2 found local `epic{N}` ahead of remote; lead pushed. Metadata: `repo=<path>` `pushed_shas=<count>`.
+  - `epic_merge_skipped` — User declined the Rule SC-4 merge prompt. Metadata: `reason=<short>`.
+  - `epic_merged_to_feature` — Rule SC-4 merge completed. Metadata: `repos=<paths>` `feature_sha=<sha>` `merge_sha=<sha>` `submodules=<paths-or-empty>`.
+  - `epic_summary` (optional, once per epic after the last `committed` entry) — see Workflow Telemetry.
 
 **Standardized telemetry metadata (record on every `*_complete` entry):**
 
@@ -783,6 +1069,11 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 **Example** (TABs shown as `→` for visibility; actual file contains literal tabs):
 
 ```
+2026-05-18T13:55:02Z→Epic 1→feature_branch_created→repos=. ticket=PROJ-1234 description=initial-foundation root=origin/main
+2026-05-18T13:55:10Z→Epic 1→epic_branch_created→repos=. from=a1b2c3d
+2026-05-18T13:55:11Z→Epic 1→epic_branch_checked_out→repos=. head=a1b2c3d
+2026-05-18T13:56:00Z→Epic 1→sprint_planning_complete→model=claude-opus-4-7
+2026-05-18T13:56:30Z→Epic 1→retro_review_skipped→reason=no_predecessor_no_deferred_work
 2026-05-18T14:23:11Z→Story 1.5→story_created→path=_bmad-output/implementation-artifacts/story-1.5.md spec_tokens=4820
 2026-05-18T14:24:02Z→Story 1.5→dev_complete→spawn_at=2026-05-18T14:23:30Z model=claude-opus-4-7 files=src/render/render-engine.ts,src/types/branded.ts loc_added=412 loc_removed=18 clarifications=1 nfr_tripwires=0 cycle_iteration=1 closing_sections_present=true
 2026-05-18T14:25:00Z→Story 1.5→adr_verifications_complete→tool=chrome_devtools_mcp ac=ac5 result=pass model=claude-opus-4-7
@@ -790,6 +1081,7 @@ Cycle log file: `_bmad-output/implementation-artifacts/cycle-log-epic-{N}.md` (a
 2026-05-18T14:33:18Z→Story 1.5→cr_complete→spawn_at=2026-05-18T14:30:15Z model=claude-opus-4-7 resolved=2 deferred=0 dismissed=0 high=1 med=1 low=0 clarifications=0 closing_sections_present=true
 2026-05-18T14:34:00Z→Story 1.5→smoke_complete→method=browser result=pass iterations=1 defects_caught=0 evidence=path/to/screens/ model=claude-opus-4-7
 2026-05-18T14:34:30Z→Story 1.5→committed→sha=abc1234 submodules=
+2026-05-18T18:02:11Z→Epic 1→epic_merged_to_feature→repos=. feature_sha=def5678 merge_sha=fed8765 submodules=
 ```
 
 **Parsing rule:** split each line on TAB into exactly 4 fields; split the metadata field on whitespace into key=value tokens; split each value on `,` for lists.
@@ -841,6 +1133,12 @@ The summary is derivable from the per-stage entries above, so it's a convenience
 - **Service-introducing story spawned without an Integration AC** — A producer + consumer can both ship green with the wiring between them never built. The lead validates integration-AC presence at `/bmad-create-story` and pauses for the user if absent.
 - **Carrying v2's BMAD `on_complete` hooks forward** — v2's `on_complete` arrays were load-bearing only because they fired the SendMessage envelope. With the envelope gone, those arrays just duplicate what the spawn prompt already says. Leaving them in place creates two sources of truth for agent behavior. Delete the `on_complete` blocks from each `.toml`; leave `persistent_facts`.
 - **Blocking the pipeline waiting for a "completion message" from the Agent tool** — The Agent tool returns once when the subagent's run ends. There is no separate envelope. Read the returned message directly.
+- **Committing directly to `main`, `master`, or `develop`** — Rule SC-6 forbids this absolutely from within `/epic-cycle`. Story commits, retrospective document commits, hotfixes — every commit produced by the workflow lands on `epic{N}` and reaches the protected trunks only through the explicit Rule SC-4 merge gate (epic → feature) followed by an out-of-band PR (feature → develop/main).
+- **Creating the feature branch silently** — Rule SC-1 mandates STOPping and asking the user for the TICKET, Description, and branch root when the feature branch is missing. Picking defaults silently is how `feature/undefined_undefined` ends up on remotes.
+- **Skipping the Source Control Branching gates on a "resume" assumption** — Mid-epic resume should find the branches already in place. If they're missing, that's a workspace-integrity error per Rule SC-2's resume semantics — halt and surface, do not silently re-create. Silent recreation orphans prior commits.
+- **Forgetting that submodules need their own `epic{N}`** — Rule SC-2 applies per repo. The parent's `epic{N}` is not authoritative for the submodules; each submodule has its own. The pre-commit branch assertion (Rule SC-3) covers each affected repo independently.
+- **Running parallel epics in a single working directory** — Git only allows one HEAD per working tree. Parallel agents must use `git worktree add` (recommended) or separate clones, per Rule SC-8. Attempting parallelism in one working directory ends in constant branch-switches that corrupt each agent's file state.
+- **Auto-resolving merge conflicts at the SC-4 gate** — Three-way-merge conflicts at end-of-epic (whether from a parallel epic, a hotfix, or any drift on feature) must always be surfaced to the user. Git's auto-resolution heuristics can silently drop intentional changes. Per Rule SC-8.
 
 ## Lessons Learned
 
@@ -905,7 +1203,7 @@ After writing all files, run these checks:
    ```
    Expected: each of the four `.toml` files reports `1` (one `persistent_facts` declaration). If any reports `0`, the rules registry isn't wired into that skill.
 
-7. **The slash command contains every section:** open `.claude/commands/epic-cycle.md` and confirm presence of: Pre-flight Runtime Check, Task Sequence, Permission Mode, Skill Tool Invocation, Agent Invocation Pattern (with Spawn Prompt Skeleton, Stage-specific rule blocks, Clarification protocol, Pipeline Flow, Smart Parallelism, Per-Story Smoke, Retrospective Review & Story X.0 Creation, Sprint Planning Per Epic, Retrospective Per Epic, Lead Creates Story Files, Context Handoff Between Stages, ADR-Aware Execution), When to Pause, Handling Clarifications, Submodule Commit Order, Completion Logging, **Workflow Telemetry**, Anti-Patterns, Lessons Learned.
+7. **The slash command contains every section:** open `.claude/commands/epic-cycle.md` and confirm presence of: Pre-flight Runtime Check, Task Sequence, Permission Mode, Skill Tool Invocation, Agent Invocation Pattern (with Spawn Prompt Skeleton, Stage-specific rule blocks, Clarification protocol, Pipeline Flow, Smart Parallelism, Per-Story Smoke, Retrospective Review & Story X.0 Creation, **Source Control Branching** (with Rules SC-1 through SC-8 and the Tracker format flexibility subsection), **Resume Semantics**, Sprint Planning Per Epic, Retrospective Per Epic, Lead Creates Story Files, Context Handoff Between Stages, ADR-Aware Execution), When to Pause, Handling Clarifications, Submodule / Sub-Repository Commit Order, Completion Logging, **Workflow Telemetry**, Anti-Patterns, Lessons Learned.
 
 8. **Telemetry metadata is documented:**
    ```
