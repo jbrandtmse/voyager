@@ -71,7 +71,7 @@ const ATTRIBUTION_ENTRIES: readonly AttributionEntry[] = [
     name: 'Voyager Golden Record audio',
     url: 'https://voyager.jpl.nasa.gov/golden-record/',
     description:
-      'NASA public domain. Diegetic audio layer activated at the launch (V1, V2), Pale Blue Dot, and heliopause (V1, V2) chapter markers. Per-track sources, licenses, and curation reasoning are in THIRD_PARTY.md.',
+      'NASA public domain. Five tracks from the canonical NASA-hosted Voyager Golden Record asset directory (Greetings in English + Arabic for the launches; "Wind, Rain, and Surf", "Life Signs / Pulsar", and "Music of the Spheres" from Sounds of Earth for Pale Blue Dot + heliopause crossings). Diegetic audio layer activated at the chapter markers. Per-track source URLs, license citations, and curation reasoning in THIRD_PARTY.md.',
   },
   {
     name: 'NASA Planetary Photojournal — Pale Blue Dot composite plates',
