@@ -32,7 +32,14 @@ export class VVersion extends BaseElement {
         display: inline-block;
         font-family: var(--v-font-mono);
         font-size: var(--v-font-size-caption);
-        color: var(--v-color-fg-quiet);
+        /* Story 6.6 AC1 — at 12px caption + no HUD text-shadow boost
+           the original --v-color-fg-quiet (3.20:1, AA-large only)
+           failed the WCAG 2.2 AA body 4.5:1 threshold. Switched to
+           --v-color-fg-muted (7.32:1 body-AA at any size) which
+           preserves the muted-vs-full-fg visual hierarchy while
+           clearing the threshold without dependence on the backdrop.
+           See docs/accessibility/contrast-audit-launch-week.md § 2.4. */
+        color: var(--v-color-fg-muted);
         letter-spacing: 0.02em;
       }
     `,

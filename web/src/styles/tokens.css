@@ -70,6 +70,15 @@
   --v-size-about-heading-sm: clamp(18px, 1.2vw, 22px);
   --v-size-about-body: clamp(16px, 1rem + 0.15vw, 19px);
 
+  /* ---------- Component-specific size tokens ---------- */
+  /* `<v-help-overlay>` `.shortcut-keys` column width — fixed at 100 px so the
+     two-column shortcut layout reads as a clean grid (keys left, description
+     right). Story 6.6 AC7 (token-ification of the deferred-work [2.8/LOW]
+     entry at deferred-work.md:400 — the original literal `min-width: 100px`
+     in `v-help-overlay.ts:185` was routed for token-ification in Story 7.6
+     or Epic 6 tokens-hygiene; landed here). */
+  --v-size-shortcut-key-col: 100px;
+
   /* ---------- Spacing — discrete 4-px scale ---------- */
   --v-space-1: 4px;
   --v-space-2: 8px;

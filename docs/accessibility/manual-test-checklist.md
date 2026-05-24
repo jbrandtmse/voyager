@@ -143,6 +143,7 @@ Each test pass below carries:
 1. Load `/c/v1-jupiter`. PASS: attitude indicator's CK vs synthesized state remains distinguishable (verify dot SHAPE / icon, not just color).
 2. Inspect the trajectory lines (past = solid, future = dashed per Story 4.x). PASS: past vs future remains distinguishable (verify DASH PATTERN, not just color).
 3. Inspect the chapter-marker dual-cluster labels (Story 6.2 — clustered V2L/V1L, V1J/V2J, etc.). PASS: cluster membership remains readable (verify TEXT and POSITION, not color alone).
+4. **Bright-backdrop legibility (Story 6.6 AC4 cross-reference)** — at each emulation, also scrub to a bright-backdrop scene (Sun close-up at `/c/launch-v1/` first ~30 s of cruise; Saturn rings at `/c/v1-saturn/`). PASS: HUD readouts, chapter title, chapter copy, and `<v-attitude-indicator>` remain legible against the brightest realistic backdrop — the HUD's `text-shadow: 0 0 8px rgba(10, 14, 20, 0.8)` (per `v-hud.ts:80`) should preserve glyph-edge contrast. If any element fails legibility under any emulation, route to `docs/accessibility/contrast-audit-launch-week.md § 6` for the canonical text-shadow audit; remediation is a `text-shadow` tightening in the affected component or in `--v-color-shadow` tokens.
 
 **Evidence:** Screenshot of each chapter at each color blindness emulation (5 emulations × 1 anchor chapter minimum). File names: `<date>-evidence/cb-<emulation>-<chapter>.png`.
 

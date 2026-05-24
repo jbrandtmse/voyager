@@ -67,7 +67,11 @@ export class VSpeedMultiplier extends BaseElement {
       .label {
         font-family: var(--v-font-mono);
         font-size: var(--v-font-size-caption);
-        color: var(--v-color-fg-quiet);
+        /* Story 6.6 AC1 — at 12px + outside HUD shadow tree the original
+           --v-color-fg-quiet (3.20:1, AA-large only) failed AA body.
+           Switched to --v-color-fg-muted (7.32:1 body-AA). See
+           docs/accessibility/contrast-audit-launch-week.md § 2.4. */
+        color: var(--v-color-fg-muted);
       }
 
       .track {
@@ -128,7 +132,9 @@ export class VSpeedMultiplier extends BaseElement {
       .readout {
         font-family: var(--v-font-mono);
         font-size: var(--v-font-size-caption);
-        color: var(--v-color-fg-quiet);
+        /* Story 6.6 AC1 — same reasoning as .label above: 12px outside
+           HUD shadow tree, switched to --v-color-fg-muted (7.32:1). */
+        color: var(--v-color-fg-muted);
         text-align: right;
       }
     `,

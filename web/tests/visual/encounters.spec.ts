@@ -197,9 +197,25 @@ test.describe.parallel('L4 visual regression — pinned encounter / launch / PBD
       // `animations: 'disabled'` — defense-in-depth alongside the
       // playwright.config reducedMotion pin: any residual CSS
       // animation is frozen during capture.
+      //
+      // Story 6.6 AC6 — mask the HUD / chapter-copy / timeline-scrubber
+      // text regions. These regions render variable digits + glyph
+      // antialiasing that previously drove the L4 0.005 tolerance loose;
+      // masking lets the playwright.config.ts maxDiffPixelRatio tighten
+      // back to 0.001 (AC2's original 0.1% target). The masked regions
+      // are filled with a pink overlay (Playwright default) in the
+      // diff artifact, so a real layout shift IN the HUD chrome would
+      // still surface as a position-of-mask diff — masking does not
+      // hide content displacement, it only hides per-glyph
+      // antialiasing variance within the bounding rect.
       const screenshot = await page.screenshot({
         fullPage: false,
         animations: 'disabled',
+        mask: [
+          page.locator('v-hud'),
+          page.locator('v-chapter-copy'),
+          page.locator('v-timeline-scrubber'),
+        ],
       });
       expect(screenshot).toMatchSnapshot(`scene-${scene.slug}.png`);
     });
@@ -326,9 +342,17 @@ test.describe.parallel('L4 PBD substates — Story 5.4 (FR55)', () => {
       // Capture + diff. Same options as the encounter-scene capture
       // path. Snapshot template flattens to `__snapshots__/<slug>.png`
       // per the suite's playwright.config.ts `snapshotPathTemplate`.
+      //
+      // Story 6.6 AC6 — HUD-region masking (see encounter-scene capture
+      // block above for the full rationale).
       const screenshot = await page.screenshot({
         fullPage: false,
         animations: 'disabled',
+        mask: [
+          page.locator('v-hud'),
+          page.locator('v-chapter-copy'),
+          page.locator('v-timeline-scrubber'),
+        ],
       });
       expect(screenshot).toMatchSnapshot(`${scene.slug}.png`);
     });

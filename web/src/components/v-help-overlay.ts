@@ -73,7 +73,15 @@ export class VHelpOverlay extends BaseElement {
       .toggle {
         appearance: none;
         background: transparent;
-        color: var(--v-color-fg-quiet);
+        /* Story 6.6 AC1 — at 16px + outside HUD shadow tree the original
+           --v-color-fg-quiet (3.20:1, AA-large only) failed AA body for
+           the icon character (the question-mark glyph). Switched the
+           TEXT to --v-color-fg-muted (7.32:1 body-AA). The BORDER
+           continues to use --v-color-fg-quiet because SC 1.4.11 governs
+           non-text UI components at 3:1 and the border clears that
+           threshold. See docs/accessibility/contrast-audit-launch-week.md
+           § 2.4. */
+        color: var(--v-color-fg-muted);
         border: 1px solid var(--v-color-fg-quiet);
         border-radius: 4px;
         width: 32px;
@@ -191,7 +199,11 @@ export class VHelpOverlay extends BaseElement {
         align-items: center;
         gap: 4px;
         flex-shrink: 0;
-        min-width: 100px;
+        /* Story 6.6 AC7 — token-ified from the prior hard-coded 100px
+           literal. Routed from deferred-work.md:400 ([2.8/LOW]). The
+           value is unchanged (100px); only the source moved to the
+           single source-of-truth in tokens.css. */
+        min-width: var(--v-size-shortcut-key-col);
       }
 
       kbd {

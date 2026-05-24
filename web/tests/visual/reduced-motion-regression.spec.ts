@@ -214,6 +214,15 @@ test.describe.parallel('L4 reduced-motion regression — Story 6.3 (FR46 / NFR-A
         // freeze provides belt-and-braces if a future PR adds a
         // non-tokenised animation that slips past the defense tests.
         animations: 'disabled',
+        // Story 6.6 AC6 — mask the HUD / chapter-copy / timeline-scrubber
+        // text regions so the playwright.config.ts maxDiffPixelRatio
+        // can tighten back to AC2's original 0.001 (0.1%) target. See
+        // encounters.spec.ts for the full rationale.
+        mask: [
+          page.locator('v-hud'),
+          page.locator('v-chapter-copy'),
+          page.locator('v-timeline-scrubber'),
+        ],
       });
       expect(screenshot).toMatchSnapshot(`reduced-motion-${scene.name}.png`);
     });
