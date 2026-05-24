@@ -1,13 +1,11 @@
 # Project override for bmad-dev-story.
-# Loads voyager-skill-rules.md so Rule 5 (NFR tripwire response) and the
-# other shared rules are visible to the dev mid-flow. No on_complete hook:
+# Loads skill-rules.md so Rule 5 (NFR tripwire response) and the other
+# shared rules are visible to the dev mid-flow. No on_complete hook:
 # the /epic-cycle workflow's spawn-prompt skeleton enforces the
 # verification gates and closing-summary requirement at runtime.
-#
-# See epic-cycle-teams-v3.md for the upgrade rationale.
 
 [workflow]
 
 persistent_facts = [
-  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+  "file:{project-root}/_bmad/custom/skill-rules.md",
 ]

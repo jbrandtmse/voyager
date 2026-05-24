@@ -1,15 +1,12 @@
 # Project override for bmad-create-story.
-# Loads voyager-skill-rules.md so the rule registry is visible to the
-# agent throughout the skill's run. No on_complete hook: the /epic-cycle
+# Loads skill-rules.md so the rule registry is visible to the agent
+# throughout the skill's run. No on_complete hook: the /epic-cycle
 # workflow's spawn-prompt skeleton restates the relevant rules and the
 # closing-summary requirement at runtime — that's the single source of
 # truth for agent behavior under this workflow.
-#
-# See epic-cycle-teams-v3.md for the upgrade rationale (the v2 on_complete
-# block was load-bearing only for the SendMessage envelope, which v3 retired).
 
 [workflow]
 
 persistent_facts = [
-  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+  "file:{project-root}/_bmad/custom/skill-rules.md",
 ]

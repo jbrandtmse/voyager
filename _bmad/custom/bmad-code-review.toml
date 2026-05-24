@@ -1,14 +1,12 @@
 # Project override for bmad-code-review.
-# Loads voyager-skill-rules.md so Rule 1 (Integration ACs), Rule 3
-# (smoke evidence), Rule 5 (NFR tripwires), and Rule 6 (ADR violations)
-# are visible to the reviewer throughout. No on_complete hook: the
+# Loads skill-rules.md so Rule 1 (Integration ACs), Rule 3 (smoke
+# evidence), Rule 5 (NFR tripwires), and Rule 6 (ADR violations) are
+# visible to the reviewer throughout. No on_complete hook: the
 # /epic-cycle workflow's spawn-prompt skeleton restates these checks
 # and the closing-summary requirement at runtime.
-#
-# See epic-cycle-teams-v3.md for the upgrade rationale.
 
 [workflow]
 
 persistent_facts = [
-  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
+  "file:{project-root}/_bmad/custom/skill-rules.md",
 ]

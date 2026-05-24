@@ -201,3 +201,11 @@ A disclosure is a one-line Dev Notes entry naming the files, estimated per-file 
 - `bmad-code-review` cross-checks a story's File List against `.gitattributes` LFS patterns; an LFS-tracked addition without a corresponding disclosure in the story's Dev Notes is a HIGH finding (sibling to Rule 5's NFR-tripwire and Rule 6's ADR-violation classes).
 
 **Why this rule exists today:** Story 4-11 (satellite SPK procurement for the Epic 4 moons) was originally estimated as adding "100–500 MB" of kernels and ended up at 2.3 GB — a 5× footprint overshoot rooted in the absence of a public-domain higher-precision Saturn moon SPK (NAIF's `sat441` is the smallest available at 662 MB; lower-precision variants didn't model the inner moons Voyager flew past). The procurement detour wasn't a planning failure — the kernel set was load-bearing — but the lack of pre-disclosure left the maintainer reasoning about clone-time + CDN-bandwidth cost mid-story rather than at sprint-planning. The Epic 4 retrospective addendum (Action #2) routed the policy to Story 5.0 for documentation; this rule is the BMAD-skill-pack landing.
+
+## Rule 13 — Test discoverability (applies to `bmad-qa-generate-e2e-tests`)
+
+Generated tests MUST be discoverable by the project's default test suite — (a) correct naming convention, (b) not excluded by ignore files, (c) not tagged in a way that opts them out of the default run.
+
+A test that exists but does not run in the default suite is invisible to CI and to the next story's regression check. Undiscoverable tests are a HIGH finding on subsequent code review.
+
+**Numbering note:** this rule corresponds to "Rule 8 — Test discoverability" in the upstream `epic-cycle` kit template. It is slotted at position 13 here so Voyager's existing project-specific rules (originally numbered 8 through 12) retain their numbers as referenced in `CONTRIBUTING.md`, `bake/tests/test_bake_moon_trajectories.py`, and the many `_bmad-output/implementation-artifacts/tests/test-summary-*.md` files. Add additional rules sequentially after Rule 13.

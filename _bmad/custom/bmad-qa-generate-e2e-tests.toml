@@ -1,19 +1,17 @@
 # Project override for bmad-qa-generate-e2e-tests.
-# Loads voyager-skill-rules.md as informational context AND the
-# Chrome DevTools MCP smoke-stage policy (Voyager-specific test-summary
-# requirement). No on_complete hook: the /epic-cycle workflow's
-# spawn-prompt skeleton handles the test-discoverability check and
-# closing-summary requirement at runtime.
-#
-# See epic-cycle-teams-v3.md for the upgrade rationale.
+# Loads skill-rules.md as informational context AND the Chrome DevTools
+# MCP smoke-stage policy (Voyager-specific test-summary requirement).
+# No on_complete hook: the /epic-cycle workflow's spawn-prompt skeleton
+# handles the test-discoverability check and closing-summary
+# requirement at runtime.
 
 [workflow]
 
 persistent_facts = [
-  "file:{project-root}/_bmad/custom/voyager-skill-rules.md",
-  """Voyager test-tier policy — Chrome DevTools MCP smoke stage (Story 2.0 AC2, encoding Rule 3 + Rule 8 from voyager-skill-rules.md):
+  "file:{project-root}/_bmad/custom/skill-rules.md",
+  """Voyager test-tier policy — Chrome DevTools MCP smoke stage (Story 2.0 AC2, encoding Rule 3 + Rule 8 from skill-rules.md):
 
-When generating tests for a story whose Files-to-Modify (or equivalent file-touch list) includes any path under `web/src/`, the test-summary output MUST include a dedicated "Chrome DevTools MCP smoke" stage IN ADDITION to the standard Vitest unit / integration / Playwright sections. The MCP smoke stage is the per-story exit criterion for browser-smoke evidence (voyager-skill-rules.md Rule 3) and the canonical browser-smoke driver is Chrome DevTools MCP (Rule 8 — no initScript/shim needed post-Story-1.16).
+When generating tests for a story whose Files-to-Modify (or equivalent file-touch list) includes any path under `web/src/`, the test-summary output MUST include a dedicated "Chrome DevTools MCP smoke" stage IN ADDITION to the standard Vitest unit / integration / Playwright sections. The MCP smoke stage is the per-story exit criterion for browser-smoke evidence (skill-rules.md Rule 3) and the canonical browser-smoke driver is Chrome DevTools MCP (Rule 8 — no initScript/shim needed post-Story-1.16).
 
 The MCP smoke stage must propose at minimum the following MCP tool calls and asserted observations:
   1. `mcp__chrome-devtools-mcp__navigate_page` — open the dev server URL exercising the story's feature (note any required query params, e.g. `?dev=precision`, `?embed=1`, `?chapter=…`).
@@ -25,6 +23,6 @@ The MCP smoke stage must propose at minimum the following MCP tool calls and ass
 For each AC the MCP smoke covers, name the AC explicitly (e.g. "MCP smoke covers AC3 (scrubber announcement) — `take_snapshot` confirms `aria-live` region update on scrub-stop").
 
 Skip rules:
-  - If the story's Files-to-Modify list is bake-only (`bake/**`) with no `web/src/` paths, the MCP stage is correctly skipped (this matches the Pure bake-side exemption in voyager-skill-rules.md Rule 3). Note the exemption explicitly in the summary so reviewers know it was considered.
+  - If the story's Files-to-Modify list is bake-only (`bake/**`) with no `web/src/` paths, the MCP stage is correctly skipped (this matches the Pure bake-side exemption in skill-rules.md Rule 3). Note the exemption explicitly in the summary so reviewers know it was considered.
   - For visual stories (precision-smoke / encounter visuals), the MCP stage may reference existing fixture directories — e.g. `_bmad-output/implementation-artifacts/1-5-ac5-precision-smoke-screens/` or `_bmad-output/implementation-artifacts/1-16-smoke-evidence/` — as canonical examples of the screenshot evidence shape (post-Story-1.16 fixtures do not contain the brotli initScript shim).""",
 ]
