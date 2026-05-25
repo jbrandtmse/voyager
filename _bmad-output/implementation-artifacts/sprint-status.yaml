@@ -223,15 +223,15 @@ development_status:
   epic-5-retrospective: done
 
   # Epic 6: Audio, Reduced Motion and Full Accessibility Pass
-  epic-6: in-progress
+  epic-6: done
   6-0-epic-5-deferred-cleanup: done
   6-1-golden-record-audio-bundle-v-audio-toggle-and-chapter-marker-activation: done
   6-2-v-hud-dismiss-restore-and-final-hud-compaction-polish: done
   6-3-full-reduced-motion-sweep-across-all-chapters-and-components: done
   6-4-axe-core-ci-expansion-and-manual-accessibility-test-layer: done
   6-5-friendly-user-qualitative-testing-differentiator-perception-launch-gate: done
-  6-6-final-contrast-typography-and-provenance-label-polish: review
-  epic-6-retrospective: optional
+  6-6-final-contrast-typography-and-provenance-label-polish: done
+  epic-6-retrospective: done
 
   # Epic 7: Operational Substrate and Launch Readiness
   epic-7: backlog
