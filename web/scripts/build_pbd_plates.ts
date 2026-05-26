@@ -262,8 +262,66 @@ const downloadIfMissing = async (src: SourcePia, cacheDir: string): Promise<Uint
 };
 
 /**
+ * BUG-E2E-002 fix (2026-05-26): luminance-threshold alpha mask applied
+ * after resize. The NASA Photojournal source plates are not pre-masked
+ * to pure-black borders — they carry visible sensor noise + film-grain
+ * coloration around the iconic content. Without this mask, the runtime
+ * composite layer renders each plate as a hard rectangle against the
+ * starfield ("Pale blue dot looks like a box" — user feedback).
+ *
+ * The mask logic:
+ *   - For each pixel, compute Rec. 709 luminance Y = 0.2126R + 0.7152G
+ *     + 0.0722B
+ *   - If Y < `HARD_THRESHOLD` → alpha = 0 (cuts sensor noise to true
+ *     transparency)
+ *   - If Y >= `SOFT_THRESHOLD` → alpha = 255 (preserves iconic content
+ *     at full opacity)
+ *   - Otherwise: smoothstep ramp between the two (avoids hard alpha
+ *     edge at the noise/iconic boundary)
+ *
+ * Tuning (Earth plate PIA00452, verified via histogram inspection
+ * 2026-05-26): the source plate's "dark space" pixels are actually
+ * at Y ≈ 50–80 (NOT pure-black — film grain + sensor noise lifts
+ * everything off the floor). The scattered sunbeam sits at Y ≈ 70–100
+ * and the iconic Earth pixel at Y ≈ 100–150. Brightest 2 pixels reach
+ * 100+. Background dominates: ~99% of the plate's pixels are at Y < 80.
+ *
+ * Threshold strategy: HARD=70 cuts the diffuse "dark space" pixels
+ * while preserving the slightly-brighter sunbeam pixels (Y ≈ 75-100);
+ * SOFT=85 gives the brightest content full opacity. The smoothstep
+ * fade from 70→85 means the boundary between the iconic content and
+ * the noise (where pixels are ambiguous) gets a graceful alpha taper.
+ */
+const HARD_LUMA_THRESHOLD = 70;
+const SOFT_LUMA_THRESHOLD = 85;
+
+const applyLumaAlphaMask = async (
+  rgbaPixels: Buffer,
+): Promise<Buffer> => {
+  const out = Buffer.from(rgbaPixels);
+  for (let i = 0; i < out.length; i += 4) {
+    const r = out[i] ?? 0;
+    const g = out[i + 1] ?? 0;
+    const b = out[i + 2] ?? 0;
+    const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let alpha: number;
+    if (y < HARD_LUMA_THRESHOLD) {
+      alpha = 0;
+    } else if (y >= SOFT_LUMA_THRESHOLD) {
+      alpha = 255;
+    } else {
+      const t = (y - HARD_LUMA_THRESHOLD) / (SOFT_LUMA_THRESHOLD - HARD_LUMA_THRESHOLD);
+      alpha = Math.round(255 * t * t * (3 - 2 * t)); // smoothstep
+    }
+    out[i + 3] = alpha;
+  }
+  return out;
+};
+
+/**
  * Process a single plate job — crop the source PIA, resize to
- * `PLATE_SIZE`×`PLATE_SIZE`, encode as PNG, content-hash, and write to
+ * `PLATE_SIZE`×`PLATE_SIZE`, apply the luminance-threshold alpha mask
+ * (BUG-E2E-002), encode as PNG, content-hash, and write to
  * `web/public/images/pbd/<body>.<hash>.png`. Returns the produced
  * filename + source PIA + SHA-256 for the audit log.
  */
@@ -282,12 +340,16 @@ export const buildPlate = async (
   if (job.cropBox !== null) {
     pipeline = pipeline.extract(job.cropBox);
   }
-  // Resize to the target plate size. `fit: 'fill'` ignores aspect ratio
-  // intentionally — each body's cell is roughly square already (after
-  // the cropBox), and forcing the same plate size for all six keeps the
-  // composite layer's CSS sizing trivial.
-  const pngBuffer = await pipeline
+  // Resize to RGBA raw buffer so we can apply the luminance alpha mask.
+  const { data: rgba, info } = await pipeline
     .resize(PLATE_SIZE, PLATE_SIZE, { fit: 'fill', kernel: 'lanczos3' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const masked = await applyLumaAlphaMask(rgba);
+  const pngBuffer = await sharp(masked, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
     .png({ compressionLevel: 9 })
     .toBuffer();
   const hash = sha256Hex(pngBuffer);

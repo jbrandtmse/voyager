@@ -537,11 +537,18 @@ export class PbdCompositeLayer {
       // Block image-smoothing crispness — the plate is a small bitmap;
       // we want pixel-perfect display, not browser-default linear scaling.
       img.style.imageRendering = 'auto';
-      // Composite blending: standard alpha-blend. Documented in the
-      // class docstring. We do NOT use mix-blend-mode 'screen' or
-      // 'plus-lighter' here — the per-pixel star-field already
-      // contrasts the plate against black space, and additive blending
-      // would oversaturate the iconic Earth pixel.
+      // BUG-E2E-002 fix (2026-05-26): the source plates are now baked
+      // with a per-pixel luminance-threshold alpha mask (see
+      // `web/scripts/build_pbd_plates.ts § applyLumaAlphaMask`). Sensor-
+      // noise pixels (Y < 30) are alpha=0; iconic content (sunbeam, the
+      // Earth pixel) is alpha=255; the boundary zone (Y ∈ [30, 50])
+      // gets a smoothstep alpha taper so the iconic content's natural
+      // edges fade gracefully into the starfield rather than ending at
+      // a hard alpha cutoff. With true source-alpha, `mixBlendMode:
+      // 'normal'` works correctly — the iconic Earth pixel + scattered
+      // sunbeam composite onto the starfield with no rectangular border.
+      // Solved the "Pale blue dot looks like a box" user feedback at
+      // its root rather than via runtime CSS workarounds.
       img.style.mixBlendMode = 'normal';
       if (this.container.appendChild !== undefined) {
         this.container.appendChild(img);
