@@ -136,6 +136,17 @@ export interface FirstPaintOptions {
    * Story 2.5 chrome-skip discipline does not apply.
    */
   audioPlaybackService?: AudioPlaybackService;
+  /**
+   * BUG-CR-011 fix (2026-05-25): caller-supplied callback for the `V`
+   * keyboard shortcut that toggles the heliocentric system view
+   * (Story 4.12). Owned by `main.ts` (camera controller lives there);
+   * forwarded into `installKeyboardShortcuts` so the shortcut is
+   * discoverable + tested without first-paint needing to know about the
+   * camera controller. Omit the option in tests / legacy mounts; the
+   * shortcut becomes a no-op (no listener attached for the missing key
+   * branch).
+   */
+  onToggleHeliocentricView?: () => void;
 }
 
 export interface FirstPaintHandle {
@@ -364,7 +375,9 @@ export const startFirstPaint = (
     });
   }
 
-  const detachKeyboard = installKeyboardShortcuts(clockManager);
+  const detachKeyboard = installKeyboardShortcuts(clockManager, document, {
+    onToggleHeliocentricView: options.onToggleHeliocentricView,
+  });
 
   const onComplete = (): void => {
     titleCard.remove();

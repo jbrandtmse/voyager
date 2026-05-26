@@ -490,6 +490,13 @@ export class VHelpOverlay extends BaseElement {
                 `boot/camera-restore-affordance.ts`; this entry makes it
                 discoverable per Story 2.8's "full inventory" promise. */ ''}
             ${this.renderShortcut([['R']], 'Restore default camera view')}
+            ${/* BUG-CR-011 fix (2026-05-25): `V` toggles the Story 4.12
+                heliocentric system view (Sun-at-origin, all-Voyagers
+                visible) vs. the chapter-default body-centered framing.
+                Shortcut wired in `boot/keyboard-shortcuts.ts`; toggle
+                logic + state in `main.ts`. This entry surfaces it under
+                Story 2.8's full-inventory promise. */ ''}
+            ${this.renderShortcut([['V']], 'Toggle heliocentric system view')}
             ${this.renderShortcut([['?']], 'Open this help overlay')}
             ${this.renderShortcut([['Esc']], 'Close any overlay')}
           </ul>

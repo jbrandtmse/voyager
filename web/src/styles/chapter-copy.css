@@ -7,7 +7,18 @@
 v-chapter-copy {
   position: fixed;
   top: 50%;
-  right: var(--v-edge-margin);
+  /* BUG-CR-013 fix (2026-05-25): shift the panel left by the top-right icon
+     cluster width (help `?` + chapter-index `≡` icons, each 32 px wide
+     plus inter-icon gap) so the chapter copy text doesn't render over the
+     interactive icon hit-targets. The cluster lives at the top-right
+     edge inside <v-hud>; without this offset the chapter copy's right
+     edge aligns to the same x as the icons' right edge and text
+     paints over them. 80 px clears both icons plus a small breathing gap.
+
+     IMPORTANT: this only affects the wide-viewport layout. The narrow-
+     viewport bottom-sheet drawer (Story 6.2 AC4 `[data-narrow]`) hangs
+     full-width and overrides this `right` value below. */
+  right: calc(var(--v-edge-margin) + 80px);
   transform: translateY(-50%);
   width: min(36ch, 40vw);
   z-index: var(--v-z-overlay);
@@ -24,7 +35,14 @@ v-chapter-copy {
 v-chapter-copy .v-chapter-copy {
   opacity: 0;
   transition: opacity var(--v-duration-base) var(--v-ease-out);
-  text-shadow: 0 0 8px rgba(10, 14, 20, 0.8);
+  /* BUG-CR-007 fix (2026-05-25): defense in depth against bright planet
+     backdrops (Jupiter / Saturn close-ups, Sun close-ups). The original
+     8px @ 80% opacity halo washes out over very bright surfaces. Adding a
+     second wider, lower-opacity layer provides a broader contrast skirt
+     so text remains legible against any backdrop tier. */
+  text-shadow:
+    0 0 8px rgba(10, 14, 20, 0.95),
+    0 0 24px rgba(10, 14, 20, 0.65);
 }
 
 v-chapter-copy .v-chapter-copy[data-active='true'] {

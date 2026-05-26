@@ -206,7 +206,17 @@ const sliceSamples = (buffer: ArrayBuffer, header: VtrjHeader): Float64Array => 
 
 // === LRU cache ====================================================
 
-export const DEFAULT_LRU_CAPACITY = 12;
+// Working-set sizing (BUG-CR-001 fix, 2026-05-25): per-frame the consumers hit
+// ~20–30 distinct chunk URLs (V1+V2 spacecraft + ~9 planets + moons + attitude
+// bus/platform per spacecraft + adjacent prefetch). The original cap of 12
+// thrashed: every frame evicted working-set chunks, the next frame's
+// `peek()` returned undefined, and HUD readouts (e.g. v-hud-distance) flickered
+// between real values and "— AU" placeholders at ~4 Hz — a photosensitive-class
+// defect that the static-analysis NFR-A6 audit (Story 6.4 AC5) could not catch.
+// 64 gives 2× headroom over the worst-case observed working set (~30 chunks at
+// V1 Jupiter encounter); memory cost is bounded by chunk sizes (each is a
+// Float64Array of trajectory samples, typically ≤ a few hundred KB).
+export const DEFAULT_LRU_CAPACITY = 64;
 
 class LruCache<V> {
   private readonly store = new Map<string, V>();

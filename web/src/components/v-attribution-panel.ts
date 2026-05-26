@@ -77,7 +77,7 @@ const ATTRIBUTION_ENTRIES: readonly AttributionEntry[] = [
     name: 'NASA Planetary Photojournal — Pale Blue Dot composite plates',
     url: 'https://photojournal.jpl.nasa.gov/',
     description:
-      'NASA / JPL-Caltech public domain. Voyager 1 narrow-angle frames PIA00452 ("The Pale Blue Dot") and PIA00453 ("Solar System Portrait — Views of 6 Planets") from the 1990-02-14 family-portrait imaging sequence. Cropped per body and composited at each substate peak in the Pale Blue Dot scene (Story 5.3).',
+      'NASA / JPL-Caltech public domain. Voyager 1 narrow-angle frames PIA00452 ("The Pale Blue Dot") and PIA00453 ("Solar System Portrait — Views of 6 Planets") from the 1990-02-14 family-portrait imaging sequence. Cropped per body and composited at each substate peak in the Pale Blue Dot scene.',
   },
 ];
 

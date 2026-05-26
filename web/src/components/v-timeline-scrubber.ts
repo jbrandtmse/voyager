@@ -1030,10 +1030,33 @@ export class VTimelineScrubber extends BaseElement {
     return { leftFrac, rightFrac };
   }
 
+  /**
+   * BUG-CR-006 fix (2026-05-25): cache the last track width used for
+   * marker clustering. Initial render returns 0 (the `.track` element
+   * doesn't exist yet at template eval time), which causes
+   * `clusterMarkers` to bail out and emit 11 singles. Once `.track` is
+   * committed to the DOM, `updated()` triggers a re-render with the
+   * measured width so the clustering algorithm can fire correctly.
+   * Re-fires on viewport resize too (handles narrow-viewport compaction
+   * per Story 6.2 AC3).
+   */
+  private lastClusterTrackWidthPx = 0;
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     const track = this.trackEl();
     const thumb = this.shadowRoot?.querySelector<HTMLElement>('.thumb');
+
+    // BUG-CR-006 fix: re-render once when track width becomes measurable
+    // (and on every viewport-driven width change thereafter).
+    if (track !== null) {
+      const currentWidth = track.getBoundingClientRect().width;
+      if (currentWidth > 0 && currentWidth !== this.lastClusterTrackWidthPx) {
+        this.lastClusterTrackWidthPx = currentWidth;
+        this.requestUpdate();
+      }
+    }
+
     if (track !== null && this.detachPointer === null) {
       // Attach once. The same primitive handles both track-click and
       // thumb-drag because the thumb's 44×44 pseudo overlays the track.
@@ -1265,9 +1288,16 @@ export class VTimelineScrubber extends BaseElement {
         @click=${this.onMarkerClick(chapter)}
         @keydown=${this.onMarkerKeyDown(chapter)}
       >
-        <span class="chapter-marker-label" aria-hidden="true"
-          >${chapter.markerLabel}</span
-        >
+        ${inPair
+          ? // BUG-CR-006 fix (2026-05-25): in a clustered pair, suppress the
+            // per-pin label; the dual-cluster "${left} / ${right}" label at
+            // the midpoint is the only label that renders. Rendering both
+            // the per-pin labels AND the cluster label was producing
+            // visually-smashed strings like "V12S" (V1S + V2S overlapping).
+            html``
+          : html`<span class="chapter-marker-label" aria-hidden="true"
+              >${chapter.markerLabel}</span
+            >`}
         <span class="chapter-marker-tooltip" role="tooltip" aria-hidden="true"
           >${chapter.name}</span
         >

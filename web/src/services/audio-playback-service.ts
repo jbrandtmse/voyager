@@ -455,7 +455,14 @@ class DefaultAudioEngine implements AudioEngineLike {
     try {
       const audio = new Audio(url);
       audio.crossOrigin = 'anonymous';
-      audio.loop = true;
+      // BUG-CR-008 fix (2026-05-25): single-play, no retrigger. Looping
+      // the Golden Record within a chapter window felt wrong — these are
+      // archival source recordings (Carter's English greeting, Eastman's
+      // pulsar map, etc.), not ambient bed music. After the track finishes
+      // its natural length, silence covers the rest of the chapter window
+      // until the user scrubs out and back in (which prepares a fresh
+      // element). Decided 2026-05-25 with maintainer.
+      audio.loop = false;
       audio.preload = 'auto';
       const source = ctx.createMediaElementSource(audio);
       const gain = ctx.createGain();

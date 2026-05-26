@@ -37,7 +37,11 @@ import { ALL_CHAPTERS } from './chapters/registry';
 import { PaleBlueDot } from './chapters/pale-blue-dot';
 import { PbdCompositeLayer } from './chapters/pale-blue-dot/composite-layer';
 import { RenderEngine } from './render/render-engine';
-import { VoyagerCameraController } from './render/voyager-camera-controller';
+import {
+  VoyagerCameraController,
+  HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+  HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
+} from './render/voyager-camera-controller';
 import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
 import { resolveChapterDefaultFraming } from './chapters/chapter-default-framing';
 import { worldVec3, type WorldVec3 } from './types/branded';
@@ -320,6 +324,29 @@ const bootstrap = (): void => {
       // work zero outside the PBD window.
       pbdCompositeLayer.update(paleBlueDot.currentSubstate, engine.camera);
     }
+    // BUG-CR-005 fix (2026-05-25): drive the spacecraft's dynamic scale
+    // boost from the ViewFrame's encounter-blend alpha. At cruise the
+    // group renders at the base SPACECRAFT_RENDER_SCALE_KM; at full
+    // body-centered encounter framing the group is boosted by up to
+    // ENCOUNTER_SCALE_BOOST × so the spacecraft is perceivable alongside
+    // the encounter body's km-scale geometry. Required for Story 6.5
+    // launch-gate Probe #5 (UNPROMPTED ATTITUDE PROBE).
+    if (viewFrameServiceRef !== null && spacecraftModelsRef !== null) {
+      const transform = viewFrameServiceRef.getTransform(
+        et,
+        chapterDirector.activeChapter,
+      );
+      spacecraftModelsRef.setEncounterAlpha(transform.encounterAlpha);
+      // BUG-CR-015 fix (2026-05-25): also drive the moon scale boost
+      // from the same encounter alpha so Io / Europa / Ganymede /
+      // Callisto / Titan / Iapetus / Hyperion grow with the camera
+      // anchor and become perceivable disks at full body-centered
+      // framing (sub-pixel native sizes otherwise undercut the chapter
+      // copy's named-moon observation targets).
+      if (celestialBodies !== null) {
+        celestialBodies.setEncounterAlpha(transform.encounterAlpha);
+      }
+    }
   });
 
   // Integration AC8 (Story 2.1) — DEV-only debug surface so the lead's
@@ -390,6 +417,13 @@ const bootstrap = (): void => {
   // chapter window. The director is already driven from `engine.onFrame`
   // above; first-paint sets it on the scrubber BEFORE connectedCallback
   // runs so the marker-subscription wires in cleanly.
+  // BUG-CR-011 fix (2026-05-25): forwarder closure for the `V` heliocentric
+  // toggle. The keyboard listener is installed inside `startFirstPaint`
+  // (before `cameraController` exists in this scope), so we hand it a
+  // mutable forwarder that becomes a no-op until the controller is wired
+  // below. Once the controller lands, the post-construction block (after
+  // `cameraController` is declared) assigns the real toggle logic.
+  let heliocentricToggleHandler: (() => void) | null = null;
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
     {
@@ -405,6 +439,14 @@ const bootstrap = (): void => {
       // embed mode; first-paint's chrome-skip discipline does not gate
       // it.
       audioPlaybackService,
+      // BUG-CR-011 fix (2026-05-25): `V` keyboard shortcut toggles
+      // heliocentric system view (Story 4.12) ⇄ chapter-default
+      // body-centered framing. The closure defers to the mutable
+      // `heliocentricToggleHandler` so we can wire the controller once it
+      // exists later in this bootstrap.
+      onToggleHeliocentricView: () => {
+        heliocentricToggleHandler?.();
+      },
     },
   );
 
@@ -576,6 +618,25 @@ const bootstrap = (): void => {
       resolveChapterDefaultFraming(chapterDirector.activeChapter, activeTarget),
   });
   cameraController.attach();
+
+  // BUG-CR-011 fix (2026-05-25): wire the heliocentric system-view toggle
+  // for the `V` keyboard shortcut. We track local state because the camera
+  // controller doesn't expose a "which framing is active" query — it just
+  // applies framings on command. Flip on each press: body-centered ⇄
+  // heliocentric. The animated path matches the `R`-restore semantics.
+  let heliocentricViewActive = false;
+  heliocentricToggleHandler = (): void => {
+    heliocentricViewActive = !heliocentricViewActive;
+    if (heliocentricViewActive) {
+      cameraController.applyHeliocentricFraming({
+        distanceAu: HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+        elevationDeg: HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
+        animated: true,
+      });
+    } else {
+      cameraController.applyDefaultFraming({ animated: true });
+    }
+  };
 
   const restoreAffordance = mountCameraRestoreAffordance({
     host: canvas.parentElement ?? document.body,

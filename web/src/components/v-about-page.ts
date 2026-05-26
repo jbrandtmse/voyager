@@ -158,7 +158,7 @@ export class VAboutPage extends LitElement {
           <tr>
             <th scope="row">Voyager Golden Record</th>
             <td>NASA mission audio</td>
-            <td>Audio surface (wired in Story 6.1)</td>
+            <td>Diegetic audio layer at the launch, PBD, and heliopause chapter markers</td>
           </tr>
         </tbody>
       </table>

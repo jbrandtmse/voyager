@@ -135,7 +135,11 @@ export class VHud extends BaseElement {
 
       .corner.bottom-left {
         bottom: var(--v-edge-margin, 16px);
-        left: var(--v-edge-margin, 16px);
+        /* BUG-CR-002 fix (2026-05-25): mirror the +108px gutter Story 6.2 AC6
+           gave the scrubber so the <v-hud-instruments> labels don't render
+           UNDER the play button + audio toggle column.
+           Play (44 px) + gap (8 px) + audio (44 px) + gap (12 px) = 108 px. */
+        left: calc(var(--v-edge-margin, 16px) + 108px);
         align-items: flex-start;
       }
 

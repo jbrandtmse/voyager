@@ -470,10 +470,14 @@ describe('Hermite reproduces sample values exactly at sample boundaries (defense
 
 describe('LRU eviction respects recency, not insertion order (defense)', () => {
   it('re-accessing chunk 0 before overflow keeps it cached; chunk 1 evicts instead', async () => {
-    // Default capacity is 12. We load chunks 0..11 (filling cache), then bump
-    // chunk 0 via re-access so it becomes MRU, then load chunk 12 to force
-    // one eviction. Expected eviction: chunk 1 (now the least-recently-used).
-    const N = 13;
+    // BUG-CR-001 follow-up (2026-05-25): DEFAULT_LRU_CAPACITY was bumped
+    // from 12 → 64 to stop per-frame eviction thrash that caused HUD
+    // distance flicker. This test exercises the LRU recency contract by
+    // filling the cache to capacity, then forcing one eviction; the
+    // capacity constant drives the loop bounds so the test stays valid
+    // across future capacity changes.
+    const CAPACITY = DEFAULT_LRU_CAPACITY;
+    const N = CAPACITY + 1;
     const files: ManifestFile[] = [];
     const blobs = new Map<string, ArrayBuffer>();
     for (let i = 0; i < N; i++) {
@@ -507,25 +511,26 @@ describe('LRU eviction respects recency, not insertion order (defense)', () => {
     }) as unknown as typeof fetch;
     const loader = new ChunkLoader({ fetchImpl });
 
-    // Load chunks 0..11 (fills cache to capacity 12).
-    for (let i = 0; i < 12; i++) {
+    // Load chunks 0..CAPACITY-1 (fills cache to capacity).
+    for (let i = 0; i < CAPACITY; i++) {
       await loader.load(files[i]);
     }
-    // Insertion order now: 0,1,2,3,4,5,6,7,8,9,10,11
+    // Insertion order now: 0,1,2,…,CAPACITY-1
 
     // Touch chunk 0 ONCE to bump it to MRU (peek -> LruCache.get bumps order).
     expect(loader.peek(files[0].url)).toBeDefined();
-    // Order now: 1,2,3,4,5,6,7,8,9,10,11,0
+    // Order now: 1,2,…,CAPACITY-1,0
 
-    // Loading chunk 12 forces eviction of the oldest, which is now chunk 1.
-    await loader.load(files[12]);
+    // Loading chunk N-1 (the overflow chunk) forces eviction of the oldest,
+    // which is now chunk 1.
+    await loader.load(files[CAPACITY]);
 
     // Inspect via __cacheKeys (does NOT bump order, unlike peek). This avoids
     // any test-time confounding of recency.
     const keys = new Set(loader.__cacheKeys());
     expect(keys.has(files[0].url), 'chunk 0 was just-accessed and must survive').toBe(true);
     expect(keys.has(files[1].url), 'chunk 1 must be the eviction victim').toBe(false);
-    expect(keys.has(files[12].url)).toBe(true);
+    expect(keys.has(files[CAPACITY].url)).toBe(true);
     expect(loader.__cacheSize()).toBe(DEFAULT_LRU_CAPACITY);
   });
 });

@@ -130,6 +130,11 @@ export class RenderEngine {
   private _manualCameraActive = false;
   private lastTickMs: number | null = null;
   private running = false;
+  // BUG-CR-014 fix (2026-05-25): remember whether the engine was running
+  // when WebGL context was lost so the `webglcontextrestored` listener
+  // knows whether to auto-resume or leave the loop quiescent (e.g. if the
+  // app had paused before the context loss).
+  private _wasRunningBeforeContextLoss = false;
 
   // Resolved depth mode, set during init().
   private _depthMode: 'reverse-z' | 'logarithmic' = 'logarithmic';
@@ -262,6 +267,42 @@ export class RenderEngine {
     this.camera.updateProjectionMatrix();
 
     this.lastTickMs = null;
+
+    // BUG-CR-014 fix (2026-05-25): WebGL context-loss / restore handling.
+    // Without these listeners, a transient GPU context loss (driver reset,
+    // tab backgrounding, MCP-controlled browser switching pages) leaves the
+    // canvas blank and the rAF loop firing against a dead context — the
+    // user sees only the HTML chrome on a black/white background until
+    // they reload manually. Calling `event.preventDefault()` on
+    // `webglcontextlost` is what tells the browser to attempt restoration;
+    // Three.js's WebGLRenderer re-uploads textures + re-binds programs on
+    // its own once the new context fires. We pause the animation loop
+    // during the gap so frame callbacks don't run with no GPU backing, and
+    // resume it on restore. HTMLCanvasElement only — OffscreenCanvas does
+    // not dispatch these events.
+    if (
+      typeof HTMLCanvasElement !== 'undefined' &&
+      canvas instanceof HTMLCanvasElement
+    ) {
+      canvas.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        console.warn(
+          '[RenderEngine] WebGL context lost; pausing animation loop ' +
+            '(will auto-resume on restore).',
+        );
+        const wasRunning = this.running;
+        this.stop();
+        // Stash whether we were running so the restore path knows whether
+        // to call start() again (vs. a manual stop the app issued earlier).
+        this._wasRunningBeforeContextLoss = wasRunning;
+      });
+      canvas.addEventListener('webglcontextrestored', () => {
+        console.warn('[RenderEngine] WebGL context restored; resuming.');
+        if (this._wasRunningBeforeContextLoss) {
+          this.start();
+        }
+      });
+    }
   }
 
   setCameraPosition(world: WorldVec3): void {

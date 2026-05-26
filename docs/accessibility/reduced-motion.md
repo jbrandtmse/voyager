@@ -9,6 +9,17 @@
 > for every consumer in one declaration. This file is the audit trail
 > that all-and-only the surfaces listed below comply with that contract.
 >
+> **Note on the FOUC-shim duplicate (BUG-CR-010 review, 2026-05-25).** The
+> critical-CSS `<style>` block in `web/index.html` ALSO declares the
+> `@media (prefers-reduced-motion: reduce)` token override. This is
+> INTENTIONAL: the FOUC shim ships inline so reduced-motion is honoured
+> at first paint, BEFORE the main bundled stylesheet loads. The two
+> declarations are byte-identical in intent (both zero `--v-duration-fast/base/slow`).
+> The "single source of truth" wording above describes the AUTHORING
+> source (one place a contributor edits to change behaviour, in
+> `global.css`); the FOUC-shim copy in `index.html` is a build-output
+> mirror kept in sync by the Story 1.7 critical-CSS contract.
+>
 > **Scope.** Every animated surface introduced across Epics 1–6. Future
 > stories adding animation (Epic 7, post-launch) MUST extend this table
 > in the same PR.
