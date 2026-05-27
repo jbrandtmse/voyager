@@ -71,13 +71,13 @@ const ATTRIBUTION_ENTRIES: readonly AttributionEntry[] = [
     name: 'Voyager Golden Record audio',
     url: 'https://voyager.jpl.nasa.gov/golden-record/',
     description:
-      'NASA public domain. Placeholder credit; the audio surface will be wired into the experience in Story 6.1.',
+      'NASA public domain. Five tracks from the canonical NASA-hosted Voyager Golden Record asset directory (Greetings in English + Arabic for the launches; "Wind, Rain, and Surf", "Life Signs / Pulsar", and "Music of the Spheres" from Sounds of Earth for Pale Blue Dot + heliopause crossings). Diegetic audio layer activated at the chapter markers. Per-track source URLs, license citations, and curation reasoning in THIRD_PARTY.md.',
   },
   {
     name: 'NASA Planetary Photojournal — Pale Blue Dot composite plates',
     url: 'https://photojournal.jpl.nasa.gov/',
     description:
-      'NASA / JPL-Caltech public domain. Voyager 1 narrow-angle frames PIA00452 ("The Pale Blue Dot") and PIA00453 ("Solar System Portrait — Views of 6 Planets") from the 1990-02-14 family-portrait imaging sequence. Cropped per body and composited at each substate peak in the Pale Blue Dot scene (Story 5.3).',
+      'NASA / JPL-Caltech public domain. Voyager 1 narrow-angle frames PIA00452 ("The Pale Blue Dot") and PIA00453 ("Solar System Portrait — Views of 6 Planets") from the 1990-02-14 family-portrait imaging sequence. Cropped per body and composited at each substate peak in the Pale Blue Dot scene.',
   },
 ];
 

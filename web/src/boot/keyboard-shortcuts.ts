@@ -72,7 +72,25 @@ export const shouldSkipSpaceShortcut = (root: Document = document): boolean => {
 };
 
 /**
- * Attach the global Space-key toggle. Returns an unsubscribe function.
+ * Optional callbacks for cross-cutting shortcuts that need a host-supplied
+ * implementation (e.g. the camera toggle for `V` lives in `main.ts`'s
+ * post-bootstrap closure where the camera controller is in scope, not in
+ * the keyboard-shortcuts module). Each callback is invoked on the
+ * corresponding key press AFTER the text-input guard runs.
+ */
+export interface ShortcutCallbacks {
+  /**
+   * BUG-CR-011 fix (2026-05-25): `V` toggles between the chapter-default
+   * body-centered framing and the heliocentric system view (Story 4.12).
+   * Discoverable per the help overlay's Display section; mirrors the
+   * `R` restore-default-camera shortcut shape. Caller is responsible for
+   * tracking which mode is active and switching to the other.
+   */
+  onToggleHeliocentricView?: () => void;
+}
+
+/**
+ * Attach global keyboard shortcuts. Returns an unsubscribe function.
  *
  * Idempotent at the instance boundary: calling it twice attaches two
  * listeners (caller's responsibility to track). Tests should always
@@ -81,17 +99,38 @@ export const shouldSkipSpaceShortcut = (root: Document = document): boolean => {
 export const installKeyboardShortcuts = (
   clockManager: ClockManager,
   target: Document = document,
+  callbacks: ShortcutCallbacks = {},
 ): (() => void) => {
   const onKeyDown = (e: KeyboardEvent): void => {
-    // Match Space by key (' ') OR code ('Space'). Both are equivalent on
-    // modern browsers; we accept both because happy-dom under tests may
-    // surface either.
-    if (e.key !== ' ' && e.code !== 'Space') return;
+    // Skip ALL global shortcuts when a text input is focused (mirrors the
+    // Space-key guard's discipline so `V` typed into an input lands as a
+    // literal character, not a view toggle).
     if (shouldSkipSpaceShortcut(target)) return;
-    // Suppress the default page-scroll on Space.
-    e.preventDefault();
-    if (clockManager.playing) clockManager.pause();
-    else clockManager.play();
+    // Skip when any modifier is held — `Ctrl/Cmd/Alt/Meta` chords belong
+    // to the browser / OS (e.g. Ctrl+V paste).
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    // Space — play / pause
+    if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      if (clockManager.playing) clockManager.pause();
+      else clockManager.play();
+      return;
+    }
+
+    // BUG-CR-011 fix (2026-05-25): `V` toggles the heliocentric system
+    // view (Story 4.12). Match by key (case-insensitive — Shift+V is also
+    // accepted since it carries no destructive semantic). No-op when the
+    // host didn't wire a callback (legacy test mounts, embed mode if the
+    // host opts out).
+    if (
+      (e.key === 'v' || e.key === 'V' || e.code === 'KeyV') &&
+      callbacks.onToggleHeliocentricView !== undefined
+    ) {
+      e.preventDefault();
+      callbacks.onToggleHeliocentricView();
+      return;
+    }
   };
   target.addEventListener('keydown', onKeyDown);
   return () => {

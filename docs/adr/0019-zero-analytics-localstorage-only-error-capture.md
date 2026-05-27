@@ -1,8 +1,48 @@
 # ADR 0019 — Zero Analytics; localStorage-Only Error Capture
 
-Status: Accepted
-Date: 2026-05-18
+Status: Accepted (amended in-place 2026-05-24 per Rule 5 by Story 6.1)
+Date: 2026-05-18 (original); 2026-05-24 (amendment)
 Deciders: Voyager project maintainer
+
+<!--
+Rule 5 amendment (Story 6.1, 2026-05-24) — original wording preserved
+verbatim below for the audit trail.
+
+ORIGINAL (2026-05-18, lines as accepted):
+  The ADR title is "Zero Analytics; localStorage-Only Error Capture". The
+  ADR's Decision section reads "Error capture: localStorage-only." and
+  scopes every localStorage use in the project to error-capture (the
+  `voyagerErrors` key written by `window.onerror` and
+  `window.onunhandledrejection`). The Status line read "Accepted." with no
+  amendment annotation.
+
+AMENDED (2026-05-24, Story 6.1):
+  The "localStorage-only error capture" phrasing was authored when
+  `voyagerErrors` was the only anticipated localStorage use. Story 6.1
+  introduces a second, deliberately-scoped use — the
+  `voyager.audio-toggle` key holding `{ sessionId, on }` for session-
+  gated audio-toggle persistence (UX-DR15). Both writes are local-only
+  by construction: no analytics, no PII, no third-party transmission, no
+  cross-session leakage (the audio toggle's `sessionId` discipline
+  ensures a fresh-tab/new-day resets the toggle to off).
+
+  The amendment is in-place per Rule 5 (NFR tripwire response). The
+  original wording is preserved verbatim above so a future contributor
+  can audit the drift; the rest of the ADR (Context, Decision, Known
+  Exceptions, Alternatives Considered) is updated below to describe
+  the two-use posture as the new source of truth.
+
+  RATIONALE: localStorage is the only client-side persistence surface
+  available under the no-server commitment (NFR-Sc1). Per UX-DR15 the
+  audio toggle MUST persist across same-tab reloads but MUST reset on a
+  new tab — `sessionStorage` is wrong (it would reset on every reload),
+  `IndexedDB` is overkill for a single boolean, and a fresh `sessionId`
+  comparison against the localStorage value gives the exact "same-tab
+  preserves, new-tab resets" semantic the UX spec demands. The
+  expansion does not breach the zero-analytics / zero-PII / no-server
+  commitments — those are about the content that is written, not
+  about which storage surface holds it.
+-->
 
 ## Status
 
@@ -30,6 +70,14 @@ Error capture is the harder question. Production sites usually pipe errors to Se
 - A `/debug` route renders the log as readable text and provides a "copy to clipboard" button.
 - Bug reports: user pastes their localStorage error log into a GitHub issue.
 - Zero external dependencies; zero PII surface; ~50 lines of code; survives the no-server commitment.
+
+**Second localStorage use case (Story 6.1, 2026-05-24 amendment): audio-toggle session-scoped preference.**
+
+- `AudioPlaybackService` writes `localStorage.voyager.audio-toggle` with JSON `{ sessionId: string, on: boolean }`.
+- The `sessionId` is a fresh `crypto.randomUUID()` generated once at boot; reading from localStorage compares the persisted `sessionId` against the boot-time value and ignores the persisted `on` value if they differ (resetting the toggle to off on a new tab / new day / browser restart).
+- Wrapped in try/catch; falls back to in-memory state on storage failure (private mode, test envs, etc.).
+- Per UX-DR15 / FR43 — local-only by construction; no analytics, no PII, no third-party transmission.
+- Documented end-to-end at [`docs/audio/golden-record-curation.md`](../audio/golden-record-curation.md) § "Runtime persistence contract".
 
 **Verification at build time:**
 

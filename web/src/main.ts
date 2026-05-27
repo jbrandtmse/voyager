@@ -25,6 +25,11 @@ import { GPUCapabilityProbe } from './boot/gpu-capability-probe';
 import { getUrlParams } from './boot/url-params';
 import { ClockManager } from './services/clock-manager';
 import { ChapterDirector } from './services/chapter-director';
+import {
+  AudioPlaybackService,
+  GOLDEN_RECORD_CHAPTER_SLUGS,
+  isGoldenRecordSlug,
+} from './services/audio-playback-service';
 import { URLSync } from './services/url-sync';
 import { URLRouter } from './services/url-router';
 import { EmbedModeState } from './services/embed-mode-state';
@@ -32,7 +37,11 @@ import { ALL_CHAPTERS } from './chapters/registry';
 import { PaleBlueDot } from './chapters/pale-blue-dot';
 import { PbdCompositeLayer } from './chapters/pale-blue-dot/composite-layer';
 import { RenderEngine } from './render/render-engine';
-import { VoyagerCameraController } from './render/voyager-camera-controller';
+import {
+  VoyagerCameraController,
+  HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+  HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
+} from './render/voyager-camera-controller';
 import { mountCameraRestoreAffordance } from './boot/camera-restore-affordance';
 import { resolveChapterDefaultFraming } from './chapters/chapter-default-framing';
 import { worldVec3, type WorldVec3 } from './types/branded';
@@ -262,6 +271,45 @@ const bootstrap = (): void => {
     }
   });
 
+  // Story 6.1 AC5 — Golden Record audio layer. Path A topology per
+  // ADR-0014 / Rule-9 of skill-rules (Story 5.1 PaleBlueDot precedent):
+  // a dedicated ChapterDirector subscriber narrows on the 5 Golden-
+  // Record slugs and forwards `to === 'held'` / `from === 'held'` to
+  // the AudioPlaybackService, which owns the audio chain end-to-end
+  // (no extension of ChapterDirector itself).
+  //
+  // The service is constructed unconditionally at boot — the toggle is
+  // OFF by default, so the audio chain stays idle until the user
+  // presses G or clicks <v-audio-toggle>. Session-id-gated localStorage
+  // persistence is internal to the service; main.ts does not see it.
+  const audioPlaybackService = new AudioPlaybackService();
+  chapterDirector.subscribe((event) => {
+    const slug = event.chapter.slug;
+    if (!isGoldenRecordSlug(slug)) return;
+    if (event.to === 'held') {
+      audioPlaybackService.onChapterEnter(slug);
+    } else if (event.from === 'held') {
+      audioPlaybackService.onChapterExit(slug);
+    }
+  });
+  // Forward ClockManager play/pause to the audio service so the audio
+  // pauses (and resumes) in lockstep with the simulation (AC5 last
+  // bullet). The clock subscriber fires on every state change; we
+  // filter to playing-vs-paused transitions internally via the
+  // service's onPlayStateChange guard.
+  clockManager.subscribe((state) => {
+    audioPlaybackService.onPlayStateChange(state.playing);
+  });
+  // The service is constructed during the playing===true seed (the
+  // default), but the very first ClockManager seed below might pause
+  // (URL-driven scrubTo always pauses). Forward the current play state
+  // explicitly so the service starts from a consistent snapshot.
+  audioPlaybackService.onPlayStateChange(clockManager.playing);
+  // Suppress the unused-local linter rule for `GOLDEN_RECORD_CHAPTER_SLUGS`
+  // — we import it for documentary clarity (the count + identity of the
+  // slugs is what the subscriber narrows against via the type-guard).
+  void GOLDEN_RECORD_CHAPTER_SLUGS;
+
   engine.onFrame((et: number) => {
     chapterDirector.update(et);
     // Story 5.1 AC3 — drive the PBD module only while it's active
@@ -275,6 +323,29 @@ const bootstrap = (): void => {
       // active plate. Inactive-frame safe but gated to keep per-frame
       // work zero outside the PBD window.
       pbdCompositeLayer.update(paleBlueDot.currentSubstate, engine.camera);
+    }
+    // BUG-CR-005 fix (2026-05-25): drive the spacecraft's dynamic scale
+    // boost from the ViewFrame's encounter-blend alpha. At cruise the
+    // group renders at the base SPACECRAFT_RENDER_SCALE_KM; at full
+    // body-centered encounter framing the group is boosted by up to
+    // ENCOUNTER_SCALE_BOOST × so the spacecraft is perceivable alongside
+    // the encounter body's km-scale geometry. Required for Story 6.5
+    // launch-gate Probe #5 (UNPROMPTED ATTITUDE PROBE).
+    if (viewFrameServiceRef !== null && spacecraftModelsRef !== null) {
+      const transform = viewFrameServiceRef.getTransform(
+        et,
+        chapterDirector.activeChapter,
+      );
+      spacecraftModelsRef.setEncounterAlpha(transform.encounterAlpha);
+      // BUG-CR-015 fix (2026-05-25): also drive the moon scale boost
+      // from the same encounter alpha so Io / Europa / Ganymede /
+      // Callisto / Titan / Iapetus / Hyperion grow with the camera
+      // anchor and become perceivable disks at full body-centered
+      // framing (sub-pixel native sizes otherwise undercut the chapter
+      // copy's named-moon observation targets).
+      if (celestialBodies !== null) {
+        celestialBodies.setEncounterAlpha(transform.encounterAlpha);
+      }
     }
   });
 
@@ -310,6 +381,14 @@ const bootstrap = (): void => {
       //   __voyagerDebug.pbdCompositeLayer.rootElement -> HTMLDivElement
       // and asserts on the layer's at-peak-ET state per AC9.
       pbdCompositeLayer,
+      // Story 6.1 AC7 — DEV surface for the lead-driven Chrome DevTools
+      // MCP smoke. The smoke probes
+      //   __voyagerDebug.audioPlaybackService.isOn() -> boolean
+      //   __voyagerDebug.audioPlaybackService.getState() -> AudioState
+      //   __voyagerDebug.audioPlaybackService.toggle() -> void
+      // and asserts on the toggle's chapter-window activation behavior
+      // at /c/launch-v1, /c/pale-blue-dot, etc.
+      audioPlaybackService,
     };
   }
 
@@ -338,6 +417,13 @@ const bootstrap = (): void => {
   // chapter window. The director is already driven from `engine.onFrame`
   // above; first-paint sets it on the scrubber BEFORE connectedCallback
   // runs so the marker-subscription wires in cleanly.
+  // BUG-CR-011 fix (2026-05-25): forwarder closure for the `V` heliocentric
+  // toggle. The keyboard listener is installed inside `startFirstPaint`
+  // (before `cameraController` exists in this scope), so we hand it a
+  // mutable forwarder that becomes a no-op until the controller is wired
+  // below. Once the controller lands, the post-construction block (after
+  // `cameraController` is declared) assigns the real toggle logic.
+  let heliocentricToggleHandler: (() => void) | null = null;
   const firstPaintHandle = startFirstPaint(
     canvas.parentElement ?? document.body,
     {
@@ -348,6 +434,19 @@ const bootstrap = (): void => {
       // Story 2.5 — skip mounting `<v-chapter-index>` (and future
       // chrome elements) when embed mode is enabled. AC2.
       embedEnabled: embedMode.enabled,
+      // Story 6.1 — wire the audio service into <v-audio-toggle>. The
+      // toggle is editorial CONTENT (not chrome) so it mounts even in
+      // embed mode; first-paint's chrome-skip discipline does not gate
+      // it.
+      audioPlaybackService,
+      // BUG-CR-011 fix (2026-05-25): `V` keyboard shortcut toggles
+      // heliocentric system view (Story 4.12) ⇄ chapter-default
+      // body-centered framing. The closure defers to the mutable
+      // `heliocentricToggleHandler` so we can wire the controller once it
+      // exists later in this bootstrap.
+      onToggleHeliocentricView: () => {
+        heliocentricToggleHandler?.();
+      },
     },
   );
 
@@ -519,6 +618,25 @@ const bootstrap = (): void => {
       resolveChapterDefaultFraming(chapterDirector.activeChapter, activeTarget),
   });
   cameraController.attach();
+
+  // BUG-CR-011 fix (2026-05-25): wire the heliocentric system-view toggle
+  // for the `V` keyboard shortcut. We track local state because the camera
+  // controller doesn't expose a "which framing is active" query — it just
+  // applies framings on command. Flip on each press: body-centered ⇄
+  // heliocentric. The animated path matches the `R`-restore semantics.
+  let heliocentricViewActive = false;
+  heliocentricToggleHandler = (): void => {
+    heliocentricViewActive = !heliocentricViewActive;
+    if (heliocentricViewActive) {
+      cameraController.applyHeliocentricFraming({
+        distanceAu: HELIOCENTRIC_DEFAULT_DISTANCE_AU,
+        elevationDeg: HELIOCENTRIC_DEFAULT_ELEVATION_DEG,
+        animated: true,
+      });
+    } else {
+      cameraController.applyDefaultFraming({ animated: true });
+    }
+  };
 
   const restoreAffordance = mountCameraRestoreAffordance({
     host: canvas.parentElement ?? document.body,
@@ -1183,10 +1301,16 @@ const mountAboutSurface = (): void => {
   while (mount.firstChild) {
     mount.removeChild(mount.firstChild);
   }
-  // Reset the page-level styling away from the canvas-friendly
-  // overflow/100vh that the simulation surface assumes. The about page is
-  // a normal document with natural scroll behaviour.
-  document.body.style.overflow = 'auto';
+  // Story 6.4 AC6 — closes [2.7/LOW]: the overflow reset now lives in
+  // `about.css` under `body.v-about-surface { overflow: auto; }` rather
+  // than a one-shot `document.body.style.overflow = 'auto'` mutation.
+  // The class persists for the lifetime of the about surface; the about
+  // → simulation back-navigation path triggers `window.location.reload()`
+  // (see the popstate handler installed in bootstrap), which clears the
+  // class as a natural side-effect of the full reload. No explicit
+  // dispose is needed because the only exit from the about surface is
+  // the reload path.
+  document.body.classList.add('v-about-surface');
   const about = document.createElement('v-about-page');
   mount.appendChild(about);
   // If the URL carried a hash (e.g. /about#attribution), browser-native

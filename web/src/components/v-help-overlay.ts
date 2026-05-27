@@ -1,7 +1,11 @@
 import { html, css, type TemplateResult } from 'lit';
-import { createFocusTrap, type FocusTrap } from 'focus-trap';
 
 import { BaseElement } from './base-element';
+import { isTextInputFocused } from '../lib/text-input-focus';
+import {
+  createDialogFocusTrap,
+  type DialogFocusTrap,
+} from '../primitives/dialog';
 
 /**
  * `<v-help-overlay>` — top-right "?" toggle that opens a centered modal
@@ -69,7 +73,15 @@ export class VHelpOverlay extends BaseElement {
       .toggle {
         appearance: none;
         background: transparent;
-        color: var(--v-color-fg-quiet);
+        /* Story 6.6 AC1 — at 16px + outside HUD shadow tree the original
+           --v-color-fg-quiet (3.20:1, AA-large only) failed AA body for
+           the icon character (the question-mark glyph). Switched the
+           TEXT to --v-color-fg-muted (7.32:1 body-AA). The BORDER
+           continues to use --v-color-fg-quiet because SC 1.4.11 governs
+           non-text UI components at 3:1 and the border clears that
+           threshold. See docs/accessibility/contrast-audit-launch-week.md
+           § 2.4. */
+        color: var(--v-color-fg-muted);
         border: 1px solid var(--v-color-fg-quiet);
         border-radius: 4px;
         width: 32px;
@@ -187,7 +199,11 @@ export class VHelpOverlay extends BaseElement {
         align-items: center;
         gap: 4px;
         flex-shrink: 0;
-        min-width: 100px;
+        /* Story 6.6 AC7 — token-ified from the prior hard-coded 100px
+           literal. Routed from deferred-work.md:400 ([2.8/LOW]). The
+           value is unchanged (100px); only the source moved to the
+           single source-of-truth in tokens.css. */
+        min-width: var(--v-size-shortcut-key-col);
       }
 
       kbd {
@@ -271,7 +287,7 @@ export class VHelpOverlay extends BaseElement {
     window.location.assign(url);
   };
 
-  private focusTrap: FocusTrap | null = null;
+  private focusTrap: DialogFocusTrap | null = null;
   private detachGlobalKeys: (() => void) | null = null;
   private triggerWasKeyboard = false;
 
@@ -357,32 +373,23 @@ export class VHelpOverlay extends BaseElement {
   private activateFocusTrap(): void {
     const dialog = this.shadowRoot?.querySelector<HTMLElement>('.dialog');
     if (dialog === null || dialog === undefined) return;
-    this.focusTrap = createFocusTrap(dialog, {
-      escapeDeactivates: false, // Esc handled by us
-      clickOutsideDeactivates: false, // scrim click handled by us
-      returnFocusOnDeactivate: false, // we restore focus explicitly
+    // Story 6.4 AC6 — Rule 9 third-consumer extraction lands at
+    // `primitives/dialog.ts`. The Voyager-flavoured focus-trap (defensive
+    // try/catch + console.warn, no escape-deactivate, no click-outside
+    // deactivate, no return-focus-on-deactivate, shadow-root descent,
+    // displayCheck disabled for jsdom/happy-dom) is now centralised.
+    this.focusTrap = createDialogFocusTrap({
+      host: dialog,
       initialFocus: () =>
         this.shadowRoot?.querySelector<HTMLButtonElement>('.close') ?? dialog,
-      tabbableOptions: {
-        getShadowRoot: true,
-        displayCheck: 'none',
-      },
+      componentName: 'v-help-overlay',
     });
-    try {
-      this.focusTrap.activate();
-    } catch {
-      // Activation can fail in test environments without layout — the
-      // dialog keydown handler keeps the dialog functional regardless.
-    }
+    this.focusTrap.activate();
   }
 
   private deactivateFocusTrap(): void {
     if (this.focusTrap !== null) {
-      try {
-        this.focusTrap.deactivate();
-      } catch {
-        // ignore — same defensive posture as activate()
-      }
+      this.focusTrap.deactivate();
       this.focusTrap = null;
     }
   }
@@ -433,6 +440,7 @@ export class VHelpOverlay extends BaseElement {
         aria-modal="true"
         aria-labelledby="help-title"
         aria-hidden=${this.open ? 'false' : 'true'}
+        ?inert=${!this.open}
         @keydown=${this.onDialogKeyDown}
       >
         <h1 class="dialog-title" id="help-title">Keyboard shortcuts</h1>
@@ -482,6 +490,13 @@ export class VHelpOverlay extends BaseElement {
                 `boot/camera-restore-affordance.ts`; this entry makes it
                 discoverable per Story 2.8's "full inventory" promise. */ ''}
             ${this.renderShortcut([['R']], 'Restore default camera view')}
+            ${/* BUG-CR-011 fix (2026-05-25): `V` toggles the Story 4.12
+                heliocentric system view (Sun-at-origin, all-Voyagers
+                visible) vs. the chapter-default body-centered framing.
+                Shortcut wired in `boot/keyboard-shortcuts.ts`; toggle
+                logic + state in `main.ts`. This entry surfaces it under
+                Story 2.8's full-inventory promise. */ ''}
+            ${this.renderShortcut([['V']], 'Toggle heliocentric system view')}
             ${this.renderShortcut([['?']], 'Open this help overlay')}
             ${this.renderShortcut([['Esc']], 'Close any overlay')}
           </ul>
@@ -566,45 +581,6 @@ const installGlobalShortcuts = (
   return () => {
     target.removeEventListener('keydown', onKeyDown);
   };
-};
-
-const isTextInputElement = (el: Element | null): boolean => {
-  if (el === null) return false;
-  if (el instanceof HTMLInputElement) {
-    const type = (el.type ?? 'text').toLowerCase();
-    const NON_TEXT_TYPES = new Set([
-      'button',
-      'checkbox',
-      'radio',
-      'submit',
-      'reset',
-      'image',
-      'file',
-      'range',
-      'color',
-    ]);
-    return !NON_TEXT_TYPES.has(type);
-  }
-  if (el instanceof HTMLTextAreaElement) return true;
-  if (el instanceof HTMLElement && el.isContentEditable) return true;
-  return false;
-};
-
-const isTextInputFocused = (root: Document): boolean => {
-  // Walk through Shadow DOM hosts (mirror of v-chapter-index.ts).
-  let active: Element | null = root.activeElement;
-  let depth = 0;
-  while (active !== null && depth < 8) {
-    if (isTextInputElement(active)) return true;
-    const shadow = (active as Element & { shadowRoot?: ShadowRoot | null })
-      .shadowRoot;
-    if (shadow === null || shadow === undefined) return false;
-    const inner = shadow.activeElement;
-    if (inner === null || inner === active) return false;
-    active = inner;
-    depth++;
-  }
-  return false;
 };
 
 if (typeof customElements !== 'undefined' && !customElements.get('v-help-overlay')) {

@@ -76,3 +76,11 @@ GitHub's LFS quota is **1 GB storage + 1 GB/month bandwidth** on the free tier; 
 - [ADR 0011 — Git LFS for kernel storage + auto-acquisition tool](docs/adr/0011-git-lfs-kernel-storage-auto-acquisition-tool.md): why kernels live in LFS at all; canonical fetch path.
 - [`.gitattributes`](.gitattributes): the authoritative pattern list of what's LFS-tracked (kernels, textures, GLBs, woff2 typography).
 - [`_bmad/custom/voyager-skill-rules.md`](_bmad/custom/voyager-skill-rules.md) Rule 12: this policy is cross-referenced from the BMAD `bmad-create-story` rule pack so the disclosure obligation surfaces at planning time.
+
+## Visual validation
+
+Voyager ships an L4 Playwright visual-regression suite under `web/tests/visual/` with baselines committed to `web/tests/visual/__snapshots__/`. Updating those baselines via Playwright's `--update-snapshots` flag is a load-bearing workflow — done wrong, it captures-in latent layout defects (the Epic 5 BUG-E5-007 class of failure) because pixel-diff vs. self is clean when both sides are broken in the same way.
+
+The full discipline — when `--update-snapshots` is the right answer, the AC1-cross-check vitest pattern that pins timing semantics, the pre-update verification gate, and the commit-evidence pattern — is documented at [`docs/visual-validation/update-snapshot-discipline.md`](docs/visual-validation/update-snapshot-discipline.md). Read it before running `npm run test:visual:update`.
+
+Story 6.0's [`web/tests/build-dist-layout.test.ts`](web/tests/build-dist-layout.test.ts) is the canonical production-build layout regression gate that pairs with the visual suite — run it (or its parent vitest sweep) before any baseline update so the BUG-E5-007 defect class cannot re-enter the committed baselines.

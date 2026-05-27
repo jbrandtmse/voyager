@@ -165,13 +165,16 @@ describe('Story 1.9 AC3 — ARIA Slider semantics', () => {
     el.remove();
   });
 
-  it('aria-valuenow reflects the current simEt as ISO', async () => {
+  it('aria-valuenow reflects the current simEt as numeric ET (Story 6.4 AC1 amendment — ARIA requires numeric)', async () => {
     const { el } = await makeScrubber();
     const target = MISSION_START_ET + 365 * ONE_DAY;
     el.simEt = target;
     await el.updateComplete;
     const thumb = el.shadowRoot!.querySelector('.thumb')!;
-    expect(thumb.getAttribute('aria-valuenow')).toBe(isoFromEt(target));
+    expect(thumb.getAttribute('aria-valuenow')).toBe(String(target));
+    // ISO representation lives on aria-valuetext (which screen readers
+    // announce in preference to the numeric aria-valuenow).
+    expect(thumb.getAttribute('aria-valuetext')).toContain('1978');
     el.remove();
   });
 
@@ -541,13 +544,13 @@ describe('Story 1.10 AC2 — scrubber consumes ClockManager.simTimeEt', () => {
     expect(() => clock.scrubTo(MISSION_START_ET + 1)).not.toThrow();
   });
 
-  it('renders aria-valuenow from clockManager.simTimeEt', async () => {
+  it('renders aria-valuenow from clockManager.simTimeEt (numeric ET per ARIA spec — Story 6.4 AC1)', async () => {
     const { el, clock } = await makeScrubberWithClock();
     const targetEt = MISSION_START_ET + 1000 * 86400;
     clock.scrubTo(targetEt);
     await el.updateComplete;
     const thumb = el.shadowRoot!.querySelector('.thumb')!;
-    expect(thumb.getAttribute('aria-valuenow')).toBe(isoFromEt(targetEt));
+    expect(thumb.getAttribute('aria-valuenow')).toBe(String(targetEt));
     expect(thumb.getAttribute('aria-valuetext')).toBe(formatForHud(targetEt));
     el.remove();
   });
@@ -1532,7 +1535,8 @@ describe('Story 4.4 AC4 — dual-scrubber state sync', () => {
     const missionNow = mission.shadowRoot!.querySelector('.thumb')!.getAttribute('aria-valuenow');
     const detailNow = detail.shadowRoot!.querySelector('.thumb')!.getAttribute('aria-valuenow');
     expect(missionNow).toBe(detailNow);
-    expect(missionNow).toBe(isoFromEt(v1Jupiter.anchorEt));
+    // Story 6.4 AC1 — aria-valuenow is numeric ET (ARIA spec).
+    expect(missionNow).toBe(String(v1Jupiter.anchorEt));
     mission.remove();
     detail.remove();
   });

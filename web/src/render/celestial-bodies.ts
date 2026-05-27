@@ -44,8 +44,12 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   SphereGeometry,
+  RingGeometry,
   DirectionalLight,
   Color,
+  CanvasTexture,
+  DoubleSide,
+  MathUtils,
   type Texture,
 } from 'three';
 
@@ -142,6 +146,13 @@ export class CelestialBodies {
   // LOD3-silhouette retain, which we did not select). The CRUISE-time
   // 10 bodies live in `this.handles` and are NEVER touched by this map.
   private readonly moonHandles = new Map<number, CelestialBodyHandle>();
+  // BUG-CR-015 fix (2026-05-25): last applied encounter-alpha for the
+  // moon-scale boost. Cached for two reasons: (a) skip redundant
+  // per-frame scale writes when alpha hasn't moved, and (b) apply the
+  // current alpha to newly-constructed moons in `addMoonsFor` so a moon
+  // added mid-encounter inherits the same scale boost as its siblings
+  // (rather than popping in at 1× and waiting for the next setter call).
+  private lastMoonEncounterAlpha = 0;
 
   constructor(options: CelestialBodiesOptions = {}) {
     this.root = new Group();
@@ -303,10 +314,17 @@ export class CelestialBodies {
   addMoonsFor(parentNaifId: number): void {
     const moonIds = MOON_NAIF_IDS_BY_PARENT[parentNaifId];
     if (moonIds === undefined) return;
+    // BUG-CR-015 fix (2026-05-25): compute the moon scale boost for the
+    // current encounter alpha so newly-constructed moons land at the
+    // same scale as their siblings (rather than popping in at 1× and
+    // jumping to the boosted size on the next per-frame setter call).
+    const moonFactor =
+      1 + this.lastMoonEncounterAlpha * (MOON_ENCOUNTER_SCALE_BOOST - 1);
     for (const moonNaifId of moonIds) {
       if (this.moonHandles.has(moonNaifId)) continue; // already present
       const handle = buildHandle(moonNaifId);
       this.moonHandles.set(moonNaifId, handle);
+      handle.mesh.scale.setScalar(moonFactor);
       this.root.add(handle.mesh);
       // Fire the 2K texture load (if wired). loadBody returns null for
       // bodies without a slug (Hyperion → null → silent skip → grey
@@ -436,6 +454,46 @@ export class CelestialBodies {
     if (allHaveData) this.allInitialised = true;
   }
 
+  /**
+   * BUG-CR-015 fix (2026-05-25): apply a per-frame dynamic scale boost
+   * to all active moon meshes, driven by the ViewFrame's encounter-blend
+   * alpha. `alpha === 0` keeps moons at native scale (irrelevant during
+   * cruise because moons aren't constructed yet — `addMoonsFor` only
+   * runs on SOI entry); `alpha === 1` multiplies the moon mesh scale by
+   * `MOON_ENCOUNTER_SCALE_BOOST` so each moon becomes a perceivable
+   * disk against the body-centered framing.
+   *
+   * Tuning: Ganymede (largest Jovian moon, 2,634 km radius) renders at
+   * ~1 px at the chapter-window-edge encounter framing (camera ~4M km
+   * out). A 4× boost yields ~4 px — small but unmistakably a disk, not
+   * a single starfield pixel. Io / Europa / Callisto follow proportionally.
+   * Same scaling at Saturn brings Titan to ~5 px and Iapetus / Hyperion
+   * to ~2–3 px. The boost is small enough that moons remain visually
+   * subordinate to the parent body (Ganymede stays at ~5% of Jupiter's
+   * apparent radius vs. its native 3.7%).
+   *
+   * Story 6.5 launch-gate Probe #5 (UNPROMPTED ATTITUDE PROBE) wants
+   * users to notice the spacecraft AND the visited bodies. The chapter
+   * copy at V1 Jupiter explicitly references Io's plume, Ganymede,
+   * Callisto, Europa as observation targets; at sub-pixel scale these
+   * narrative anchors had no visual counterpart.
+   *
+   * Called from `main.ts engine.onFrame` alongside the spacecraft
+   * `setEncounterAlpha` so the moons grow with the same smoothstep curve
+   * as the camera anchor / spacecraft scale boost.
+   *
+   * No-op when alpha hasn't moved frame-to-frame.
+   */
+  setEncounterAlpha(alpha: number): void {
+    const clamped = Math.max(0, Math.min(1, alpha));
+    if (clamped === this.lastMoonEncounterAlpha) return;
+    this.lastMoonEncounterAlpha = clamped;
+    const factor = 1 + clamped * (MOON_ENCOUNTER_SCALE_BOOST - 1);
+    for (const handle of this.moonHandles.values()) {
+      handle.mesh.scale.setScalar(factor);
+    }
+  }
+
   /** Test helper — expose a handle by NAIF ID for assertion. */
   _peekHandle(naifId: number): CelestialBodyHandle | undefined {
     return this.handles.find((h) => h.naifId === naifId);
@@ -446,6 +504,21 @@ export class CelestialBodies {
     return this.allInitialised;
   }
 }
+
+/**
+ * BUG-CR-015 fix (2026-05-25): max scale boost applied to moon meshes
+ * at full body-centered encounter framing (`encounterAlpha === 1`).
+ * Native scale at alpha=0. See `setEncounterAlpha` docstring above for
+ * the per-moon px math.
+ *
+ * Tuning revisited: at 4× moons are still ~4 px and visually
+ * indistinguishable from starfield pixels. 8× yields Ganymede at ~9 px
+ * (clearly a disk), Io / Europa / Callisto at 6–8 px (recognizable
+ * spheres rather than star-like points). Ganymede remains at ~10% of
+ * Jupiter's apparent radius — visually subordinate to the parent body,
+ * but discoverable as the named chapter-copy targets they are.
+ */
+export const MOON_ENCOUNTER_SCALE_BOOST = 8;
 
 const buildHandle = (naifId: number): CelestialBodyHandle => {
   const radius = BODY_RADII_KM[naifId];
@@ -478,7 +551,199 @@ const buildHandle = (naifId: number): CelestialBodyHandle => {
   // Bodies start hidden until the first ephemeris tick lands a real
   // position; otherwise they'd render at the world origin one frame.
   mesh.visible = false;
+
+  // BUG-CR-012 fix (2026-05-25): Saturn's rings. Build a flat ring
+  // geometry parented to Saturn's mesh, tilted to its axial obliquity.
+  // The chapter copy for V1/V2 Saturn references the rings as a primary
+  // observation target ("first high-resolution photometry of the broad
+  // rings, the braided F-ring, and a new feature — radial 'spokes'"); a
+  // Saturn that renders as a featureless sphere undercuts the chapter
+  // narrative. Procedurally textured (no external asset dependency) — a
+  // canvas-generated band pattern approximating the A + Cassini-Division
+  // + B + C ring boundaries (NASA / Cassini photometric reference).
+  if (naifId === SATURN_NAIF_ID) {
+    const ring = buildSaturnRing(radius);
+    mesh.add(ring);
+  }
+
   return { naifId, mesh, material };
+};
+
+/** NAIF ID for Saturn (matches BODY_RADII_KM index). */
+const SATURN_NAIF_ID = 6;
+
+/**
+ * BUG-CR-012 fix (2026-05-25): build Saturn's ring system as a flat
+ * `RingGeometry` with a procedurally-painted banding texture. Inner edge
+ * = 1.18× Saturn radius (just outside the cloud tops, where the C ring
+ * begins ~74,500 km from center); outer edge = 2.27× radius (A-ring
+ * outer edge ~136,500 km). Axial tilt 26.73° (Saturn's obliquity).
+ *
+ * The procedural texture paints the canonical photometric structure:
+ *   - C ring (innermost): faint, brownish
+ *   - B ring: bright, opaque
+ *   - Cassini Division: dark gap
+ *   - A ring: bright, slightly less opaque than B
+ *   - Encke Division: subtle thin gap near outer A
+ *
+ * No external asset dependency — generated at construction time. Future
+ * polish: replace with NASA Cassini photometric scan once an asset is
+ * procured.
+ */
+const buildSaturnRing = (saturnRadius: number): Mesh => {
+  const innerRadius = saturnRadius * 1.18; // C ring inner edge
+  const outerRadius = saturnRadius * 2.27; // A ring outer edge
+  // Tessellate radially (`thetaSegments=128, phiSegments=8`) so the ring
+  // has enough radial vertex resolution for the procedural banding texture
+  // (4-band photometric structure: C / B / Cassini / A) to sample
+  // smoothly. The default phiSegments=1 yields a single radial quad per
+  // theta slice, which would alias the texture banding badly.
+  const ringGeom = new RingGeometry(innerRadius, outerRadius, 128, 8);
+  // BUG-CR-012 follow-up (2026-05-25): Three.js RingGeometry's default UVs
+  // are computed as `(x/outerRadius + 1) / 2, (y/outerRadius + 1) / 2` —
+  // i.e. they form a square texture map in the ring's plane, NOT the
+  // (theta, radial) mapping a 1-D banding texture expects. Override the
+  // UV attribute so V runs from 0 at the inner edge → 1 at the outer
+  // edge, and U runs around theta. This makes a 1xN canvas texture sample
+  // correctly as concentric photometric bands.
+  const posAttr = ringGeom.attributes.position;
+  const uvAttr = ringGeom.attributes.uv;
+  for (let i = 0; i < posAttr.count; i++) {
+    const x = posAttr.getX(i);
+    const y = posAttr.getY(i);
+    const r = Math.sqrt(x * x + y * y);
+    const theta = Math.atan2(y, x);
+    const u = (theta + Math.PI) / (2 * Math.PI); // [0, 1] around the ring
+    const v = (r - innerRadius) / (outerRadius - innerRadius); // 0 inner, 1 outer
+    uvAttr.setXY(i, u, v);
+  }
+  uvAttr.needsUpdate = true;
+  // RingGeometry's default UVs run along the ring's tangent; we want a
+  // RADIAL gradient sampled by texture U coordinate, so remap U from
+  // [0,1] across the radial extent (inner → outer) and leave V along
+  // tangent. Three.js RingGeometry's default UV mapping already does
+  // this — V is angle and U is the radial fraction inner→outer.
+
+  // BUG-CR-012 follow-up: width=1, height=512 so the V axis (radial,
+  // inner→outer) sweeps through the photometric bands. We rewrote the UV
+  // attribute above so V samples radially; the texture is now drawn along
+  // the Y axis (top=inner C ring, bottom=outer F+faint).
+  //
+  // Defensive guard: in some test environments (happy-dom / jsdom)
+  // `document` may not be available or `canvas.getContext('2d')` may
+  // return null. Fall back to a tint-only material when canvas-2D isn't
+  // available — production browsers always satisfy the typeof guard, so
+  // the procedural texture path is the normal flow.
+  const canvas =
+    typeof document !== 'undefined'
+      ? document.createElement('canvas')
+      : null;
+  if (canvas !== null) {
+    canvas.width = 1;
+    canvas.height = 512;
+  }
+  const ctx = canvas !== null ? canvas.getContext('2d') : null;
+  if (ctx !== null) {
+    // Paint the radial banding. y=0 is innermost (C ring); y=512 is
+    // outermost (A ring outer edge). Photometric structure approximated
+    // from NASA Cassini ring overview.
+    // Inner → outer radius span: 1.18 → 2.27 saturnRadii = 1.09 span.
+    // Map each ring's normalized position (relative to inner-outer span):
+    //   C: 0.00 - 0.20 (faint brown)
+    //   B: 0.20 - 0.62 (bright)
+    //   Cassini Division: 0.62 - 0.66 (dark)
+    //   A: 0.66 - 0.96 (bright, slightly less opaque)
+    //   Encke Division: 0.93 - 0.94 (subtle thin gap inside A)
+    //   F + outer: 0.96 - 1.00 (faint)
+    for (let i = 0; i < 512; i++) {
+      const t = i / 511; // 0..1 radial position
+      let r = 0,
+        g = 0,
+        b = 0,
+        a = 0;
+      if (t < 0.20) {
+        // C ring — faint, brownish-grey
+        a = 0.35 + t * 0.6;
+        r = 0.55;
+        g = 0.48;
+        b = 0.4;
+      } else if (t < 0.62) {
+        // B ring — bright, opaque, cream-coloured
+        a = 0.95;
+        r = 0.88;
+        g = 0.82;
+        b = 0.72;
+        // Add subtle radial structure
+        const phase = (t - 0.20) * 35;
+        const ripple = Math.sin(phase) * 0.04;
+        r += ripple;
+        g += ripple;
+        b += ripple;
+      } else if (t < 0.66) {
+        // Cassini Division — dark gap
+        a = 0.15;
+        r = 0.4;
+        g = 0.35;
+        b = 0.3;
+      } else if (t < 0.96) {
+        // A ring — bright but slightly less opaque than B
+        a = 0.85;
+        r = 0.82;
+        g = 0.78;
+        b = 0.68;
+        // Encke division (thin dark line near outer A)
+        if (t > 0.93 && t < 0.94) {
+          a = 0.3;
+        }
+        const phase = (t - 0.66) * 40;
+        const ripple = Math.sin(phase) * 0.03;
+        r += ripple;
+        g += ripple;
+        b += ripple;
+      } else {
+        // F ring + faint outer — very thin and faint
+        a = 0.2 * (1 - (t - 0.96) / 0.04);
+        r = 0.75;
+        g = 0.7;
+        b = 0.6;
+      }
+      ctx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a.toFixed(3)})`;
+      ctx.fillRect(0, i, 1, 1);
+    }
+  }
+  // Build material: textured when canvas-2D was available, tint-only
+  // fallback otherwise (so unit tests under happy-dom can construct a
+  // CelestialBodies without a working 2D context).
+  const ringMat =
+    canvas !== null
+      ? new MeshBasicMaterial({
+          map: (() => {
+            const tex = new CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            return tex;
+          })(),
+          transparent: true,
+          side: DoubleSide,
+          depthWrite: false, // avoid sorting issues with the planet sphere
+        })
+      : new MeshBasicMaterial({
+          color: new Color(0xc8b88e),
+          transparent: true,
+          opacity: 0.85,
+          side: DoubleSide,
+          depthWrite: false,
+        });
+  const ringMesh = new Mesh(ringGeom, ringMat);
+  ringMesh.name = 'saturn-rings';
+  // Saturn's axial obliquity ≈ 26.73° to the ecliptic. The world here is
+  // J2000 ecliptic with +Z as the ecliptic pole (NOT Three.js's default
+  // +Y up). RingGeometry lives in its local XY plane (normal +Z) which
+  // is already the ecliptic plane in this convention; tilting it around
+  // X by Saturn's obliquity gives the canonical inclined-ring look
+  // (visible at 26.73° from "face-on" when the camera looks down the
+  // ecliptic pole, and elliptical at typical mission-camera angles).
+  ringMesh.rotation.x = MathUtils.degToRad(26.73);
+  return ringMesh;
 };
 
 const applyTextureToHandle = (handle: CelestialBodyHandle, texture: Texture): void => {

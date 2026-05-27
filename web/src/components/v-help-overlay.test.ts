@@ -55,11 +55,21 @@ describe('Story 2.8 AC1 — toggle button (32×32 quieter than chapter-index)', 
     expect(flat).toMatch(/\.toggle\s*\{[^}]*height:\s*32px/);
   });
 
-  it('toggle uses --v-color-fg-quiet (visual treatment quieter than chapter-index)', () => {
+  it('toggle uses --v-color-fg-muted text + --v-color-fg-quiet border (Story 6.6 AC1 contrast fix)', () => {
+    // Story 6.6 AC1 — text colour switched from `--v-color-fg-quiet`
+    // (3.20:1, AA-large only at ≥18px) to `--v-color-fg-muted`
+    // (7.32:1, body-AA at any size) because the toggle's 16px `?`
+    // glyph + the toggle's position OUTSIDE the HUD shadow tree means
+    // the original text colour failed AA body. The 1-px border
+    // continues to use `--v-color-fg-quiet` — SC 1.4.11 governs non-
+    // text UI components at 3:1 and the border clears it.
     const flat = (VHelpOverlay.styles as Array<{ cssText?: string } | undefined>)
       .map((s) => String(s?.cssText ?? ''))
       .join('\n');
-    expect(flat).toMatch(/\.toggle\s*\{[^}]*color:\s*var\(--v-color-fg-quiet\)/);
+    expect(flat).toMatch(/\.toggle\s*\{[^}]*color:\s*var\(--v-color-fg-muted\)/);
+    expect(flat).toMatch(
+      /\.toggle\s*\{[^}]*border:\s*1px solid var\(--v-color-fg-quiet\)/,
+    );
   });
 
   it('click on the toggle opens the dialog', async () => {

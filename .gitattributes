@@ -35,3 +35,16 @@ web/public/textures/*.ktx2 filter=lfs diff=lfs merge=lfs -text
 web/textures-src/**/*.png filter=lfs diff=lfs merge=lfs -text
 web/textures-src/**/*.jpg filter=lfs diff=lfs merge=lfs -text
 web/textures-src/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+
+# Story 6.1 — Golden Record audio bundle. AAC-LC `.m4a` placeholders live
+# at `web/public/audio/golden-record/<chapter-slug>.m4a`. Real-procurement
+# successor tracks land at the same paths via a future patch (the curation
+# doc at `docs/audio/golden-record-curation.md` carries the procurement
+# checklist). LFS-tracked from the start so the swap is a transparent
+# in-place blob replace without rewriting history. Per-file budget is
+# ~6 MB after real procurement; the current placeholders are ~32 KB each
+# (silent AAC-LC, 90 s mono 96 kbps — exercises the playback chain end-to-
+# end without shipping audible content). Voluntary Rule 12 disclosure: the
+# bundle is well under both the 500 MB per-story and 250 MB single-file
+# thresholds.
+web/public/audio/**/*.m4a filter=lfs diff=lfs merge=lfs -text

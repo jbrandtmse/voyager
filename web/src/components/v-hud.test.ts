@@ -90,16 +90,22 @@ describe('Story 1.11 Task 9 — <v-hud> registration + structure', () => {
 
 describe('Story 1.11 AC1 — corners anchored via --v-edge-margin', () => {
   it('CSS uses position fixed/absolute + var(--v-edge-margin)', () => {
+    // Story 6.2 AC7 — corner edges now use the defensive fallback form
+    // `var(--v-edge-margin, 16px)` per Epic 5 retro Action item #8 (a
+    // missing token must surface as a visible offset, not a silent
+    // collapse to 0). The expectations relax accordingly: the token
+    // reference must be present (with the 16px fallback), and each
+    // edge must be declared.
     const flat = (VHud.styles as Array<{ cssText?: string } | undefined>).map(
       (s) => String(s?.cssText ?? ''),
     );
     const joined = flat.join('\n');
     expect(joined).toContain('position: fixed');
-    expect(joined).toContain('var(--v-edge-margin)');
-    expect(joined).toContain('top: var(--v-edge-margin)');
-    expect(joined).toContain('bottom: var(--v-edge-margin)');
-    expect(joined).toContain('left: var(--v-edge-margin)');
-    expect(joined).toContain('right: var(--v-edge-margin)');
+    expect(joined).toContain('var(--v-edge-margin');
+    expect(joined).toMatch(/top:\s*var\(--v-edge-margin/);
+    expect(joined).toMatch(/bottom:\s*var\(--v-edge-margin/);
+    expect(joined).toMatch(/left:\s*var\(--v-edge-margin/);
+    expect(joined).toMatch(/right:\s*var\(--v-edge-margin/);
   });
 
   it('lives at the HUD z-index layer', () => {
@@ -184,11 +190,28 @@ describe('Story 1.11 AC7 — compaction placeholder uses existing 1023px breakpo
     }
   });
 
-  it('renders a compact-toggle "HUD ▾" button', async () => {
+  it('does NOT render a compact-toggle at wide viewports (Story 6.2 owns narrow-only)', async () => {
+    // Story 1.11 originally shipped a placeholder "HUD ▾" button visible
+    // at all viewports via CSS display: none on wide + flex on narrow.
+    // Story 6.2 AC3 replaced the placeholder: the toggle now renders
+    // ONLY when narrowViewport is true (the `⋯` button), and the
+    // CSS @media block re-shows it via `display: inline-flex`. At wide
+    // viewports the button is NOT in the shadow DOM at all — the
+    // render branch is gated on `this.narrowViewport`.
     const el = await mount(new ClockManager());
+    // happy-dom defaults to 1024×768 — wide-viewport branch.
+    const btn = el.shadowRoot!.querySelector('.compact-toggle');
+    expect(btn).toBeNull();
+    el.remove();
+  });
+
+  it('renders the ⋯ toggle at narrow viewports (Story 6.2 AC3)', async () => {
+    const el = await mount(new ClockManager());
+    el.narrowViewport = true;
+    await el.updateComplete;
     const btn = el.shadowRoot!.querySelector('.compact-toggle') as HTMLButtonElement;
     expect(btn).toBeTruthy();
-    expect(btn.textContent?.trim()).toBe('HUD ▾');
+    expect(btn.textContent?.trim()).toBe('⋯');
     expect(btn.getAttribute('aria-label')).toBe('Expand HUD');
     expect(btn.getAttribute('aria-expanded')).toBe('false');
     el.remove();

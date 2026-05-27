@@ -4,6 +4,22 @@
    when bootstrap routes to the about page; never participates in the
    simulation surface's critical path. */
 
+/* Story 6.4 AC6 — closes [2.7/LOW]: the about-surface body-level overflow
+   override moves from `main.ts`'s inline `document.body.style.overflow`
+   mutation into this CSS rule. `mountAboutSurface` adds the
+   `v-about-surface` class to `<body>`; the only exit from the about
+   surface is `window.location.reload()` (triggered by the popstate
+   handler in bootstrap when navigating back to `/` or `/c/<slug>`),
+   which clears the class as a natural side-effect of the full reload —
+   no explicit dispose path is needed. Switching from inline-style
+   mutation to a class toggle means the rule lives next to the other
+   about-surface styles and is diffable as part of the CSS contract;
+   the previous inline mutation was invisible to a CSS-only review of
+   the about surface. */
+body.v-about-surface {
+  overflow: auto;
+}
+
 v-about-page {
   display: block;
   max-width: 60ch;

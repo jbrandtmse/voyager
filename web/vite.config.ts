@@ -380,6 +380,15 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/tests/visual/**',
+      // Story 6.4 AC2 — the Playwright route-axe suite lives at
+      // `tests/a11y/routes.spec.ts`. Like the visual suite it uses the
+      // `.spec.ts` extension that Vitest globs by default; this
+      // exclude keeps `npm test` bound to the L3 vitest tier and routes
+      // the L4 route-axe suite through `npm run test:a11y`. The
+      // component-state vitest tests under `tests/a11y/components/`
+      // and `tests/a11y/helpers/` use `.test.ts` (not `.spec.ts`) and
+      // are NOT excluded — they run as part of the default L3 sweep.
+      '**/tests/a11y/routes.spec.ts',
     ],
   },
 });

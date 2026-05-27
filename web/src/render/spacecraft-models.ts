@@ -99,6 +99,35 @@ export const BASIS_TRANSCODER_PATH = '/basis/';
  */
 export const SPACECRAFT_RENDER_SCALE_KM = 0.01;
 
+/**
+ * BUG-CR-005 fix (2026-05-25): max scale boost applied to the spacecraft
+ * group when the ViewFrame is fully body-centered on an encounter
+ * (`encounterAlpha === 1`). At cruise (`encounterAlpha === 0`) the group's
+ * scale is identity, so the spacecraft renders at the base
+ * `SPACECRAFT_RENDER_SCALE_KM` (~10 m exaggerated). At full encounter the
+ * group's scale lerps to this factor.
+ *
+ * Tuning math (2026-05-25): at the V1 Jupiter body-centered encounter
+ * framing the camera sits ~4 million km from Jupiter (Jupiter's 71,492 km
+ * radius subtends ~15 px in a 720-px-tall viewport at 50° FOV, implying
+ * D ≈ 71,492 / tan(15 × 0.069°) ≈ 4×10⁶ km). For the spacecraft to
+ * subtend ~5 px (perceivable for unprompted attitude observation per
+ * Story 6.5 Probe #5), it needs an effective size of ≈ 4M × 5/720 × 0.87
+ * ≈ 24,000 km. The base scale is 0.01 km, so the boost factor is
+ * ~2.4×10⁶. We use 500,000 — large enough to make the spacecraft
+ * unambiguously visible (~5,000 km effective ≈ 7% of Jupiter's radius —
+ * smaller than Jupiter's moons would appear at the same scale, still
+ * within the NASA artist-rendering exaggeration tradition), while
+ * staying well below the artistic-license threshold where the
+ * spacecraft would dwarf the planet.
+ *
+ * Story 6.5 launch-gate Probe #5 (UNPROMPTED ATTITUDE PROBE) requires
+ * users to mention the spacecraft turning / scan-platform articulating at
+ * the V1 Jupiter encounter. With the base 0.01 km scale the spacecraft is
+ * sub-pixel against a 71,492 km Jupiter; this boost makes it perceivable.
+ */
+export const ENCOUNTER_SCALE_BOOST = 1_000_000;
+
 /** Pixel size for the V1/V2 sprite label texture. */
 const LABEL_CANVAS_SIZE_PX = 128;
 /**
@@ -198,6 +227,31 @@ export class SpacecraftModels {
     this.v1.group.visible = false;
     this.v2.group.visible = false;
   }
+
+  /**
+   * BUG-CR-005 fix (2026-05-25): apply a per-frame dynamic scale boost
+   * driven by the ViewFrame's encounter-blend alpha. `alpha === 0` keeps
+   * the base `SPACECRAFT_RENDER_SCALE_KM` (cruise; spacecraft tiny but
+   * findable in heliocentric framing); `alpha === 1` multiplies the
+   * group's scale by `ENCOUNTER_SCALE_BOOST` so the spacecraft is large
+   * enough to be perceived against the encounter body. Lerps smoothly
+   * along the same smoothstep ramp the ViewFrame uses for camera anchor
+   * (Story 4.1), so the spacecraft grows visibly as the camera pulls in.
+   *
+   * Called from `main.ts` `engine.onFrame` after `viewFrame.getTransform`.
+   * No-op when called with the same alpha as the previous frame (cheap
+   * identity check; avoids redundant matrix dirty-flagging).
+   */
+  setEncounterAlpha(alpha: number): void {
+    const clamped = Math.max(0, Math.min(1, alpha));
+    if (clamped === this.lastEncounterAlpha) return;
+    this.lastEncounterAlpha = clamped;
+    const factor = 1 + clamped * (ENCOUNTER_SCALE_BOOST - 1);
+    this.v1.group.scale.setScalar(factor);
+    this.v2.group.scale.setScalar(factor);
+  }
+
+  private lastEncounterAlpha = 0;
 
   /**
    * Kick off the GLB-chain load. Returns a promise that resolves once both

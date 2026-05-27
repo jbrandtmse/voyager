@@ -110,7 +110,7 @@ The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cle
 - **[1.7 / LOW]** `tokens.css` `--v-bp-*` media-query comment — DEFER (one-line doc; batch next tokens touch).
 - **[1.7 / LOW]** `index.html` / `fonts.css` root-absolute paths — DEFER to Story 7.4 (deploy).
 - **[1.7 / LOW]** `font-subset.py` dead code — DEFER (one-off script).
-- **[1.7 / LOW]** `global.css` universal margin/padding reset — DEFER to Story 6.4 (BaseElement doc).
+- ~~**[1.7 / LOW]** `global.css` universal margin/padding reset — DEFER to Story 6.4 (BaseElement doc).~~ **CLOSED by Story 6.4 (2026-05-24) via AC6 T5.1:** JSDoc block added to `web/src/components/base-element.ts` documenting the universal-reset implications (Shadow DOM components insulated; Light-DOM components must re-add UA defaults via their companion stylesheet; about.css already does this for `<v-about-page>` + `<v-attribution-panel>`; future form-element-bearing Light-DOM components must opt into a "form-element reset" sibling stylesheet). The block names every current component to make the contract grep-able.
 - **[1.8 / LOW]** font preloads before FEATURE_PROBE — DEFER (architectural trade-off).
 - **[1.8 / LOW]** `vite.config` replace vs replaceAll — DEFER until 5th marker.
 - **[1.8 / LOW]** `resolveMainEntry` silent `/src/main.ts` fallback — DEFER to Story 7.x build hygiene.
@@ -144,11 +144,11 @@ The `/epic-cycle 3` invocation for Epic 3 created Story 3.0 (Epic 2 Deferred Cle
 - **[2.6 / LOW]** `ogCardsPlugin` duplicated `resolveMainEntry` helper — DEFER (vite hygiene).
 - **[2.7 / LOW]** `main.ts` ClockManager constructed before `/about` return — DEFER to Story 6.1 (audio surface restructure).
 - **[2.7 / LOW]** `main.ts` `ensureCanvas` before URL parse — DEFER (paired with above).
-- **[2.7 / LOW]** `mountAboutSurface` mutates `document.body.style.overflow` — DEFER to Story 6.4 (global.css revisit).
+- ~~**[2.7 / LOW]** `mountAboutSurface` mutates `document.body.style.overflow` — DEFER to Story 6.4 (global.css revisit).~~ **CLOSED by Story 6.4 (2026-05-24) via AC6 T5.2:** the inline mutation in `web/src/main.ts:mountAboutSurface` now toggles a `v-about-surface` class on `<body>`; the actual `overflow: auto` rule lives in `web/src/styles/about.css` next to the other about-surface styles. The rule is now visible to a CSS-only review of the about surface and diffable as part of the CSS contract — the previous inline mutation was invisible to a CSS audit.
 - **[2.7 / LOW]** `about.css` mixes `--v-size-about-*` and `--v-font-size-*` — DEFER to Story 7.6 (token sweep).
 - **[2.7 / LOW]** `URLRouter.dispose` listeners-array iteration race — DEFER (paired with 2.4 `pendingWaveSettle`).
 - **[2.7 / LOW]** `mountAttributionsFooter` host attachment fragility — DEFER to Epic 6 (layout).
-- **[2.8 / LOW]** `v-help-overlay` focus-trap silent catches — DEFER to Story 6.4 (a11y; paired with v-chapter-index sibling — `primitives/dialog.ts` extraction is the natural sibling to Story 3.0's AC4 work).
+- ~~**[2.8 / LOW]** `v-help-overlay` focus-trap silent catches — DEFER to Story 6.4 (a11y; paired with v-chapter-index sibling — `primitives/dialog.ts` extraction is the natural sibling to Story 3.0's AC4 work).~~ **CLOSED by Story 6.4 (2026-05-24) via AC6 T5.3 + T5.4:** `web/src/primitives/dialog.ts` extracted per Rule 9 (third-consumer threshold). Both `<v-help-overlay>` and `<v-chapter-index>` now delegate to `createDialogFocusTrap({ host, initialFocus, componentName })`; the defensive try/catch + `console.warn` diagnostics live in the primitive. Inline re-implementation by a future dialog component is now a HIGH code-review finding per Rule 6 (ADR-0025 obligations carried into Rule 9). Sibling primitive tests at `web/src/primitives/dialog.test.ts` (5 cases).
 - **[2.8 / LOW]** `v-help-overlay` `.shortcut-keys` 100px literal — DEFER to Story 7.6 (tokens hygiene).
 - **[2.9 / LOW]** `v-chapter-copy` `pointer-events: none` prevents copy-paste — DEFER to Epic 4 (encounter chapters).
 - **[2.9 / LOW]** `v-chapter-copy` short-viewport collision risk — DEFER to Story 6.2 (HUD compaction).
@@ -397,7 +397,7 @@ This section records ADR-tooled AC verifications applied retroactively to storie
 
 - **[2.8 / LOW]** `web/src/components/v-help-overlay.ts:366-371,376-380` — `focus-trap` activate/deactivate calls are wrapped in silent `try { ... } catch { }` blocks with no logging. In production this masks real activation failures (e.g., DOM-tree changes that orphan the trap target). **Why deferred:** the pattern mirrors `web/src/components/v-chapter-index.ts` (Story 2.3) — it is currently the project-canonical posture for trap-defense in test environments without layout. Changing it here without simultaneously changing v-chapter-index would split the convention. **Suggested resolution:** in a future a11y-hardening pass (likely Story 6.4 — axe-core CI expansion + manual accessibility test layer), replace the silent catches with `console.warn('[v-help-overlay] focus-trap activate failed:', err)` across BOTH v-help-overlay.ts and v-chapter-index.ts together, so the diagnostic surface is uniform. The defensive catch should stay (test environments still benefit) — just emit a warning so production regressions surface.
 
-- **[2.8 / LOW]** `web/src/components/v-help-overlay.ts:185` — `.shortcut-keys { min-width: 100px; }` uses a hard-coded pixel literal for the shortcut-keys column width. Story 1.7's design-system defense forbids hardcoded hex literals in component code but is silent on raw pixel sizings; nevertheless, the same single-source-of-truth argument applies — a future viewport-aware sizing tweak would have to touch this file specifically rather than the tokens layer. **Why deferred:** purely cosmetic; the value works at every viewport tested and the column-alignment contract has no test coverage that would catch a regression. The token-naming question (`--v-size-shortcut-key-col` or similar) is also a one-off that doesn't generalize. **Suggested resolution:** fold into a future tokens.css hygiene pass alongside the 2.7-deferred `--v-size-about-*` naming question — decide whether the `--v-size-*` namespace should grow component-specific entries or stay reserved for typography. Likely Story 7.6 (final perf/polish pass) or a dedicated tokens-hygiene story in Epic 6.
+- ~~**[2.8 / LOW]** `web/src/components/v-help-overlay.ts:185` — `.shortcut-keys { min-width: 100px; }` uses a hard-coded pixel literal for the shortcut-keys column width. Story 1.7's design-system defense forbids hardcoded hex literals in component code but is silent on raw pixel sizings; nevertheless, the same single-source-of-truth argument applies — a future viewport-aware sizing tweak would have to touch this file specifically rather than the tokens layer. **Why deferred:** purely cosmetic; the value works at every viewport tested and the column-alignment contract has no test coverage that would catch a regression. The token-naming question (`--v-size-shortcut-key-col` or similar) is also a one-off that doesn't generalize. **Suggested resolution:** fold into a future tokens.css hygiene pass alongside the 2.7-deferred `--v-size-about-*` naming question — decide whether the `--v-size-*` namespace should grow component-specific entries or stay reserved for typography. Likely Story 7.6 (final perf/polish pass) or a dedicated tokens-hygiene story in Epic 6.~~ **Closed by Story 6.6 (2026-05-25):** token-ified to `--v-size-shortcut-key-col: 100px` at `web/src/styles/tokens.css` (under a new "Component-specific size tokens" subsection). `v-help-overlay.ts:189–197` (post-token-ification line range) now consumes the token via `min-width: var(--v-size-shortcut-key-col)`. Value unchanged (100 px); only the source moved to the single source-of-truth tokens layer. The naming decision: `--v-size-*` namespace was extended with a component-specific entry (the alternative — keep `--v-size-*` reserved for typography — was rejected because the alternative would require a parallel `--v-component-*` namespace which has no other consumers).
 
 ## Deferred from: code review of 2-9-heliopause-text-cards-and-instrument-shutoff-hud-integration (2026-05-20)
 
@@ -879,3 +879,116 @@ The Story 4.3 code review auto-resolved 2 findings inline (F1 Integration AC stu
    **Suggested resolution:** Either (a) reset `_currentSubstate = PbdSubstate.idle` in `dispose()` (the strict-reset interpretation; matches the "no stale state after dispose" doctrine) or (b) document the divergence in the `dispose()` JSDoc and add a unit test pinning the observed behaviour ("currentSubstate retains last value post-dispose; production code re-drives via update()"). Trivial either way.
 
    **Routing:** Story 5.3 or 5.4 — address inline when next touching `PaleBlueDot.dispose()` semantics, or fold into an Epic 5 polish pass.
+
+---
+
+### Story 6.0 (code review, 2026-05-24)
+
+1. **`[6.0 / LOW]` `voyager-skill-rules.md` widespread reference rot across the repository (88 files reference a filename that does not exist)**
+
+   **What's the issue:** 88 files in the repository reference `voyager-skill-rules.md` — a filename that does not exist. The canonical file is `_bmad/custom/skill-rules.md` (renamed at some point in the BMAD-kit installation). Affected surfaces include `CONTRIBUTING.md:78`, multiple `docs/adr/*.md`, every `_bmad-output/implementation-artifacts/tests/test-summary-*.md` from 2-0 through 4-7, every per-story implementation artifact from Stories 1.15 through 5.3, multiple `web/tests/*.test.ts` story-X.Y qa-gaps files, `README.md`, `THIRD_PARTY.md`, and `bake/src/ck_sample.py`.
+
+   **Why deferred:** out of scope for Story 6.0 (which focused on Epic 5 retro Action items #1, #4, #5, #6). A repo-wide find/replace would be mechanical but the audit should also reconcile any links that point at sections within `voyager-skill-rules.md` (e.g., "Rule 12") to verify they resolve to the same rule numbers in `skill-rules.md` (which they should — Rule 12 / 13 numbering is preserved per the Rule 13 numbering note). The Story 6.0 review surfaced this when the dev's NEW dev-doc at `docs/visual-validation/update-snapshot-discipline.md:7` inherited the stale name; that one file was auto-resolved inline (the Story-6.0-introduced contribution is now zero).
+
+   **Suggested resolution:** Epic 7 docs-cleanup / ADR-housekeeping pass: (a) repo-wide find `voyager-skill-rules.md` → replace `_bmad/custom/skill-rules.md` (with relative-path adjustments per file location), (b) follow up by greg-verifying every Rule-N reference in the replaced files still resolves to the same numbered rule in `skill-rules.md`.
+
+   **Routing:** Epic 7 docs-cleanup / ADR-housekeeping pass, or fold into the next story that touches a substantial fraction of the affected files.
+
+2. **`[6.0 / LOW]` `build-dist-layout.test.ts` CSS-link strip regex assumes trailing whitespace after `>`**
+
+   **What's the issue:** The synthetic missing-CSS-link case in `web/tests/build-dist-layout.test.ts:432-435` uses `/<link\s+rel="stylesheet"\s+(?:crossorigin\s+)?href="\/assets\/main-[^"]+\.css">\s*/` to strip the CSS link tag. The trailing `\s*` is greedy-matched but requires SOME whitespace context. If a future Vite plugin emits the `<link>` tag at the end of a minified single line with no trailing whitespace (or as the last char of the document), the regex still matches — `\s*` matches zero chars. The regex is correct in practice; the LOW signal is that the sanity-check `throw` (lines 439–443) is the binding gate that catches a future Vite emission change.
+
+   **Why deferred:** the test fails LOUD if the regex no-ops (the `throw` says "CSS-link strip regex did not match — defense test cannot prove regression coverage"). The failure mode is graceful and surfaces immediately at vitest time. Tightening the regex to be more permissive (e.g., `(?:\s*|\b)` after `>`) is a defensive tweak with no current failure mode driving it.
+
+   **Suggested resolution:** when the next bundler-config or Vite-version change lands (Epic 6 dev-cycle or Epic 7), revisit the regex's robustness against minified HEAD emission. Optional pre-emptive tightening: replace `>\s*/` with `>\s*(?:<|$)/` to anchor the strip at the next tag-open or document end.
+
+   **Routing:** any future story that touches `vite.config.ts`, `web/index.html`, or `package.json` Vite version pins; OR a defensive-test sweep at Epic 6 retro.
+
+---
+
+### Story 6.1 (code review, 2026-05-24)
+
+1. **`[6.1 / LOW]` `<v-chapter-index>` still inlines a Shadow-DOM-walk text-input-focus helper that wasn't consolidated into `web/src/lib/text-input-focus.ts`**
+
+   **What's the issue:** Story 6.1's Rule 9 primitive extraction consolidated the `isTextInputFocused` Shadow-DOM walk used by `<v-help-overlay>` and `<v-audio-toggle>` into `web/src/lib/text-input-focus.ts`. A similar (but slightly different — different walk bounds, different non-text-input-type set) helper is still inlined in `web/src/components/v-chapter-index.ts` per the extracted module's docstring at lines 24–31 ("the chapter-index inlines a similar walk but with different bounds — its consolidation is deferred to a future story to keep Story 6.1's diff focused"). This is an acceptable Rule 9 posture (the helper now has TWO consumers — the second-consumer trigger has fired); the chapter-index becomes the THIRD consumer when it eventually gets consolidated.
+
+   **Why deferred:** Story 6.1 scope is the audio bundle + toggle + chapter-marker activation. Consolidating the chapter-index helper would require auditing the divergence between the two walk implementations (the bound limit + the non-text-input-type set differ) and either folding both into the shared helper or carrying two parametrized variants. Keeping Story 6.1's diff focused is the right call.
+
+   **Suggested resolution:** when the next story touches `<v-chapter-index>` keyboard handling, audit the inlined `isTextInputFocused`-style helper against `web/src/lib/text-input-focus.ts` and either consolidate (preferred) or document the divergence as intentional. The audit is mechanical: grep for `activeElement` + Shadow-DOM walks in `v-chapter-index.ts`, compare against the extracted helper's behavior, decide.
+
+   **Routing:** any future story touching `<v-chapter-index>` keyboard / focus discipline; otherwise fold into an Epic 6 polish pass.
+
+2. **`[6.1 / LOW]` `AudioPlaybackService.syncEngine()` does not wrap audio-engine method calls in try/catch — engine throws propagate to caller**
+
+   **What's the issue:** `web/src/services/audio-playback-service.ts:syncEngine()` invokes `this.audioEngine.prepare(...)`, `fadeIn(...)`, `fadeOut(...)`, `pause(...)`, `resume(...)` without service-level try/catch. The Story 6.1 QA defense file at `web/tests/story-6-1-qa-defense.test.ts:214-282` PINS this current "throws propagate" posture against a synthetic-throwing engine stub. In practice, the production `DefaultAudioEngine` catches its own errors at the engine layer and `console.warn`s, so real-world failures do not propagate up through the service. The Story 6.1 code-review MED-1 fix added `.catch(() => {})` to the underlying `audio.play()` Promise rejections (which addresses the realistic autoplay-blocked failure path); deeper engine-call hardening is deferred.
+
+   **Why deferred:** the realistic failure mode (autoplay-policy `NotAllowedError` on `audio.play()`) is now hardened inline (Story 6.1 code-review MED-1). The remaining "synthetic engine throws" failure path is hypothetical — the production engine catches its own errors. Adding service-level try/catch wrap is defensible code-hygiene but not load-bearing.
+
+   **Suggested resolution:** if a future story introduces a NON-default `AudioEngineLike` (e.g., a Web Audio decoder variant or a server-streaming engine), revisit the service's hardening posture. At that point, wrap each engine call in `try { this.audioEngine.<method>(...); } catch (err) { console.warn('[AudioPlaybackService] engine throw:', err); }` and update the QA defense test (lines 214-282) to assert `.not.toThrow()` once the hardening lands.
+
+   **Routing:** any future story that adds a new `AudioEngineLike` implementation, OR an Epic 7 audio-hardening pass.
+
+3. **`[6.1 / LOW]` Golden Record audio is placeholder silence — real-track procurement is gated on maintainer authorization**
+
+   **What's the issue:** Per the Story 6.1 dev's explicit fallback-branch decision (the JPL canonical URL returned 302→missing.html during the dev cycle), the 5 `.m4a` files at `web/public/audio/golden-record/` are silent AAC-LC placeholders (~32 KB each, ~160 KB total). The entire runtime codepath is exercised end-to-end with these placeholders; only the audio content is provisional. The curation doc at `docs/audio/golden-record-curation.md` carries the procurement checklist and a "Placeholder audio — real procurement deferred pending maintainer authorization" callout. `THIRD_PARTY.md` § Golden Record audio assets describes the wiring honestly without claiming the placeholder content is the real Record audio.
+
+   **Why deferred:** procurement requires network access to NASA-hosted sources (or Library of Congress National Recording Registry, etc.) AND a per-track license-confirmation audit. Both fall outside the dev-agent's sandbox capability and the audit demands maintainer judgement. The runtime contract (slug-to-URL map, service activation, component toggle, ChapterDirector wire-up) is locked in and survives the placeholder→real swap unchanged — only the blob content at the LFS paths changes.
+
+   **Suggested resolution:** maintainer-driven track-by-track procurement per the curation doc's checklist (lines 33–60). The swap is in-place at the same LFS paths; no code or runtime changes required. Update curation doc's "Per-track curation reasoning" section + `THIRD_PARTY.md` § Golden Record with finalized titles + source URLs + per-file SHA-256 checksums (currently all 5 share `99bad3d3...` because they encode identical silence).
+
+   **Routing:** maintainer (not a Story); pre-merge gate per the curation doc. Optional Story 6.2 / 6.3 dev-supervised swap once the maintainer has authorized the specific track set.
+
+---
+
+### Story 6.3 (QA, 2026-05-24)
+
+1. ~~**`[6.0/6.2 → 6.4 / MED]` `build-dist-layout.test.ts` synthetic BUG-E5-007 case invalidated by Story 6.2's defensive corner CSS fallback**~~ — **CLOSED by Story 6.3 code review (2026-05-24):** rewrote the synthetic case as delta-based detection (option b from the three proposed resolutions). The test now opens TWO contexts — one with the CSS link present (baseline), one with it stripped — and asserts that ≥1 landmark (HUD corners + mission scrubber) differs by ≥50px between the two samples. The light-DOM mission scrubber is the load-bearing delta surface: its gutter rules live in external CSS without a shadow-DOM fallback, so a missing main-*.css bundle widens it across the full viewport (delta of hundreds of pixels). The shadow-DOM-fallback'd HUD corners shift by only ~8px under the same condition (24px clamp floor → 16px fallback), below the threshold by design. The delta-based form is robust to future defensive additions — any surface that depends on the external bundle for ANY computed-style property still produces a detectable delta. Verification: `cd web && npx vitest run tests/build-dist-layout.test.ts` → 6/6 passed; `cd web && npm test` → 3669 passed / 10 skipped / **0 failures** (was 3668 + 1 fail). See review findings in `_bmad-output/implementation-artifacts/6-3-full-reduced-motion-sweep-across-all-chapters-and-components.md` § Review Findings.
+
+   <details><summary>Historical findings preserved</summary>
+
+1a. **`[6.0/6.2 → 6.4 / MED]` `build-dist-layout.test.ts` synthetic BUG-E5-007 case invalidated by Story 6.2's defensive corner CSS fallback**
+
+   **What's the issue:** `web/tests/build-dist-layout.test.ts > catches a missing CSS-link regression (synthetic BUG-E5-007)` fails deterministically on `epic6` HEAD (3 consecutive runs confirmed during Story 6.3 QA — all observe `0` violations, expected `≥3`). The failure was already documented as pre-existing by the Story 6.3 dev via `git stash + re-run` and is NOT introduced by Story 6.3 (verified independently by QA: the bypass fix at `v-timeline-scrubber.ts:398` touches an unrelated CSS surface). Root cause is Story 6.2 AC7 (`d3b4311` "feat(story-6.2): HUD dismiss/restore + narrow-viewport compaction + marker clustering" — Epic 5 retro Action item #8), which added explicit fallbacks to all four `<v-hud>` corner rules:
+
+   ```css
+   .corner.top-left  { top: var(--v-edge-margin, 16px);  left: var(--v-edge-margin, 16px); }
+   .corner.top-right { top: var(--v-edge-margin, 16px);  right: var(--v-edge-margin, 16px); }
+   .corner.bottom-left  { bottom: var(--v-edge-margin, 16px); left: var(--v-edge-margin, 16px); }
+   .corner.bottom-right { bottom: var(--v-edge-margin, 16px); right: var(--v-edge-margin, 16px); }
+   ```
+
+   These rules live in `<v-hud>`'s Shadow-DOM `<style>` block (NOT the external `main-*.css` bundle). When the synthetic test at `build-dist-layout.test.ts:405-548` intercepts the root HTML response and strips the `<link rel="stylesheet">` tag, the shadow-DOM rule still applies and the `16px` fallback keeps each corner properly positioned. Result: `top-right.right > VIEWPORT_WIDTH - 200`, `bottom-*.bottom > VIEWPORT_HEIGHT - 100` still all pass — the "violations" counter stays at 0. The test's premise (no CSS link ⇒ corners collapse to (0,0)) is over-specified post-Story 6.2; the defense pattern documented by `v-hud-corner-defensive.test.ts` now intentionally **prevents** the collapse the synthetic test was designed to detect.
+
+   The two surfaces are not in conflict on intent — they're both expressing the same defensive principle from different angles — but the regression test's specific failure-mode assumption no longer holds.
+
+   **Why deferred (not auto-fixed):** Story 6.3 is primarily AUDIT + DOCUMENTATION; root-causing was in scope but rewriting the synthetic case is not. The fix has multiple reasonable shapes (strip the `--v-edge-margin` token from `:root` as part of the intercept; strip the shadow-DOM `<style>` block too; assert on `<v-chapter-copy>` position which is light-DOM and DOES depend on the external CSS; or retire the synthetic case in favour of the corner-defensive test which now covers the same defect class via a different mechanism). Choosing the right shape requires a design decision the next maintenance pass should make explicitly.
+
+   **Suggested resolution:** Story 6.4 (axe-core a11y expansion) or a dedicated maintenance commit. Three options:
+
+   1. **Retire the synthetic case** — accept that Story 6.2's corner-defensive CSS makes the original BUG-E5-007 failure mode unreachable. Remove the `it('catches a missing CSS-link regression…')` block. `v-hud-corner-defensive.test.ts` already covers the load-bearing defense pattern from the inverse direction (assert tokens are referenced WITH a fallback). The static-parse tier in the same file (CSS link present in dist HTML) plus the cold-load layout invariants still cover the original BUG-E5-007 detection contract.
+   2. **Rewrite the strip to also remove the `--v-edge-margin` token** — patch the intercepted HTML so `:root { --v-edge-margin: ... }` is also stripped, defeating the shadow-DOM fallback. Restores the original assertion but couples the test to two implementation details instead of one.
+   3. **Re-target at a light-DOM consequence** — assert on `<v-chapter-copy>` or `<v-timeline-scrubber>` mission-variant gutters, which live in light DOM and DO depend on the external CSS bundle (no shadow-DOM fallback in play). Closest to the original BUG-E5-007 detection signal.
+
+   Option 3 most faithfully preserves the test's regression-coverage intent; option 1 is the lowest-risk delete if no other layout-collapse defense regression has surfaced since.
+
+   **Routing:** Story 6.4 (next Epic 6 story — natural landing) OR a maintenance commit between 6.3 and 6.4.
+
+   </details>
+
+---
+
+## Forward-coupled provisional definitions
+
+> **Established by Story 6.0 (2026-05-24, Epic 5 retro Action item #6).** Landing place for cross-story coupled definitions introduced in a Story-X.1 foundation story and consumed by a named-but-not-yet-written future Story X.Y. Per [`_bmad/custom/skill-rules.md`](../../_bmad/custom/skill-rules.md) Rule 15, every PROVISIONAL definition gets a forward-link here so the consumer story's `bmad-create-story` planning gate sees the pending coupling.
+>
+> **Entry format:** `**[X.1 → X.Y]** <definition name> — <one-line semantic contract>` plus a sub-bullet linking the X.1 Dev Notes section. Closure happens when the consumer Story X.Y is implemented and the PROVISIONAL marker is resolved (either confirmed or amended via Rule 5). At closure, strike through the entry with a `**CLOSED by Story X.Y (date): <one-line>**` annotation.
+
+_(Currently empty — Epic 6 does not introduce any X.1-style multi-story foundation; the section is in place for any future epic with that shape. Add new forward-links here as Story-X.1 stories ship.)_
+
+---
+
+## Deferred from: code review of story 6.4 (2026-05-24)
+
+- **[6.4 / LOW]** `<v-timeline-scrubber>` `aria-valuenow` NaN-safety hardening — the Story 6.4 numeric `aria-valuenow` contract (`String(this.simEt)`) is correct, but no production-side guard rejects the degenerate case where `simEt` could become `NaN` or `undefined` from a malformed clock subscription. The defense test at `web/tests/story-6-4-defense.test.ts:134` pins `Number.isFinite(Number(valueNow))` only on the normal-mount path. A future hardening could clamp `valueNow` to `String(MISSION_START_ET)` when `!Number.isFinite(this.simEt)` and emit a `console.warn`. Not a Story 6.4 regression — pre-existing surface. **Suggested resolution:** add a one-line `isFinite` guard in `render()` before the `String(this.simEt)` coercion; surface a diagnostic warn when the guard fires. **Routing:** Epic 7 polish or the next Story-6.x cleanup pass.
+
+- **[6.4 / LOW]** `web/src/primitives/dialog.test.ts:50-70` — the "activate failure surfaces as console.warn" test currently accepts EITHER outcome (warned OR silently succeeded), because happy-dom tolerates `focus-trap.activate()` against detached hosts and the throw path may not fire. The test as-shipped pins ONLY the contract that IF a warn fires, the message contract is correct. Strengthening would require a more aggressive happy-dom fixture that forces the throw (e.g., a sinon-style replacement on `createFocusTrap` returning a stub whose `activate()` throws synchronously). **Suggested resolution:** refactor the test to inject a throwing stub via dependency injection (would require widening `createDialogFocusTrap`'s seam or extracting an internal factory). **Routing:** non-blocking; revisit if a dialog activation failure ever escapes the warn channel.

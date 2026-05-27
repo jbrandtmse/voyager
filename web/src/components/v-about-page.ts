@@ -158,7 +158,7 @@ export class VAboutPage extends LitElement {
           <tr>
             <th scope="row">Voyager Golden Record</th>
             <td>NASA mission audio</td>
-            <td>Audio surface (wired in Story 6.1)</td>
+            <td>Diegetic audio layer at the launch, PBD, and heliopause chapter markers</td>
           </tr>
         </tbody>
       </table>
@@ -235,6 +235,15 @@ export class VAboutPage extends LitElement {
         that the browser fetches on demand. Every chunk is checksum-pinned
         in the manifest, so a kernel update is a deliberate act with a
         diff, not a silent regression.
+      </p>
+      <p>
+        The Golden Record audio layer that activates at the launch, Pale
+        Blue Dot, and heliopause chapters is <em>diegetic</em>: it is the
+        same NASA public-domain recording shipped on the actual
+        spacecraft, attached at the chapter markers as an artifact
+        reproduction. It is not a narration or voiceover. A spoken
+        narration layer is a v1.1 candidate; the current scope keeps the
+        Record's own bass-note elegy as the only audio Voyager carries.
       </p>
       <p>
         Source, build pipeline, and validation harness will be published

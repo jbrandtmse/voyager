@@ -1,0 +1,54 @@
+Story 6.4 AC8 Probe (d) — focus-trap diagnostic surface lands.
+
+The original Probe (d) wording was:
+
+  > Grep the codebase for `console.warn.*focus-trap` — verify the AC6
+  > diagnostic surface landed in both `<v-help-overlay>` and
+  > `<v-chapter-index>`.
+
+After the Rule 9 dialog-primitive extraction (T5.4), the literal warn
+strings no longer live in the two component files — they live in the
+extracted primitive that both components consume:
+
+  web/src/primitives/dialog.ts:104
+    console.warn(
+      `[${opts.componentName}] focus-trap activation failed:`,
+      err,
+    );
+
+  web/src/primitives/dialog.ts:115
+    console.warn(
+      `[${opts.componentName}] focus-trap deactivation failed:`,
+      err,
+    );
+
+Both consumers wire their componentName explicitly:
+
+  web/src/components/v-help-overlay.ts (via createDialogFocusTrap):
+    componentName: 'v-help-overlay'
+
+  web/src/components/v-chapter-index.ts (via createDialogFocusTrap):
+    componentName: 'v-chapter-index'
+
+A real runtime activation failure surfaces as:
+
+  [v-help-overlay] focus-trap activation failed: <Error ...>
+  [v-chapter-index] focus-trap activation failed: <Error ...>
+
+The diagnostic surface AC6 mandated lands in both surfaces — through the
+shared primitive — and is verified by `web/src/primitives/dialog.test.ts`
+(5 tests). The grep results below pin the file map:
+
+$ grep -rn "focus-trap activation failed\|focus-trap deactivation failed" web/src/
+web/src/primitives/dialog.test.ts:67:      expect(firstCall[0]).toContain('focus-trap activation failed');
+web/src/primitives/dialog.ts:104:          `[${opts.componentName}] focus-trap activation failed:`,
+web/src/primitives/dialog.ts:115:          `[${opts.componentName}] focus-trap deactivation failed:`,
+
+$ grep -rln "createDialogFocusTrap" web/src/
+web/src/primitives/dialog.test.ts
+web/src/components/v-chapter-index.ts
+web/src/components/v-help-overlay.ts
+web/src/primitives/dialog.ts
+
+PASS — both consumers route through the primitive; the diagnostic
+surface is preserved across the extraction.

@@ -416,3 +416,106 @@ simulation). The story spec records the rationale.
 
 Each plate PNG is ~20-30 KB; six plates total ~150 KB. Well below LFS
 thresholds, so no LFS tracking; committed directly to the repo.
+
+## Voyager Golden Record audio assets (Story 6.1)
+
+Story 6.1 wires the diegetic Voyager Golden Record audio layer into five
+chapter-marker activation windows (V1 launch, V2 launch, Pale Blue Dot,
+V1 heliopause, V2 heliopause). The runtime contract — toggle off by
+default, session-id-gated localStorage persistence, 1500 ms cross-fade,
+silence outside Golden-Record windows — is documented in the per-track
+curation doc at
+[`docs/audio/golden-record-curation.md`](docs/audio/golden-record-curation.md).
+
+### Source + license posture
+
+The Voyager Golden Record contents that ship in this repo are sourced
+from the canonical NASA-hosted asset directory at
+`voyager.jpl.nasa.gov/assets/audio/golden-record/`. The live JPL host
+now 302-redirects those URLs to `webhosting-external.jpl.nasa.gov/
+missing.html` (the redirect Story 6.1 dev originally observed), so this
+procurement pass routed through the Internet Archive's Wayback Machine,
+which preserves the NASA-hosted assets with their original
+`Last-Modified: 2017-08-09` headers and `x-archive-orig-server: Apache`
+upstream provenance intact.
+
+The license posture is **NASA's standard media usage statement** per
+<https://www.nasa.gov/nasa-brand-center/images-and-media/> (accessed
+2026-05-24): "NASA content – images, audio, video, and media files
+used in the rendition of 3-dimensional models, such as texture maps and
+polygon data in any format – generally are not subject to copyright in
+the United States." The five selected tracks all fall inside the NASA-
+produced cohort (Cornell-recorded greetings donated to NASA + JPL/NASA
+"Sounds of Earth" mission recordings). This procurement deliberately
+**excluded** the encumbered cohort (Bach Munich Bach Orchestra 1971,
+Beethoven Otto Klemperer ~1955, Blind Willie Johnson 1927, Stravinsky
+1959, etc.) — these performances carry separate performance rights
+that are not part of NASA's public-domain umbrella even though the
+underlying compositions are public domain.
+
+### Per-track inventory
+
+Each entry lists the chapter slug, the file path, the NASA source URL
+(with the specific Wayback snapshot used), license citation, encoding,
+and final size. Common encoding: AAC-LC, mono, 44.1 kHz, ~96 kbps.
+
+- **`launch-v1`** — `web/public/audio/golden-record/launch-v1.m4a` —
+  **"Greetings in English" (Nick Sagan).** NASA source:
+  <https://voyager.jpl.nasa.gov/assets/audio/golden-record/english.au>
+  via Wayback snapshot
+  <https://web.archive.org/web/20210319024735if_/https://voyager.jpl.nasa.gov/assets/audio/golden-record/english.au>
+  (2021-03-19; upstream `Last-Modified: 2017-08-09`). License: NASA
+  media policy as above (accessed 2026-05-24). Encoded duration 4.27 s,
+  53 KB.
+
+- **`launch-v2`** — `web/public/audio/golden-record/launch-v2.m4a` —
+  **"Greetings in Arabic".** NASA source:
+  <https://voyager.jpl.nasa.gov/assets/audio/golden-record/arabic.au>
+  via Wayback snapshot
+  <https://web.archive.org/web/20210318135029if_/https://voyager.jpl.nasa.gov/assets/audio/golden-record/arabic.au>
+  (2021-03-18; upstream `Last-Modified: 2017-08-09`). License: NASA
+  media policy as above. Encoded duration 6.01 s, 75 KB.
+
+- **`pale-blue-dot`** — `web/public/audio/golden-record/pale-blue-dot.m4a` —
+  **"Wind, Rain, and Surf" (Sounds of Earth).** NASA source:
+  <https://voyager.jpl.nasa.gov/assets/audio/golden-record/wind.wav>
+  via Wayback snapshot
+  <https://web.archive.org/web/20210318210632if_/https://voyager.jpl.nasa.gov/assets/audio/golden-record/wind.wav>
+  (2021-03-18; upstream `Last-Modified: 2017-08-09`). License: NASA
+  media policy as above. Encoded duration 97.73 s, 1.18 MB.
+
+- **`v1-heliopause`** — `web/public/audio/golden-record/v1-heliopause.m4a` —
+  **"Life Signs / Pulsar" (Sounds of Earth).** NASA source:
+  <https://voyager.jpl.nasa.gov/assets/audio/golden-record/life.wav>
+  via Wayback snapshot
+  <https://web.archive.org/web/20210320094802if_/https://voyager.jpl.nasa.gov/assets/audio/golden-record/life.wav>
+  (2021-03-20; upstream `Last-Modified: 2017-08-09`). License: NASA
+  media policy as above. Encoded duration 51.03 s, 617 KB.
+
+- **`v2-heliopause`** — `web/public/audio/golden-record/v2-heliopause.m4a` —
+  **"Music of the Spheres" (Sounds of Earth).** NASA source:
+  <https://voyager.jpl.nasa.gov/assets/audio/golden-record/spheres.wav>
+  via Wayback snapshot
+  <https://web.archive.org/web/20210320094756if_/https://voyager.jpl.nasa.gov/assets/audio/golden-record/spheres.wav>
+  (2021-03-20; upstream `Last-Modified: 2017-08-09`). License: NASA
+  media policy as above. Encoded duration 37.38 s, 448 KB.
+
+### Checksums (SHA-256, source + final)
+
+| Slug              | Source (NASA upstream)                                               | Final (committed `.m4a`)                                            |
+|-------------------|----------------------------------------------------------------------|---------------------------------------------------------------------|
+| `launch-v1`       | `43893d11b645d63258d056d5e542789055c3092038bbaac0cedcceb2d00072e7`   | `64c171e549aeffc57403d020c10bbafc0871c9b4fd8f7cec9e1bc9237d5517ec`  |
+| `launch-v2`       | `0f31bf782342e412f37751ce0cf1095454184b02c1832adf3e3383a7b99350a8`   | `9600db0511ff63aa8df356d7fd760a25ceca0da9226f9b6feaa44291fb1daae3`  |
+| `pale-blue-dot`   | `d1c7722fe70a388c8765889baed7acb93d8cee0a88f408ffb0272b2c6ed00e1b`   | `51de466560dd8974bd1d296f2b6aff0bc524aae1f790963330550bea15c02924`  |
+| `v1-heliopause`   | `42710bc73dce1caa38b21062e07cfc89e9ddd65d145231278f36ac2cef1aec27`   | `36f3eeac892447048a77fee27e16156c1298398b169d7903c26c503a8ecd2254`  |
+| `v2-heliopause`   | `fb208e402a40417da4b3c5f8c7e81d09ae825448ae01e5e93673162a0f080f77`   | `97c6068dc001d5086053a28ea0eeb37791ff8281094c310aa07739708e7d26d6`  |
+
+### Audio bundle LFS / footprint
+
+The five `.m4a` files are LFS-tracked under
+`web/public/audio/**/*.m4a` in `.gitattributes`. Real-audio bundle
+total: ~2.4 MB (53 KB + 75 KB + 1.18 MB + 617 KB + 448 KB). The bundle
+is small because the NASA upstream source content itself is short
+(4-98 s per track) and 8 kHz mono — fidelity is upstream-bound, not
+encode-bound. Well under Rule 12's 500 MB per-story and 250 MB single-
+file disclosure thresholds.

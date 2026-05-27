@@ -81,10 +81,14 @@ describe('ViewFrameService — AC3 translation-only contract (ADR-0023)', () => 
     const { service } = makeService();
     const t = service.getTransform(v1Jupiter.anchorEt, v1Jupiter);
     expect(t).not.toHaveProperty('quaternion');
-    // The interface itself only declares originOffsetWorld; this assertion
-    // is a runtime defense against a future contributor sneaking a
-    // rotation field onto the returned object.
-    expect(Object.keys(t)).toEqual(['originOffsetWorld']);
+    // The interface declares originOffsetWorld + encounterAlpha (added in
+    // BUG-CR-005 fix 2026-05-25 to drive the spacecraft's dynamic scale
+    // boost along the same blend curve as the camera anchor); this
+    // assertion is a runtime defense against a future contributor
+    // sneaking a rotation field onto the returned object.
+    expect(Object.keys(t).sort()).toEqual(
+      ['encounterAlpha', 'originOffsetWorld'].sort(),
+    );
   });
 });
 

@@ -43,6 +43,11 @@ describe('Story 1.7 AC4 — <v-version> demo component', () => {
     const joined = flat.join('\n');
     expect(joined).toContain('var(--v-font-mono)');
     expect(joined).toContain('var(--v-font-size-caption)');
-    expect(joined).toContain('var(--v-color-fg-quiet)');
+    // Story 6.6 AC1 — at 12px caption + no HUD text-shadow inheritance the
+    // original `--v-color-fg-quiet` (3.20:1, AA-large only) failed AA body.
+    // Switched to `--v-color-fg-muted` (7.32:1 body-AA at any size). See
+    // docs/accessibility/contrast-audit-launch-week.md § 2.4.
+    expect(joined).toContain('var(--v-color-fg-muted)');
+    expect(joined).not.toContain('var(--v-color-fg-quiet)');
   });
 });

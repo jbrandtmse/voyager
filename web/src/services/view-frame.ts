@@ -92,6 +92,16 @@ export interface ViewFrameTransform {
    * the encounter body during the held window.
    */
   readonly originOffsetWorld: WorldVec3;
+  /**
+   * BUG-CR-005 fix (2026-05-25): blend factor in [0, 1] mirroring the
+   * smoothstep ramp used for `originOffsetWorld`. 0 = heliocentric/cruise,
+   * 1 = full body-centered framing. Consumers (e.g. SpacecraftModels'
+   * dynamic scale exaggeration at encounter close-ups) read this to lerp
+   * presentation properties along the same blend curve the camera anchor
+   * uses, guaranteeing visual synchronization with the ViewFrame's body-
+   * centered transition.
+   */
+  readonly encounterAlpha: number;
 }
 
 const SECONDS_PER_DAY = 86_400;
@@ -188,6 +198,7 @@ export class ViewFrameService {
         alpha * bodyPos[1],
         alpha * bodyPos[2],
       ),
+      encounterAlpha: alpha,
     };
   }
 
@@ -284,4 +295,5 @@ export class ViewFrameService {
  */
 const IDENTITY_TRANSFORM: ViewFrameTransform = Object.freeze({
   originOffsetWorld: worldVec3(0, 0, 0),
+  encounterAlpha: 0,
 });

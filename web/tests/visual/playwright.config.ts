@@ -90,20 +90,26 @@ export default defineConfig({
   expect: {
     timeout: 30_000,
     toMatchSnapshot: {
-      // Story 4.9 AC2 — per-pixel diff tolerance. Initial target ~0.1%
-      // (AC2 verbatim) was empirically too tight against the HUD text
-      // region's sub-pixel font hinting drift across the same pinned
-      // Chrome-for-Testing build: a deterministic re-run produced
-      // ~0.13% diff (~1200 pixels) dominated by glyph antialiasing on
-      // the chapter-title / HUD-distance / scrubber-time text.
+      // Story 6.6 AC6 — TIGHTENED back to AC2's original 0.001 (0.1%)
+      // target now that the HUD / chapter-copy / timeline-scrubber text
+      // regions are MASKED out of every snapshot capture (see
+      // `mask: [page.locator(...)]` parameters on each
+      // `page.screenshot({ mask: [...] })` call in encounters.spec.ts
+      // and reduced-motion-regression.spec.ts). Masking removes the
+      // HUD-text antialiasing flake that previously required the 0.005
+      // tolerance, restoring the AC2-verbatim 0.1% threshold.
       //
-      // Raised to 0.5% to absorb that drift while still catching real
-      // visual regressions, which produce orders-of-magnitude larger
-      // diffs (a full-canvas framing shift is ~50% diff; a missing
-      // moon mesh is ~5–10% diff). The threshold floor is documented
-      // here so a future tightening (e.g. once we mask the HUD region
-      // with a Playwright `mask: [...]` clip) is an intentional choice.
-      maxDiffPixelRatio: 0.005,
+      // History — Story 4.9 originally targeted 0.001 (AC2 verbatim) but
+      // empirically observed ~0.13% diff (~1200 pixels) dominated by
+      // glyph antialiasing on the chapter-title / HUD-distance /
+      // scrubber-time text across reruns of the same pinned Chrome-
+      // for-Testing build. Raised to 0.005 (0.5%) as a known-loose
+      // tolerance through Stories 4.9 → 5.4 → 6.3. Story 6.6 (Epic 5
+      // retro Action item #3 + Epic 4 retro addendum #3) ships the
+      // masking fix that lets the tolerance tighten back to the
+      // original 0.001 — a 5× tightening that surfaces real visual
+      // regressions ~5× earlier than the loose tolerance allowed.
+      maxDiffPixelRatio: 0.001,
       // Per-channel tolerance (Playwright default is 0.2). Bumped slightly
       // to absorb sub-pixel font hinting drift across runs of the same
       // pinned Chrome-for-Testing build.

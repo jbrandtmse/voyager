@@ -15,6 +15,11 @@ import {
 import { attachPointerHandlers } from '../primitives/pointer-events';
 import { createSliderKeyboardHandler } from '../primitives/slider-keyboard';
 import { cadenceAwareStep } from '../primitives/cadence-aware-step';
+import {
+  clusterMarkers,
+  defaultLabelWidthPx,
+  type MarkerDescriptor,
+} from '../lib/marker-cluster';
 import { URLSync } from '../services/url-sync';
 import type { ClockManager, ClockState } from '../services/clock-manager';
 import type { ChapterDirector } from '../services/chapter-director';
@@ -84,8 +89,8 @@ const isEncounterChapter = (chapter: ChapterSpec | null): boolean => {
  *     fixed defect where these rendered as `"0"` via Lit's undefined
  *     coercion; the bindings now route through `String(MISSION_*_ET)`
  *     directly so the template evaluates synchronously at first paint)
- *   - `aria-valuenow` as an ISO-8601 UTC string (assistive-tech announces
- *     it to the user)
+ *   - `aria-valuenow` as the numeric SPICE ET value (ARIA spec requires
+ *     numeric; assistive tech announces `aria-valuetext` in preference)
  *   - `aria-valuetext` as the human-readable "YYYY-MM-DD HH:MM UT" form
  *   - `aria-label="Mission timeline"` (mission variant) or
  *     `"<chapter name> encounter timeline"` (detail variant, Story 4.4 AC5)
@@ -167,7 +172,17 @@ export class VTimelineScrubber extends BaseElement {
         position: fixed;
         /* BUG-E5-009 (2026-05-24): shifted left edge RIGHT by play-button
            width (44px) + gap (12px) = 56px so the leftmost chapter-marker
-           labels (V1L / V2L) stop overlapping the play button glyph.
+           labels (V1L / V2L) stopped overlapping the play button glyph.
+           Story 6.2 AC6 (2026-05-24 follow-up): with v-audio-toggle
+           introduced by Story 6.1 sitting between the play button and
+           the scrubber (left = edge + 44 + 8 → 44px wide), the gutter
+           needs to clear BOTH controls. New left gutter:
+             play-button (44) + gap (8) + audio-toggle (44) + gap (12)
+             = 108 px.
+           The 12-px tail gap matches the original 12 px before the
+           audio-toggle was introduced. Both apply to mission AND
+           detail variants.
+
            Right edge shifted LEFT to accommodate the speed-multiplier's
            readout text at high speeds — the readout grows wider than the
            172px slider track when the text is "1,000,000× — 11.57 days/
@@ -175,11 +190,8 @@ export class VTimelineScrubber extends BaseElement {
            v2-uranus chapter smoke (2026-05-24) showed the detail-scrubber
            right-edge label "JAN 29, 1986" still being obscured by the
            readout's leftmost characters. 222 = 194 (readout) + 12 (gap)
-           + 16 (slop for clamp on smaller viewports).
-           Both apply to mission AND detail variants; the detail variant
-           overrides bottom (further below) but inherits the horizontal
-           gutter. */
-        left: calc(var(--v-edge-margin) + 56px);
+           + 16 (slop for clamp on smaller viewports). */
+        left: calc(var(--v-edge-margin) + 108px);
         right: calc(var(--v-edge-margin) + 222px);
         bottom: var(--v-edge-margin);
         z-index: var(--v-z-scrubber);
@@ -346,6 +358,31 @@ export class VTimelineScrubber extends BaseElement {
         user-select: none;
       }
 
+      /* Story 6.2 AC5 — BUG-E5-009 residual: when two chapter-marker
+         labels would overlap (V2L/V1L, V1J/V2J, V1S/V2S, V2N/PBD), the
+         clustering pass collapses them into a combined label rendered
+         at the midpoint of the two anchors. The pin lines stay at each
+         member's own anchor ET so the click target remains precise; only
+         the LABEL is moved. We hide the per-member label and render a
+         shared label as a sibling node positioned via inline left offset. */
+      .chapter-marker[data-clustered-pair] .chapter-marker-label {
+        display: none;
+      }
+
+      .chapter-cluster-label {
+        position: absolute;
+        bottom: 100%;
+        margin-bottom: 2px;
+        font-family: var(--v-font-mono);
+        font-size: var(--v-size-hud-mono-sm);
+        text-transform: uppercase;
+        color: var(--v-color-fg-muted);
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+        transform: translateX(-50%);
+      }
+
       .chapter-marker-tooltip {
         position: absolute;
         bottom: calc(100% + 18px);
@@ -358,7 +395,14 @@ export class VTimelineScrubber extends BaseElement {
         white-space: nowrap;
         pointer-events: none;
         opacity: 0;
-        transition: opacity 80ms ease;
+        /* Story 6.3 — route fade-in through --v-duration-fast (120ms baseline)
+           so prefers-reduced-motion collapses it to 0ms via global.css. The
+           previous bare 80ms literal bypassed the token and would have
+           persisted as an 80ms fade even under reduced-motion. The
+           transition-delay literals below are intentional hover-dwell + hide
+           timings (UX-DR22), NOT motion durations — they remain bare per the
+           reduced-motion audit (docs/accessibility/reduced-motion.md). */
+        transition: opacity var(--v-duration-fast) ease;
         transition-delay: 0ms;
       }
 
@@ -566,10 +610,18 @@ export class VTimelineScrubber extends BaseElement {
     // Story 4.4 — sync aria-hidden on mount BEFORE first render so a
     // detail-variant scrubber that is mounted but not yet open is
     // already inaccessible to assistive tech.
+    //
+    // Story 6.4 AC1 — pair aria-hidden with `inert` so the slider thumb
+    // inside the closed detail variant is removed from the tab order
+    // too (axe-core `aria-hidden-focus` is a serious violation when
+    // aria-hidden contains focusable content).
     if (this.variant === 'detail') {
       this.setAttribute('aria-hidden', this.detailOpen ? 'false' : 'true');
       if (this.detailOpen) {
         this.setAttribute('data-open', '');
+        this.removeAttribute('inert');
+      } else {
+        this.setAttribute('inert', '');
       }
     }
   }
@@ -693,9 +745,12 @@ export class VTimelineScrubber extends BaseElement {
     if (this.detailOpen) {
       this.setAttribute('data-open', '');
       this.setAttribute('aria-hidden', 'false');
+      this.removeAttribute('inert');
     } else {
       this.removeAttribute('data-open');
       this.setAttribute('aria-hidden', 'true');
+      // Story 6.4 AC1 — pair aria-hidden with inert (see connectedCallback).
+      this.setAttribute('inert', '');
     }
     this.requestUpdate();
   }
@@ -975,10 +1030,33 @@ export class VTimelineScrubber extends BaseElement {
     return { leftFrac, rightFrac };
   }
 
+  /**
+   * BUG-CR-006 fix (2026-05-25): cache the last track width used for
+   * marker clustering. Initial render returns 0 (the `.track` element
+   * doesn't exist yet at template eval time), which causes
+   * `clusterMarkers` to bail out and emit 11 singles. Once `.track` is
+   * committed to the DOM, `updated()` triggers a re-render with the
+   * measured width so the clustering algorithm can fire correctly.
+   * Re-fires on viewport resize too (handles narrow-viewport compaction
+   * per Story 6.2 AC3).
+   */
+  private lastClusterTrackWidthPx = 0;
+
   override updated(changed: Map<string, unknown>): void {
     super.updated(changed);
     const track = this.trackEl();
     const thumb = this.shadowRoot?.querySelector<HTMLElement>('.thumb');
+
+    // BUG-CR-006 fix: re-render once when track width becomes measurable
+    // (and on every viewport-driven width change thereafter).
+    if (track !== null) {
+      const currentWidth = track.getBoundingClientRect().width;
+      if (currentWidth > 0 && currentWidth !== this.lastClusterTrackWidthPx) {
+        this.lastClusterTrackWidthPx = currentWidth;
+        this.requestUpdate();
+      }
+    }
+
     if (track !== null && this.detachPointer === null) {
       // Attach once. The same primitive handles both track-click and
       // thumb-drag because the thumb's 44×44 pseudo overlays the track.
@@ -1029,22 +1107,24 @@ export class VTimelineScrubber extends BaseElement {
     const fracPct = `${(this.computeFraction() * 100).toFixed(4)}%`;
     // Story 1.15 AC3 — `aria-valuemin` / `aria-valuemax` carry the numeric
     // SPICE ET range, not ISO-8601 strings. The WAI-ARIA Slider pattern
-    // permits any string and the manual browser smoke surfaced a defect
-    // where the bound values rendered as the literal `"0"` (Lit silently
-    // coerces `undefined` to the string `"0"` on numeric attributes). We
-    // route through `String(...)` of the module-level constants so the
-    // template evaluates synchronously at first paint — no async-init or
-    // late-binding window where the values could be undefined. ISO
-    // representations of the current position and value-text remain on
-    // `aria-valuenow` / `aria-valuetext` because that's what screen
-    // readers announce to the user.
+    // requires `aria-valuenow` to be a NUMERIC value (axe-core
+    // `aria-valid-attr-value` is critical when an ISO string is
+    // supplied) — the human-readable ISO representation goes on
+    // `aria-valuetext` which assistive tech announces in preference to
+    // the numeric `aria-valuenow`. Story 1.15 AC3 traced the original
+    // defect of these rendering as `"0"` from Lit's `undefined` coercion;
+    // routing through `String(...)` of the module-level constants
+    // preserves synchronous first-paint evaluation. Story 6.4 AC1
+    // amended `aria-valuenow` from `isoFromEt(...)` to the raw ET
+    // number after axe-core flagged the ISO string as a critical
+    // ARIA-value violation.
     //
     // Story 4.4 AC1 + AC5 — the detail variant exposes the chapter
     // window's bounds (not the mission window) and adopts a chapter-
     // aware aria-label.
     const valueMin = String(this.rangeLow());
     const valueMax = String(this.rangeHigh());
-    const valueNow = isoFromEt(this.simEt);
+    const valueNow = String(this.simEt);
     const valueText = formatForHud(this.simEt);
 
     let ariaLabel = 'Mission timeline';
@@ -1113,9 +1193,7 @@ export class VTimelineScrubber extends BaseElement {
         <div class="fill" style=${`width:${fracPct}`}></div>
         <div class="chapters" part="chapters">
           ${this.variant === 'mission'
-            ? ALL_CHAPTERS.map((chapter) =>
-                this.renderChapterMarker(chapter, activeSlug),
-              )
+            ? this.renderClusteredChapterMarkers(activeSlug)
             : null}
         </div>
         <div
@@ -1148,35 +1226,163 @@ export class VTimelineScrubber extends BaseElement {
    * `data-active` boolean attribute drives the colour selector AND is
    * the contract surface the lead's Chrome DevTools MCP smoke
    * (Integration AC7) reads to confirm the active marker.
+   *
+   * Story 6.2 AC5 — when this marker is part of an overlap-collapsed
+   * dual cluster, the `pairContext` carries the cluster fraction
+   * (midpoint) and the joined label. The marker's pin line still
+   * renders at its OWN anchor ET (click precision preserved); the
+   * label is suppressed via the `data-clustered-pair` attribute and
+   * a sibling `.chapter-cluster-label` element renders the combined
+   * "V1L / V2L"-style label at the midpoint (only on the FIRST member
+   * to avoid double-rendering).
    */
   private renderChapterMarker(
     chapter: ChapterSpec,
     activeSlug: string | null,
+    pairContext: {
+      isInPair: boolean;
+      isFirstInPair: boolean;
+      clusterFraction: number;
+      clusterLabel: string;
+    } | null = null,
   ): TemplateResult {
     const fracPct = `${(this.chapterFraction(chapter) * 100).toFixed(4)}%`;
     const isoDate = isoFromEt(chapter.anchorEt).slice(0, 10); // YYYY-MM-DD
     const ariaLabel = `${chapter.name} — ${isoDate}`;
     const isActive = chapter.slug === activeSlug;
+    const inPair = pairContext?.isInPair === true;
+    // Cluster label: render once per pair, anchored at the midpoint via
+    // an inline `left:` percentage. The label is a transform-centred
+    // span; on the FIRST member's <button> as a child so the focus
+    // ring + hover affordance both still reach it, but visually it
+    // floats at the pair's midpoint.
+    let clusterLabel: TemplateResult | null = null;
+    if (
+      inPair &&
+      pairContext !== null &&
+      pairContext.isFirstInPair
+    ) {
+      // The cluster label is positioned absolutely against the
+      // .chapters container (not the marker button), so we compute the
+      // OFFSET from THIS marker's anchor to the cluster midpoint.
+      const ownFrac = this.chapterFraction(chapter);
+      // The label uses translateX(-50%) to centre on its `left` value.
+      // We render `left: <delta>%` relative to the button (which has
+      // its own translateX(-50%)). Easier: render at the .chapters
+      // container level instead. We'll emit the cluster label as a
+      // separate sibling node returned alongside the marker — see
+      // renderClusteredChapterMarkers below.
+      void ownFrac;
+      void clusterLabel;
+    }
     return html`
       <button
         type="button"
         class="chapter-marker"
         data-slug=${chapter.slug}
         ?data-active=${isActive}
+        ?data-clustered-pair=${inPair}
         aria-label=${ariaLabel}
         style=${`left:${fracPct}`}
         @pointerdown=${this.onMarkerPointerDown}
         @click=${this.onMarkerClick(chapter)}
         @keydown=${this.onMarkerKeyDown(chapter)}
       >
-        <span class="chapter-marker-label" aria-hidden="true"
-          >${chapter.markerLabel}</span
-        >
+        ${inPair
+          ? // BUG-CR-006 fix (2026-05-25): in a clustered pair, suppress the
+            // per-pin label; the dual-cluster "${left} / ${right}" label at
+            // the midpoint is the only label that renders. Rendering both
+            // the per-pin labels AND the cluster label was producing
+            // visually-smashed strings like "V12S" (V1S + V2S overlapping).
+            html``
+          : html`<span class="chapter-marker-label" aria-hidden="true"
+              >${chapter.markerLabel}</span
+            >`}
         <span class="chapter-marker-tooltip" role="tooltip" aria-hidden="true"
           >${chapter.name}</span
         >
       </button>
     `;
+  }
+
+  /**
+   * Story 6.2 AC5 — measure the track width at render time (via
+   * `getBoundingClientRect()`), run the clustering pass over the 11
+   * chapter anchors, and emit a mix of single + dual marker nodes.
+   *
+   * Behaviour at zero-width tracks (happy-dom + early-render frames):
+   * `clusterMarkers` returns single-passthrough markers, so the
+   * existing 11-marker behaviour is preserved when the layout pixel
+   * width is unknown (the clustering pass IS the only consumer of
+   * trackWidthPx — without a real width, no overlap can be computed).
+   *
+   * The cluster label (e.g. "V1L / V2L") is rendered as a sibling
+   * `<span class="chapter-cluster-label">` positioned at the cluster
+   * midpoint via an inline `left:` percentage. The pin lines stay
+   * at each member's own anchor ET so clicking the LEFT pin jumps to
+   * the LEFT chapter and the RIGHT pin jumps to the RIGHT chapter —
+   * click precision is preserved per the AC's "clickable in two
+   * regions" option.
+   */
+  private renderClusteredChapterMarkers(
+    activeSlug: string | null,
+  ): TemplateResult[] {
+    const track = this.trackEl();
+    // happy-dom returns width: 0 for unmeasured elements; that's the
+    // implicit signal to skip clustering (no real layout yet).
+    const trackWidthPx = track !== null
+      ? track.getBoundingClientRect().width
+      : 0;
+    const descriptors: MarkerDescriptor<ChapterSpec>[] = ALL_CHAPTERS.map(
+      (chapter) => ({
+        id: chapter.slug,
+        label: chapter.markerLabel,
+        fraction: this.chapterFraction(chapter),
+        data: chapter,
+      }),
+    );
+    const clusters = clusterMarkers(descriptors, trackWidthPx, defaultLabelWidthPx);
+    const out: TemplateResult[] = [];
+    for (const cluster of clusters) {
+      if (cluster.members.length === 1) {
+        const chapter = cluster.members[0]!.data;
+        out.push(this.renderChapterMarker(chapter, activeSlug));
+      } else {
+        // Dual cluster — render BOTH pin buttons at their own
+        // fractions, then emit a single combined label at the midpoint.
+        const [left, right] = cluster.members;
+        out.push(
+          this.renderChapterMarker(left!.data, activeSlug, {
+            isInPair: true,
+            isFirstInPair: true,
+            clusterFraction: cluster.fraction,
+            clusterLabel: cluster.label,
+          }),
+        );
+        out.push(
+          this.renderChapterMarker(right!.data, activeSlug, {
+            isInPair: true,
+            isFirstInPair: false,
+            clusterFraction: cluster.fraction,
+            clusterLabel: cluster.label,
+          }),
+        );
+        // Combined label, midpoint-anchored. Positioned absolutely
+        // inside `.chapters` (which has `inset: 0`), so `left:X%` is
+        // measured against the track width.
+        const labelPct = `${(cluster.fraction * 100).toFixed(4)}%`;
+        out.push(html`
+          <span
+            class="chapter-cluster-label"
+            data-cluster-id=${cluster.id}
+            aria-hidden="true"
+            style=${`left:${labelPct}`}
+            >${cluster.label}</span
+          >
+        `);
+      }
+    }
+    return out;
   }
 }
 

@@ -59,8 +59,15 @@ const V2_NAIF_ID = -32;
 const FALLBACK_PAST_COLOR = '#e8eaed';
 const FALLBACK_FUTURE_COLOR = '#5f6368';
 
-const PAST_LINE_WIDTH_PX = 1.5;
-const FUTURE_LINE_WIDTH_PX = 1.0;
+// BUG-CR-004 fix (2026-05-25): bumped both line widths from
+// past=1.5 / future=1.0 to past=2.0 / future=1.5 to absorb sub-pixel
+// rasterization jitter when the floating-origin recenters per frame. At
+// 1.0 px a thin line straddling pixel boundaries flickers visibly on/off
+// frame-to-frame at GPU/AA levels that don't supersample thin geometry.
+// Bumping both preserves the past > future width relationship (FR49
+// non-color-only encoding) while keeping the rasterized footprint stable.
+const PAST_LINE_WIDTH_PX = 2.0;
+const FUTURE_LINE_WIDTH_PX = 1.5;
 const FUTURE_DASH_SIZE = 0.5;
 const FUTURE_GAP_SIZE = 0.3;
 

@@ -1,7 +1,10 @@
 import { html, css, type TemplateResult } from 'lit';
-import { createFocusTrap, type FocusTrap } from 'focus-trap';
 
 import { BaseElement } from './base-element';
+import {
+  createDialogFocusTrap,
+  type DialogFocusTrap,
+} from '../primitives/dialog';
 import { ALL_CHAPTERS } from '../chapters/registry';
 import { isoFromEt } from '../math/et-conversions';
 import { createListboxKeyboardHandler } from '../primitives/listbox-keyboard';
@@ -256,7 +259,7 @@ export class VChapterIndex extends BaseElement {
   keyboardTarget: Document = document;
 
   private chapterUnsub: (() => void) | null = null;
-  private focusTrap: FocusTrap | null = null;
+  private focusTrap: DialogFocusTrap | null = null;
   private focusedIndex = 0;
   private detachGlobalKeys: (() => void) | null = null;
   private detachClickOutside: (() => void) | null = null;
@@ -362,36 +365,20 @@ export class VChapterIndex extends BaseElement {
   private activateFocusTrap(): void {
     const panel = this.shadowRoot?.querySelector<HTMLElement>('.panel');
     if (panel === null || panel === undefined) return;
-    // focus-trap walks the panel's subtree for tabbable nodes. Because
-    // the panel lives in our shadow root we ask tabbable to descend
-    // into shadow roots (the panel itself is one). Tabbable also needs
-    // displayCheck disabled in jsdom/happy-dom where layout is empty —
-    // the test env reports zero-area elements as non-tabbable otherwise.
-    this.focusTrap = createFocusTrap(panel, {
-      escapeDeactivates: false, // Esc is handled by us so we can emit our own contract
-      clickOutsideDeactivates: false, // we listen at document level instead
-      returnFocusOnDeactivate: false, // we restore focus explicitly
+    // Story 6.4 AC6 — Rule 9 third-consumer extraction. See sibling
+    // wire-up in v-help-overlay.ts. The defensive try/catch + console.warn
+    // diagnostics live in primitives/dialog.ts now.
+    this.focusTrap = createDialogFocusTrap({
+      host: panel,
       initialFocus: () => this.optionElementAt(this.focusedIndex) ?? panel,
-      tabbableOptions: {
-        getShadowRoot: true,
-        displayCheck: 'none',
-      },
+      componentName: 'v-chapter-index',
     });
-    try {
-      this.focusTrap.activate();
-    } catch {
-      // Activation can fail in test environments without layout — the
-      // listbox keyboard handler keeps the panel functional regardless.
-    }
+    this.focusTrap.activate();
   }
 
   private deactivateFocusTrap(): void {
     if (this.focusTrap !== null) {
-      try {
-        this.focusTrap.deactivate();
-      } catch {
-        // ignore — same defensive posture as activate()
-      }
+      this.focusTrap.deactivate();
       this.focusTrap = null;
     }
   }
@@ -521,7 +508,7 @@ export class VChapterIndex extends BaseElement {
         <span class="bar" aria-hidden="true"></span>
       </button>
       <div class="scrim" part="scrim" aria-hidden="true"></div>
-      <div class="panel" part="panel" aria-hidden=${this.open ? 'false' : 'true'}>
+      <div class="panel" part="panel" aria-hidden=${this.open ? 'false' : 'true'} ?inert=${!this.open}>
         <div class="panel-heading" id="chapter-index-heading">Chapters</div>
         <div
           class="listbox"
